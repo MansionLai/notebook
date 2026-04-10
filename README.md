@@ -33,3 +33,24 @@ graph TD
     B -->|Yes| C[執行動作]
     B -->|No| D[結束]
 ```
+
+## 🤖 Copilot CLI Agents
+
+本 repo 備份了兩個自訂 Copilot CLI agents，存放於 `agents/` 目錄。
+
+### Agents 列表
+
+| Agent | 用途 |
+|-------|------|
+| `@coder` | 程式碼分析、架構設計、debug、開發 |
+| `@note-taker` | 將學習內容整理為筆記並上傳到此 repo |
+
+### 還原方式
+
+若 superpowers plugin 更新後 agents 消失，執行以下指令還原：
+
+```bash
+AGENTS_DIR=~/.copilot/installed-plugins/superpowers-marketplace/superpowers/agents
+cp agents/coder.md $AGENTS_DIR/
+cp agents/note-taker.md $AGENTS_DIR/
+```
