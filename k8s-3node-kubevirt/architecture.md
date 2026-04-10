@@ -49,7 +49,7 @@ graph TB
             VH[virt-handler\nDaemonSet]
             VL[virt-launcher]
             UB[Ubuntu 24.04 VM\nQEMU/KVM]
-            KVM[/dev/kvm]
+            KVM["/dev/kvm"]
             VH --> VL --> UB
             UB --> KVM
         end
