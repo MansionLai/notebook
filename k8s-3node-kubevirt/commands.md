@@ -55,18 +55,65 @@ kubeadm token create --print-join-command
 
 ---
 
-## 設定 Node 角色
+## 設定 Node 角色（Option B）
 
 ```bash
-# 防止 Pod 排到 Master（通常 kubeadm init 已自動加）
-kubectl taint nodes master node-role.kubernetes.io/master=:NoSchedule
+# Master: 移除 NoSchedule taint，允許 KubeVirt 管理面元件排程
+# （kubeadm init 預設會加 control-plane taint，需先移除才能排 KubeVirt mgmt pods）
+kubectl taint nodes master node-role.kubernetes.io/control-plane:NoSchedule-
 
-# 標記 Infra 節點
+# 加上自訂 label 供 KubeVirt 管理面元件 nodeSelector 使用
+kubectl label nodes master kubevirt-management=true
+
+# 標記並 taint Infra 節點（只跑基礎設施 Pod）
 kubectl label nodes infra node-role.kubernetes.io/infra=
 kubectl taint nodes infra node-role.kubernetes.io/infra=:NoSchedule
 
+# 標記 Worker 節點（只跑 virt-handler + VM workload）
+kubectl label nodes worker node-role.kubernetes.io/worker=
+kubectl label nodes worker kubevirt-workload=true
+
 # 驗證節點狀態
 kubectl get nodes -o wide
+kubectl get nodes --show-labels
+```
+
+### KubeVirt 管理面元件 — NodeSelector / Toleration（Option B）
+
+> 安裝 KubeVirt 後，透過 `KubeVirt` CR 的 `infra` 欄位指定管理面元件位置
+
+```yaml
+# kubevirt-cr-optionb.yaml
+apiVersion: kubevirt.io/v1
+kind: KubeVirt
+metadata:
+  name: kubevirt
+  namespace: kubevirt
+spec:
+  # 讓 virt-operator / virt-api / virt-controller 排到 Master
+  infra:
+    nodePlacement:
+      nodeSelector:
+        kubevirt-management: "true"
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+  # 讓 virt-handler DaemonSet 只跑在 Worker
+  workloads:
+    nodePlacement:
+      nodeSelector:
+        kubevirt-workload: "true"
+```
+
+```bash
+kubectl apply -f kubevirt-cr-optionb.yaml
+
+# 確認管理面元件在 Master
+kubectl get pods -n kubevirt -o wide | grep -E 'virt-operator|virt-api|virt-controller'
+
+# 確認 virt-handler 在 Worker
+kubectl get pods -n kubevirt -o wide | grep virt-handler
 ```
 
 ---
