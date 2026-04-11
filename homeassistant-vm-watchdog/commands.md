@@ -21,46 +21,54 @@ cat > ~/.local/bin/homeassistant-vm-watchdog.sh << 'EOF'
 # • 開機自動啟動 VirtualBox VM（headless 模式）
 # • VM crash 後自動重啟
 # • 若 VM 已在運行，靜候直到結束再重啟
+# • Log rotation：超過 1MB 自動輪替，保留最近 7 天
 
 VM_NAME="HomeAssistant"
 VBOX_HEADLESS="/usr/local/bin/VBoxHeadless"
 VBOX_MANAGE="/usr/local/bin/VBoxManage"
-LOG_PREFIX="[homeassistant-watchdog]"
-POLL_INTERVAL=60  # 1 分鐘
+LOG_FILE="${HOME}/Library/Logs/homeassistant-vm.log"
+LOG_MAX_BYTES=$((1024 * 1024))   # 1 MB
+LOG_MAX_DAYS=7                   # 保留天數
+POLL_INTERVAL=60                 # 秒：偵測 VM 狀態的輪詢間隔（1 分鐘）
 
-# Log 設定
-LOG_DIR="$HOME/Library/Logs"
-LOG_FILE="$LOG_DIR/homeassistant-vm.log"
-LOG_MAX_BYTES=$((1 * 1024 * 1024))  # 1 MB
-LOG_KEEP_DAYS=7
+# ── Log 工具 ──────────────────────────────────────────────────────
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [homeassistant-watchdog] $*" >> "$LOG_FILE"
+}
 
-# ── Log Rotation ──
 rotate_log() {
-    [ -f "$LOG_FILE" ] || return
+    [ ! -f "$LOG_FILE" ] && return
+
+    # 大於 1MB → 輪替（加時間戳後綴）
     local size
     size=$(stat -f%z "$LOG_FILE" 2>/dev/null || echo 0)
     if [ "$size" -gt "$LOG_MAX_BYTES" ]; then
-        local rotated="${LOG_FILE%.log}-$(date '+%Y%m%d-%H%M%S').log"
-        mv "$LOG_FILE" "$rotated"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') ${LOG_PREFIX} Log rotated → $(basename "$rotated")" >> "$LOG_FILE"
+        local ts
+        ts=$(date '+%Y%m%d-%H%M%S')
+        mv "$LOG_FILE" "${LOG_FILE}.${ts}"
+        log "Log rotated (was ${size} bytes → archived as .${ts})"
     fi
-    find "$LOG_DIR" -name "homeassistant-vm-*.log" -mtime +"$LOG_KEEP_DAYS" -delete 2>/dev/null
+
+    # 刪除超過 7 天的舊輪替檔
+    find "$(dirname "$LOG_FILE")" \
+        -name "$(basename "$LOG_FILE").*" \
+        -mtime +${LOG_MAX_DAYS} \
+        -delete 2>/dev/null
 }
 
-log() {
-    rotate_log
-    echo "$(date '+%Y-%m-%d %H:%M:%S') ${LOG_PREFIX} $*" >> "$LOG_FILE"
-}
-
+# ── VM 狀態查詢 ───────────────────────────────────────────────────
 get_vm_state() {
     "$VBOX_MANAGE" showvminfo "$VM_NAME" --machinereadable 2>/dev/null \
         | grep '^VMState=' | cut -d'"' -f2
 }
 
-log "Watchdog started for VM: $VM_NAME"
+# ── 主迴圈 ────────────────────────────────────────────────────────
+log "Watchdog started for VM: $VM_NAME (interval=${POLL_INTERVAL}s, maxLog=${LOG_MAX_BYTES}B, retention=${LOG_MAX_DAYS}d)"
 
 while true; do
+    rotate_log
     STATE=$(get_vm_state)
+
     case "$STATE" in
         running|starting|restoring|saving)
             log "VM is '$STATE', monitoring..."
@@ -72,7 +80,7 @@ while true; do
             ;;
         *)
             log "VM state is '$STATE', launching headless..."
-            "$VBOX_HEADLESS" --startvm "$VM_NAME"
+            "$VBOX_HEADLESS" --startvm "$VM_NAME" >> "$LOG_FILE" 2>&1
             EXIT_CODE=$?
             log "VBoxHeadless exited with code $EXIT_CODE (state: $(get_vm_state))"
             sleep 5
