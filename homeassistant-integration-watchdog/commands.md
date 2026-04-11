@@ -292,6 +292,53 @@ Template trigger 只在 **False → True 轉換**時觸發。若 HA 重啟時 in
 
 ---
 
+## Gmail SMTP 設定（HA configuration.yaml）
+
+在 `/config/configuration.yaml` 加入以下設定後重啟 HA：
+
+```yaml
+notify:
+  - name: gmail
+    platform: smtp
+    server: smtp.gmail.com
+    port: 587
+    starttls: true
+    sender: "你的email@gmail.com"
+    username: "你的email@gmail.com"
+    password: "app-password-無空格"   # Google App Password（16碼去空格）
+    recipient:
+      - "你的email@gmail.com"
+```
+
+> **App Password 產生**：https://myaccount.google.com/apppasswords
+> 需先開啟 Google 帳號兩步驟驗證
+
+驗證 notify.gmail 已載入：
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  http://192.168.50.71:8123/api/services \
+| python3 -c "
+import json,sys
+svcs=json.load(sys.stdin)
+n=next((d for d in svcs if d.get('domain')=='notify'),None)
+print(list(n['services'].keys()) if n else 'not found')
+"
+# 預期出現 'gmail' 在列表中
+```
+
+發送測試信：
+
+```bash
+curl -s -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"[HA] 測試","message":"Gmail 通知設定成功！"}' \
+  http://192.168.50.71:8123/api/services/notify/gmail
+```
+
+---
+
 ## HA REST API 快速參考
 
 | 用途 | Method | Endpoint |
