@@ -26,10 +26,30 @@ VM_NAME="HomeAssistant"
 VBOX_HEADLESS="/usr/local/bin/VBoxHeadless"
 VBOX_MANAGE="/usr/local/bin/VBoxManage"
 LOG_PREFIX="[homeassistant-watchdog]"
-POLL_INTERVAL=15
+POLL_INTERVAL=60  # 1 分鐘
+
+# Log 設定
+LOG_DIR="$HOME/Library/Logs"
+LOG_FILE="$LOG_DIR/homeassistant-vm.log"
+LOG_MAX_BYTES=$((1 * 1024 * 1024))  # 1 MB
+LOG_KEEP_DAYS=7
+
+# ── Log Rotation ──
+rotate_log() {
+    [ -f "$LOG_FILE" ] || return
+    local size
+    size=$(stat -f%z "$LOG_FILE" 2>/dev/null || echo 0)
+    if [ "$size" -gt "$LOG_MAX_BYTES" ]; then
+        local rotated="${LOG_FILE%.log}-$(date '+%Y%m%d-%H%M%S').log"
+        mv "$LOG_FILE" "$rotated"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') ${LOG_PREFIX} Log rotated → $(basename "$rotated")" >> "$LOG_FILE"
+    fi
+    find "$LOG_DIR" -name "homeassistant-vm-*.log" -mtime +"$LOG_KEEP_DAYS" -delete 2>/dev/null
+}
 
 log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') ${LOG_PREFIX} $*"
+    rotate_log
+    echo "$(date '+%Y-%m-%d %H:%M:%S') ${LOG_PREFIX} $*" >> "$LOG_FILE"
 }
 
 get_vm_state() {
@@ -89,7 +109,7 @@ cat > ~/Library/LaunchAgents/com.user.homeassistant-vm.plist << 'EOF'
     <key>ThrottleInterval</key>
     <integer>30</integer>
     <key>StandardOutPath</key>
-    <string>/Users/mansionlai/Library/Logs/homeassistant-vm.log</string>
+    <string>/dev/null</string>
     <key>StandardErrorPath</key>
     <string>/Users/mansionlai/Library/Logs/homeassistant-vm-error.log</string>
 </dict>

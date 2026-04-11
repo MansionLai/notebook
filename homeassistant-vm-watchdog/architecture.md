@@ -27,16 +27,16 @@
 | `RunAtLoad` | `true` | 用戶登入後立即啟動 Watchdog |
 | `KeepAlive` | `true` | Watchdog 腳本 crash 時自動重啟 |
 | `ThrottleInterval` | `30s` | 防止 Watchdog 快速 crashloop |
-| `StandardOutPath` | `~/Library/Logs/homeassistant-vm.log` | 正常 log |
-| `StandardErrorPath` | `~/Library/Logs/homeassistant-vm-error.log` | 錯誤 log |
+| `StandardOutPath` | `/dev/null` | Script 自行管理 Log |
+| `StandardErrorPath` | `~/Library/Logs/homeassistant-vm-error.log` | 未預期錯誤 |
 
 ### Watchdog Script（`homeassistant-vm-watchdog.sh`）
 
 | VM State | Watchdog 行為 |
 |----------|-------------|
-| `running` / `starting` / `restoring` | sleep 15s，繼續輪詢 |
+| `running` / `starting` / `restoring` | sleep 60s，繼續輪詢 |
 | `stopped` / `aborted` / `poweroff` / `saved` | 呼叫 `VBoxHeadless --startvm` |
-| 查詢失敗（VBox 未就緒） | sleep 15s 後重試 |
+| 查詢失敗（VBox 未就緒） | sleep 60s 後重試 |
 
 ### VBoxHeadless vs VBoxManage startvm
 
