@@ -17,7 +17,7 @@
 graph TB
     subgraph Host["Mac Mini M4 · 10C / 24GB · macOS 15"]
         subgraph Bridge["en0 Bridge · 192.168.50.x/24"]
-            subgraph Master["k8s-master · 4C / 6GB · 192.168.50.x"]
+            subgraph Master["k8s-master · 2C / 2.5GB · 192.168.50.x"]
                 direction TB
                 subgraph CP["K8s Control Plane"]
                     API[kube-apiserver]
@@ -32,7 +32,7 @@ graph TB
                 CRM[containerd]
             end
 
-            subgraph Infra["k8s-infra · 2C / 4GB · 192.168.50.x"]
+            subgraph Infra["k8s-infra · 2C / 2.5GB · 192.168.50.x"]
                 DNS[CoreDNS]
                 ING[Ingress Controller]
                 MS[Metrics Server]
@@ -42,7 +42,7 @@ graph TB
                 CRI[containerd]
             end
 
-            subgraph Worker["k8s-worker · 4C / 8GB · 192.168.50.x"]
+            subgraph Worker["k8s-worker · 2C / 2GB · 192.168.50.x"]
                 WL1[App Pod 1]
                 WL2[App Pod 2]
                 WL3[App Pod 3]
@@ -72,13 +72,14 @@ graph TB
 
 | 節點 | VM 名稱 | vCPU | RAM | Disk | 角色 |
 |------|---------|------|-----|------|------|
-| Master | `k8s-master` | 4 | 6GB | 30GB | K8s Control Plane |
-| Infra | `k8s-infra` | 2 | 4GB | 30GB | 基礎設施服務 |
-| Worker | `k8s-worker` | 4 | 8GB | 40GB | App Workload |
-| **Mac Mini Host 保留** | — | — | ~6GB | — | macOS 系統 |
-| **合計** | | **10C** | **18GB + 6GB host** | **100GB** | |
+| Master | `k8s-master` | 2 | 2.5GB | 30GB | K8s Control Plane |
+| Infra | `k8s-infra` | 2 | 2.5GB | 30GB | 基礎設施服務 |
+| Worker | `k8s-worker` | 2 | 2GB | 40GB | App Workload |
+| **Mac Mini Host 保留** | — | — | ~17GB | — | macOS 系統 |
+| **合計** | | **6C** | **7GB + 17GB host** | **100GB** | |
 
-> ✅ 10 核心 / 24GB RAM 足夠，但記憶體偏緊，建議關閉 Mac 上不必要的應用程式。
+> ✅ 最低可用規格：kubeadm 強制要求 Master ≥ 2 CPU，Infra/Worker 各 2C 足以跑 Lab 工作負載。  
+> ⚠️ Prometheus 記憶體需求較大（~500MB），Infra 2.5GB 為最低建議值，若 OOM 可先將 Prometheus retention 調低。
 
 ---
 

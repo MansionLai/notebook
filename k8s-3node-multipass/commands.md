@@ -22,10 +22,11 @@ ifconfig en0 | grep "inet "
 
 ```bash
 # Master Node（K8s Control Plane）
+# ⚠️ kubeadm 強制要求 ≥ 2 CPU，不可再減
 multipass launch ubuntu:24.04 \
   --name k8s-master \
-  --cpus 4 \
-  --memory 6G \
+  --cpus 2 \
+  --memory 2.5G \
   --disk 30G \
   --network en0
 
@@ -33,15 +34,15 @@ multipass launch ubuntu:24.04 \
 multipass launch ubuntu:24.04 \
   --name k8s-infra \
   --cpus 2 \
-  --memory 4G \
+  --memory 2.5G \
   --disk 30G \
   --network en0
 
 # Worker Node（App Workload）
 multipass launch ubuntu:24.04 \
   --name k8s-worker \
-  --cpus 4 \
-  --memory 8G \
+  --cpus 2 \
+  --memory 2G \
   --disk 40G \
   --network en0
 
