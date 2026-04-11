@@ -123,7 +123,7 @@ graph TB
 | 類型 | 說明 |
 |------|------|
 | VM 網卡 | Multipass bridge → en0 → 192.168.50.x/24 |
-| Pod Network (CNI) | Flannel (`10.244.0.0/16`) |
+| Pod Network (CNI) | Cilium (`172.46.0.0/16`) |
 | Service Network | `10.96.0.0/12` |
 | NodePort 存取 | 直接用 VM IP + NodePort |
 | Ingress 存取 | 透過 Infra Node IP + 80/443 |
@@ -146,5 +146,5 @@ graph TB
 
 - [Multipass Documentation](https://multipass.run/docs)
 - [Kubernetes 官方文件](https://kubernetes.io/docs/)
-- [Flannel CNI](https://github.com/flannel-io/flannel)
+- [Cilium CNI](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/)
 - [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts)

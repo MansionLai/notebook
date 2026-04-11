@@ -92,16 +92,18 @@ flowchart LR
 
 ---
 
-## Phase 5：安裝 CNI（Flannel）
+## Phase 5：安裝 CNI（Cilium）
 
 ```mermaid
 flowchart TD
-    S([在 Master 執行]) --> APPLY["kubectl apply -f\nhttps://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml"]
-    APPLY --> WAIT[等待 flannel Pod Running\nkubectl get pods -n kube-flannel]
+    S([在 Master 執行]) --> CLI[安裝 Cilium CLI\ncilium-linux-arm64]
+    CLI --> HELM[helm repo add cilium\nhttps://helm.cilium.io]
+    HELM --> INSTALL["helm install cilium cilium/cilium\n--set ipam.mode=cluster-pool\n--set clusterPoolIPv4PodCIDRList=172.46.0.0/16"]
+    INSTALL --> WAIT[cilium status --wait]
     WAIT --> CHK{"kubectl get nodes\n全部 Ready?"}
     CHK -- Yes --> DONE([Phase 5 完成 ✅])
-    CHK -- No --> LOG[kubectl logs -n kube-flannel\n查看 flannel 錯誤]
-    LOG --> DBG[確認 pod-network-cidr\n是否為 10.244.0.0/16]
+    CHK -- No --> LOG[cilium status\nkubectl logs -n kube-system\n查看 cilium-agent 錯誤]
+    LOG --> DBG[確認 pod-network-cidr\n是否為 172.46.0.0/16]
 ```
 
 ---
@@ -160,5 +162,5 @@ curl -H "Host: test.local" http://192.168.50.x
 
 - [Multipass Bridge Networking](https://multipass.run/docs/create-an-instance#heading--bridged)
 - [kubeadm 安裝指南](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/)
-- [Flannel CNI](https://github.com/flannel-io/flannel)
+- [Cilium CNI](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/)
 - [ingress-nginx Helm](https://kubernetes.github.io/ingress-nginx/deploy/#quick-start)

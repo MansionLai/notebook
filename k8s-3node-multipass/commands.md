@@ -129,8 +129,9 @@ ip addr show ens4 | grep "inet "
 # 初始化 Cluster（替換 <MASTER_IP> 為上面取得的 192.168.50.x）
 sudo kubeadm init \
   --apiserver-advertise-address=<MASTER_IP> \
-  --pod-network-cidr=10.244.0.0/16 \
-  --node-name=k8s-master
+  --pod-network-cidr=172.46.0.0/16 \
+  --node-name=k8s-master \
+  --skip-phases=addon/kube-proxy
 
 # 設定 kubectl
 mkdir -p $HOME/.kube
@@ -167,16 +168,29 @@ kubectl get nodes
 
 ---
 
-## Step 5：安裝 CNI（Flannel）
+## Step 5：安裝 CNI（Cilium）
 
 ```bash
 # ── 在 k8s-master 執行 ────────────────────────────────
 
-# 套用 Flannel manifest
-kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+# 安裝 Cilium CLI（ARM64）
+CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
+curl -L --fail --remote-name-all \
+  https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-arm64.tar.gz
+sudo tar xzvfC cilium-linux-arm64.tar.gz /usr/local/bin
+rm cilium-linux-arm64.tar.gz
 
-# 等待 flannel Pod Running
-kubectl get pods -n kube-flannel -w
+# 透過 Helm 安裝 Cilium（使用自訂 Pod CIDR）
+helm repo add cilium https://helm.cilium.io/
+helm repo update
+helm install cilium cilium/cilium \
+  --namespace kube-system \
+  --set ipam.mode=cluster-pool \
+  --set ipam.operator.clusterPoolIPv4PodCIDRList=172.46.0.0/16 \
+  --set ipam.operator.clusterPoolIPv4MaskSize=24
+
+# 等待 Cilium Pod 全部 Running
+cilium status --wait
 
 # 確認所有節點 Ready
 kubectl get nodes
@@ -297,5 +311,6 @@ sudo iptables -F && sudo iptables -t nat -F
 
 - [Multipass CLI Reference](https://multipass.run/docs/multipass-cli-client)
 - [kubeadm init 參數](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/)
-- [Flannel 安裝](https://github.com/flannel-io/flannel#deploying-flannel-manually)
+- [Cilium 安裝指南](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/)
+- [Cilium Helm Reference](https://docs.cilium.io/en/stable/helm-reference/)
 - [kube-prometheus-stack Helm Values](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack)
