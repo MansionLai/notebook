@@ -284,3 +284,69 @@ kubectl delete pod test-nginx
 | Phase 2 - worker join | ⬜ | | |
 | Phase 3 - 驗證 | ⬜ | | |
 
+
+---
+
+## 實際建置結果（2026-04-11）
+
+### kubeadm init 輸出重點
+
+```
+[certs] apiserver serving cert is signed for IPs [10.96.0.1 192.168.50.200]
+[mark-control-plane] adding taints [node-role.kubernetes.io/control-plane:NoSchedule]
+[addons] Applied essential addon: CoreDNS
+[addons] Applied essential addon: kube-proxy
+Your Kubernetes control-plane has initialized successfully!
+```
+
+### Join Token（已使用）
+
+```bash
+kubeadm join 192.168.50.200:6443 --token kgqbt8.0p8z398hsbvlupqs \
+  --discovery-token-ca-cert-hash sha256:d9a5d9e219ea5dcea5a01a9d75b386b9ac80ea7827458310b3c30488630cf5dd
+```
+
+> ⚠️ Token 有效期 24 小時。過期後用 `kubeadm token create --print-join-command` 重新產生。
+
+### 最終驗證結果
+
+```
+$ kubectl get nodes -o wide
+NAME         STATUS   ROLES           AGE     VERSION    INTERNAL-IP
+k8s-infra    Ready    <none>          87s     v1.32.13   192.168.50.201
+k8s-master   Ready    control-plane   9m53s   v1.32.13   192.168.50.200
+k8s-worker   Ready    <none>          78s     v1.32.13   192.168.50.202
+
+$ kubectl get pods -A
+kube-flannel   kube-flannel-ds-*   1/1   Running  (3 pods, 每節點一個)
+kube-system    coredns-*           1/1   Running  (2 pods)
+kube-system    etcd-k8s-master     1/1   Running
+kube-system    kube-apiserver      1/1   Running
+kube-system    kube-controller-*   1/1   Running
+kube-system    kube-proxy-*        1/1   Running  (3 pods, 每節點一個)
+kube-system    kube-scheduler      1/1   Running
+```
+
+### 建置記錄（已完成）
+
+| 步驟 | 狀態 | 備註 |
+|------|------|------|
+| Phase 0 - /etc/hosts | ✅ | 三台互 ping 正常 |
+| Phase 0 - Swap off | ✅ | swapon --show 空白 |
+| Phase 0 - Kernel modules | ✅ | overlay + br_netfilter |
+| Phase 0 - sysctl | ✅ | ip_forward=1, br_netfilter=1 |
+| Phase 0 - containerd | ✅ | SystemdCgroup=true |
+| Phase 0 - kubeadm/kubelet/kubectl | ✅ | v1.32.13, apt-mark hold |
+| Phase 1 - kubeadm init | ✅ | --apiserver-advertise-address=192.168.50.200 |
+| Phase 1 - kubectl config | ✅ | admin.conf → ~/.kube/config |
+| Phase 1 - Flannel CNI | ✅ | CoreDNS Pending→Running 自動恢復 |
+| Phase 2 - infra join | ✅ | 65s 後 Ready |
+| Phase 2 - worker join | ✅ | 56s 後 Ready |
+| Phase 3 - 驗證 | ✅ | 三節點全 Ready，13 pods Running |
+
+### 踩到的坑
+
+1. **`--node-ip` 不是 kubeadm 參數**：是 kubelet 參數，不能傳給 `kubeadm init`，移除即可
+2. **CoreDNS Pending 是正常現象**：裝 Flannel 前 node NotReady，裝完自動恢復
+3. **cloud-init heredoc 問題**：YAML block scalar 內不能用 `<< EOF`（yaml-cpp 誤判），改用 `printf` 解決
+
