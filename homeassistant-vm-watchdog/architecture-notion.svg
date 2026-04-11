@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520">
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; }
+  </style>
+  <defs>
+    <marker id="arr-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#3b82f6"/>
+    </marker>
+    <marker id="arr-gray" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#d1d5db"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="960" height="520" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="480" y="26" text-anchor="middle" font-size="18" font-weight="500" fill="#111827">HomeAssistant VM 自動啟動與 Crash 監控</text>
+  <text x="480" y="46" text-anchor="middle" font-size="11" fill="#9ca3af">macOS launchd + VBoxHeadless Watchdog</text>
+
+  <!-- HOST CONTAINER -->
+  <rect x="16" y="56" width="928" height="448" rx="4" fill="none" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="28" y="72" font-size="10" fill="#9ca3af" font-weight="500" letter-spacing="0.08em">MAC MINI M4 · MACOS 15 · VIRTUALBOX 7.1.8</text>
+
+  <!-- ══════════ ROW 1: STARTUP CHAIN ══════════ -->
+
+  <!-- [User Login] -->
+  <rect x="32" y="84" width="152" height="52" rx="4" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="40" y="98" font-size="10" fill="#9ca3af" font-weight="500" letter-spacing="0.08em">TRIGGER</text>
+  <text x="108" y="118" text-anchor="middle" font-size="14" font-weight="500" fill="#111827">User Login</text>
+
+  <!-- Arrow: Login → launchd -->
+  <line x1="184" y1="110" x2="224" y2="110" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+
+  <!-- [launchd plist] -->
+  <rect x="224" y="84" width="216" height="80" rx="4" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="232" y="98" font-size="10" fill="#9ca3af" font-weight="500" letter-spacing="0.08em">SERVICE MANAGER</text>
+  <text x="332" y="118" text-anchor="middle" font-size="14" font-weight="500" fill="#111827">launchd plist</text>
+  <text x="332" y="135" text-anchor="middle" font-size="11" fill="#374151">com.user.homeassistant-vm</text>
+  <text x="332" y="152" text-anchor="middle" font-size="10" fill="#9ca3af">RunAtLoad · KeepAlive · Throttle=30s</text>
+
+  <!-- Arrow: launchd → Watchdog -->
+  <line x1="440" y1="124" x2="480" y2="124" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+
+  <!-- [Watchdog Script] -->
+  <rect x="480" y="84" width="216" height="80" rx="4" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="488" y="98" font-size="10" fill="#9ca3af" font-weight="500" letter-spacing="0.08em">WATCHDOG</text>
+  <text x="588" y="118" text-anchor="middle" font-size="13" font-weight="500" fill="#111827">homeassistant-vm-watchdog.sh</text>
+  <text x="588" y="135" text-anchor="middle" font-size="11" fill="#374151">poll VM state every 15s</text>
+  <text x="588" y="152" text-anchor="middle" font-size="10" fill="#9ca3af">infinite loop · auto crash recovery</text>
+
+  <!-- Arrow: Watchdog → Log group -->
+  <line x1="696" y1="124" x2="756" y2="124" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+
+  <!-- ══════════ LOG FILES (right) ══════════ -->
+  <rect x="756" y="84" width="172" height="124" rx="4" fill="none" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="768" y="98" font-size="10" fill="#9ca3af" font-weight="500" letter-spacing="0.08em">LOGGING</text>
+
+  <rect x="768" y="105" width="148" height="36" rx="4" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="776" y="118" font-size="9" fill="#9ca3af" font-weight="500" letter-spacing="0.08em">STDOUT</text>
+  <text x="842" y="132" text-anchor="middle" font-size="11" fill="#374151">homeassistant-vm.log</text>
+
+  <rect x="768" y="153" width="148" height="44" rx="4" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="776" y="166" font-size="9" fill="#9ca3af" font-weight="500" letter-spacing="0.08em">STDERR</text>
+  <text x="842" y="180" text-anchor="middle" font-size="11" fill="#374151">homeassistant-vm-error.log</text>
+  <text x="842" y="192" text-anchor="middle" font-size="9" fill="#9ca3af">~/Library/Logs/</text>
+
+  <!-- ══════════ VERTICAL VM CHAIN ══════════ -->
+
+  <!-- Arrow: Watchdog ↓ VBoxHeadless -->
+  <line x1="588" y1="164" x2="588" y2="220" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+  <text x="598" y="197" font-size="10" fill="#9ca3af">start VM</text>
+
+  <!-- [VBoxHeadless Process] -->
+  <rect x="480" y="224" width="216" height="56" rx="4" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="488" y="238" font-size="10" fill="#9ca3af" font-weight="500" letter-spacing="0.08em">PROCESS</text>
+  <text x="588" y="258" text-anchor="middle" font-size="14" font-weight="500" fill="#111827">VBoxHeadless</text>
+  <text x="588" y="272" text-anchor="middle" font-size="11" fill="#374151">--startvm HomeAssistant</text>
+
+  <!-- Arrow: VBoxHeadless ↓ HA VM -->
+  <line x1="588" y1="280" x2="588" y2="332" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+  <text x="598" y="312" font-size="10" fill="#9ca3af">running</text>
+
+  <!-- [HomeAssistant VM] -->
+  <rect x="480" y="336" width="216" height="72" rx="4" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="488" y="350" font-size="10" fill="#9ca3af" font-weight="500" letter-spacing="0.08em">VIRTUAL MACHINE</text>
+  <text x="588" y="372" text-anchor="middle" font-size="14" font-weight="500" fill="#111827">HomeAssistant</text>
+  <text x="588" y="389" text-anchor="middle" font-size="11" fill="#374151">VirtualBox Guest OS · Port 8123</text>
+
+  <!-- ══════════ CRASH RECOVERY LOOP (right side) ══════════ -->
+  <!-- Path: VBoxHeadless right (696,252) → (728,252) → (728,124) → Watchdog right (696,124) -->
+  <path d="M 696 252 L 728 252 L 728 124 L 696 124"
+        stroke="#d1d5db" stroke-width="1.5" fill="none"
+        stroke-dasharray="4,3" marker-end="url(#arr-gray)"/>
+
+  <!-- Crash loop label (rotated beside vertical segment) -->
+  <rect x="731" y="170" width="20" height="60" rx="2" fill="#ffffff"/>
+  <text x="741" y="215" text-anchor="middle" font-size="9" fill="#9ca3af"
+        transform="rotate(-90, 741, 200)">VM exits / crash detected</text>
+
+  <!-- ══════════ LEGEND ══════════ -->
+  <rect x="32" y="432" width="420" height="60" rx="4" fill="none" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="44" y="447" font-size="10" fill="#9ca3af" font-weight="500" letter-spacing="0.08em">LEGEND</text>
+
+  <line x1="48" y1="466" x2="92" y2="466" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+  <text x="100" y="470" font-size="11" fill="#374151">Normal control flow</text>
+
+  <line x1="48" y1="484" x2="92" y2="484" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-gray)"/>
+  <text x="100" y="488" font-size="11" fill="#374151">Crash recovery feedback (VM exits → Watchdog detects → restart)</text>
+</svg>

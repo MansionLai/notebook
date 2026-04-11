@@ -12,48 +12,9 @@
 
 ## 架構圖
 
-```mermaid
-graph TB
-    subgraph macOS["macOS 15 · Mac Mini M4"]
-        subgraph Boot["開機 / 用戶登入"]
-            LOGIN[User Login]
-        end
+![HomeAssistant VM Watchdog 架構圖](architecture-notion.png)
 
-        subgraph LaunchD["launchd（macOS 服務管理）"]
-            PLIST["com.user.homeassistant-vm.plist\n~/Library/LaunchAgents/\n• RunAtLoad = true\n• KeepAlive = true\n• ThrottleInterval = 30s"]
-        end
-
-        subgraph Watchdog["Watchdog Script\n~/.local/bin/homeassistant-vm-watchdog.sh"]
-            POLL["每 15s 輪詢\nVBoxManage showvminfo"]
-            CHK{VM State?}
-            RUNNING["running / starting\n→ 繼續監控"]
-            START["stopped / aborted / saved\n→ 啟動 VM"]
-        end
-
-        subgraph VBox["VirtualBox 7.1.8"]
-            HEADLESS["VBoxHeadless --startvm HomeAssistant\n（持續佔用行程直到 VM 結束）"]
-            VM["HomeAssistant VM\nVirtualBox Guest"]
-        end
-
-        subgraph Logs["Log 輸出"]
-            LOG1["~/Library/Logs/homeassistant-vm.log\nstdout"]
-            LOG2["~/Library/Logs/homeassistant-vm-error.log\nstderr"]
-        end
-    end
-
-    LOGIN --> PLIST
-    PLIST -->|"RunAtLoad 觸發"| Watchdog
-    POLL --> CHK
-    CHK -->|running| RUNNING
-    RUNNING -->|"sleep 15s"| POLL
-    CHK -->|"stopped / crashed"| START
-    START --> HEADLESS
-    HEADLESS --> VM
-    HEADLESS -->|"VM 結束 / crash\nVBoxHeadless 退出"| POLL
-    Watchdog --> LOG1
-    Watchdog --> LOG2
-    PLIST -->|"Watchdog crash\n→ launchd 重啟"| Watchdog
-```
+> 圖片原始檔：[architecture-notion.svg](architecture-notion.svg)
 
 ---
 
