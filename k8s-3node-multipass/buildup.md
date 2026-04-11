@@ -350,3 +350,31 @@ kube-system    kube-scheduler      1/1   Running
 2. **CoreDNS Pending 是正常現象**：裝 Flannel 前 node NotReady，裝完自動恢復
 3. **cloud-init heredoc 問題**：YAML block scalar 內不能用 `<< EOF`（yaml-cpp 誤判），改用 `printf` 解決
 
+
+### Node Role 設定
+
+```bash
+# ROLES 欄位來自 node-role.kubernetes.io/<role> label
+kubectl label node k8s-infra  node-role.kubernetes.io/infra=
+kubectl label node k8s-worker node-role.kubernetes.io/worker=
+```
+
+結果：
+```
+NAME         STATUS   ROLES           AGE   VERSION
+k8s-infra    Ready    infra           4m    v1.32.13
+k8s-master   Ready    control-plane   12m   v1.32.13
+k8s-worker   Ready    worker          3m    v1.32.13
+```
+
+### Phase 3 Pod 測試
+
+```bash
+kubectl run test-nginx --image=nginx --restart=Never
+kubectl get pod test-nginx -o wide
+# NAME         READY   STATUS    IP           NODE
+# test-nginx   1/1     Running   10.244.1.2   k8s-infra
+kubectl delete pod test-nginx --grace-period=0
+```
+
+✅ Pod 成功排程到 k8s-infra，IP 從 Flannel 的 10.244.1.0/24 分配
