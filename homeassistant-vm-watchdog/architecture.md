@@ -1,0 +1,127 @@
+# VirtualBox HomeAssistant VM 自動啟動與 Crash 監控架構
+
+> 建立日期：2026-04-11  
+> 分類：architecture  
+> 環境：macOS 15 · VirtualBox 7.1.8 · Apple M4
+
+## 概述
+
+在 Mac Mini 上使用 macOS 原生的 `launchd` 服務管理 VirtualBox HomeAssistant VM，取代 Login Items `.app` 方案。透過 `VBoxHeadless`（無頭模式）持續持有 VM 行程，搭配 Watchdog Shell Script 實現：開機自動啟動、VM crash 自動重啟、完整 Log 紀錄。
+
+---
+
+## 架構圖
+
+```mermaid
+graph TB
+    subgraph macOS["macOS 15 · Mac Mini M4"]
+        subgraph Boot["開機 / 用戶登入"]
+            LOGIN[User Login]
+        end
+
+        subgraph LaunchD["launchd（macOS 服務管理）"]
+            PLIST["com.user.homeassistant-vm.plist\n~/Library/LaunchAgents/\n• RunAtLoad = true\n• KeepAlive = true\n• ThrottleInterval = 30s"]
+        end
+
+        subgraph Watchdog["Watchdog Script\n~/.local/bin/homeassistant-vm-watchdog.sh"]
+            POLL["每 15s 輪詢\nVBoxManage showvminfo"]
+            CHK{VM State?}
+            RUNNING["running / starting\n→ 繼續監控"]
+            START["stopped / aborted / saved\n→ 啟動 VM"]
+        end
+
+        subgraph VBox["VirtualBox 7.1.8"]
+            HEADLESS["VBoxHeadless --startvm HomeAssistant\n（持續佔用行程直到 VM 結束）"]
+            VM["HomeAssistant VM\nVirtualBox Guest"]
+        end
+
+        subgraph Logs["Log 輸出"]
+            LOG1["~/Library/Logs/homeassistant-vm.log\nstdout"]
+            LOG2["~/Library/Logs/homeassistant-vm-error.log\nstderr"]
+        end
+    end
+
+    LOGIN --> PLIST
+    PLIST -->|"RunAtLoad 觸發"| Watchdog
+    POLL --> CHK
+    CHK -->|running| RUNNING
+    RUNNING -->|"sleep 15s"| POLL
+    CHK -->|"stopped / crashed"| START
+    START --> HEADLESS
+    HEADLESS --> VM
+    HEADLESS -->|"VM 結束 / crash\nVBoxHeadless 退出"| POLL
+    Watchdog --> LOG1
+    Watchdog --> LOG2
+    PLIST -->|"Watchdog crash\n→ launchd 重啟"| Watchdog
+```
+
+---
+
+## 元件說明
+
+### launchd plist（`com.user.homeassistant-vm.plist`）
+
+| 設定 | 值 | 說明 |
+|------|-----|------|
+| `RunAtLoad` | `true` | 用戶登入後立即啟動 Watchdog |
+| `KeepAlive` | `true` | Watchdog 腳本 crash 時自動重啟 |
+| `ThrottleInterval` | `30s` | 防止 Watchdog 快速 crashloop |
+| `StandardOutPath` | `~/Library/Logs/homeassistant-vm.log` | 正常 log |
+| `StandardErrorPath` | `~/Library/Logs/homeassistant-vm-error.log` | 錯誤 log |
+
+### Watchdog Script（`homeassistant-vm-watchdog.sh`）
+
+| VM State | Watchdog 行為 |
+|----------|-------------|
+| `running` / `starting` / `restoring` | sleep 15s，繼續輪詢 |
+| `stopped` / `aborted` / `poweroff` / `saved` | 呼叫 `VBoxHeadless --startvm` |
+| 查詢失敗（VBox 未就緒） | sleep 15s 後重試 |
+
+### VBoxHeadless vs VBoxManage startvm
+
+| | `VBoxHeadless` | `VBoxManage startvm` |
+|--|:-:|:-:|
+| 行程持續運行 | ✅ VM 結束才退出 | ❌ 啟動後立刻退出 |
+| launchd 可監控 | ✅ | ❌ |
+| Crash 可偵測 | ✅ | ❌ |
+| 無頭（不顯示視窗） | ✅ | 需加 `--type headless` |
+
+---
+
+## 與舊方案比較
+
+| 功能 | `.app` Login Items | launchd + Watchdog |
+|------|:-:|:-:|
+| 開機自動啟動 | ✅ | ✅ |
+| VM crash 自動重啟 | ❌ | ✅ |
+| 無頭模式（headless） | 視腳本而定 | ✅ |
+| Log 紀錄 | ❌ | ✅ |
+| 指令管理（start/stop） | ❌ | ✅ |
+| Watchdog 本身 crash 重啟 | ❌ | ✅ |
+| 需要圖形介面登入 | ✅ | ✅（LaunchAgent） |
+
+> 💡 若想不需登入就啟動（純 headless server），可改用 `/Library/LaunchDaemons/`（需 root），但 VirtualBox 需額外設定。
+
+---
+
+## 檔案位置
+
+```
+~/
+├── .local/bin/
+│   └── homeassistant-vm-watchdog.sh     # Watchdog 主腳本
+├── Library/
+│   ├── LaunchAgents/
+│   │   └── com.user.homeassistant-vm.plist  # launchd 設定
+│   └── Logs/
+│       ├── homeassistant-vm.log             # stdout log
+│       └── homeassistant-vm-error.log       # stderr log
+```
+
+---
+
+## 參考資料
+
+- [launchd 官方文件](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html)
+- [VBoxHeadless 文件](https://www.virtualbox.org/manual/ch07.html)
+- [launchctl man page](https://ss64.com/osx/launchctl.html)
