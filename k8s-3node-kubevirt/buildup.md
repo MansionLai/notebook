@@ -113,7 +113,7 @@
 3. 設定：
    - Name: `k8s-worker-nic2`
    - Subnet: `kubevirt-subnet`（10.10.100.0/24）
-   - Private IP assignment: **Static** → `10.10.100.1`（Worker NIC 的 IP，不是 VM 的 IP）
+   - Private IP assignment: **Static** → `10.10.100.12`（Worker eth1 IP）
 4. 建立後 → 啟動 Worker
 
 ---
