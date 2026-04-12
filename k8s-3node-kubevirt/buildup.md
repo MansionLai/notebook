@@ -10,9 +10,9 @@
 
 | 節點 | Azure VM | Private IP | 角色 |
 |------|----------|------------|------|
-| k8s-master | Standard_D4s_v5 (4C/16G) | 10.10.10.10 | K8s CP + KubeVirt 管理面 |
-| k8s-infra | Standard_D2s_v5 (2C/8G) | 10.10.10.11 | Prometheus + OpenSearch + Fluent Bit |
-| k8s-worker | Standard_D4s_v5 (4C/16G) | 10.10.10.12 | KubeVirt VM workload |
+| mansion-k8s-master | Standard_D4s_v4 (4C/16G) | 10.10.10.10 | K8s CP + KubeVirt 管理面 |
+| mansion-k8s-infra | Standard_D2s_v4 (2C/8G) | 10.10.10.11 | Prometheus + OpenSearch + Fluent Bit |
+| mansion-k8s-worker | Standard_D4s_v4 (4C/16G) | 10.10.10.12 | KubeVirt VM workload |
 
 **Pod 網段：** 10.244.0.0/16（Cilium）  
 **KubeVirt VM 網段：** 10.10.100.0/24（kubevirt-subnet，Worker eth1）
@@ -74,11 +74,11 @@
 
 #### Basics Tab
 
-| 欄位 | k8s-master | k8s-infra | k8s-worker |
+| 欄位 | mansion-k8s-master | mansion-k8s-infra | mansion-k8s-worker |
 |------|-----------|-----------|-----------|
-| VM name | `k8s-master` | `k8s-infra` | `k8s-worker` |
+| VM name | `mansion-k8s-master` | `mansion-k8s-infra` | `mansion-k8s-worker` |
 | Image | Ubuntu Server 24.04 LTS (Gen2) | 同左 | 同左 |
-| Size | Standard_D4s_v5 | Standard_D2s_v5 | Standard_D4s_v5 |
+| Size | Standard_D4s_v4 | Standard_D2s_v4 | Standard_D4s_v4 |
 | Auth type | SSH public key | 同左 | 同左 |
 | Username | `ubuntu` | 同左 | 同左 |
 | SSH key | 貼上你的 public key | 同左 | 同左 |
@@ -100,9 +100,9 @@
 
 | 節點 | Private IP |
 |------|-----------|
-| k8s-master | `10.10.10.10` |
-| k8s-infra | `10.10.10.11` |
-| k8s-worker | `10.10.10.12` |
+| mansion-k8s-master | `10.10.10.10` |
+| mansion-k8s-infra | `10.10.10.11` |
+| mansion-k8s-worker | `10.10.10.12` |
 
 ---
 
