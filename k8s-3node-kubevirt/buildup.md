@@ -230,49 +230,45 @@ sysctl net.ipv4.ip_forward
 
 ---
 
-### Step 1-5：安裝 containerd
+### Step 1-5：安裝 CRI-O
+
+> CRI-O 是專為 Kubernetes 設計的輕量級 CRI，預設使用 systemd cgroup，不需要額外設定。
 
 ```bash
-# 安裝 Docker repo（containerd.io 版本較新）
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl gnupg
 
 sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-  sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-  https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+# 加入 CRI-O 官方 repo（版本對應 K8s 1.32）
+KUBERNETES_VERSION=v1.32
+
+curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/stable:/${KUBERNETES_VERSION}/deb/Release.key | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+
+echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] \
+  https://pkgs.k8s.io/addons:/cri-o:/stable:/${KUBERNETES_VERSION}/deb/ /" | \
+  sudo tee /etc/apt/sources.list.d/cri-o.list
 
 sudo apt-get update
-sudo apt-get install -y containerd.io
+sudo apt-get install -y cri-o
+
+sudo systemctl start crio
+sudo systemctl enable crio
 ```
 
 ---
 
-### Step 1-6：設定 containerd（systemd cgroup）
+### Step 1-6：驗證 CRI-O
+
+> CRI-O 預設已正確設定 systemd cgroup 與 pause image，無需額外修改設定檔。
 
 ```bash
-sudo mkdir -p /etc/containerd
-containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
-
-# 啟用 systemd cgroup driver
-sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-
-# 修正 pause image（與 kubeadm 一致）
-sudo sed -i 's|sandbox_image = ".*"|sandbox_image = "registry.k8s.io/pause:3.10"|' \
-  /etc/containerd/config.toml
-
-sudo systemctl restart containerd
-sudo systemctl enable containerd
-```
-
-驗證：
-```bash
-sudo systemctl is-active containerd
+sudo systemctl is-active crio
 # 預期：active
+
+sudo crictl info | grep -E 'cgroup|sandbox'
+# 預期：看到 cgroupDriver: systemd
 ```
 
 ---
@@ -965,7 +961,7 @@ kubectl get crd | grep kubevirt.io
 
 | 問題 | 原因 | 解法 |
 |------|------|------|
-| `kubeadm init` 失敗 — sandbox image 不一致 | containerd config 的 pause image 版本不符 | 修改 `config.toml` 的 `sandbox_image = "registry.k8s.io/pause:3.10"` |
+| `kubeadm init` 失敗 — sandbox image 不一致 | CRI-O 預設已對應正確 pause image，通常不會出現此問題 | 若出現，檢查 `/etc/crio/crio.conf` 的 `pause_image` |
 | CoreDNS Pending | 未安裝 CNI | 先裝 Cilium，CoreDNS 才會 Running |
 | virt-api/controller 一直排程到 worker | master 有 NoSchedule taint | 在 KubeVirt CR 的 customizeComponents 加 toleration + nodeSelector |
 | Worker bridge 模式流量被丟棄 | Azure NIC MAC filtering | Portal → NIC (eth1) → Enable IP Forwarding |
