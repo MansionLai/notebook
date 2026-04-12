@@ -25,7 +25,7 @@
 
 1. Portal → **Resource groups** → **Create**
 2. Subscription: 選你的訂閱
-3. Resource group name: `k8s-kubevirt-rg`
+3. Resource group name: `mansion_resource`
 4. Region: 選你最近的地區（例如 East Asia）
 5. → **Review + create** → **Create**
 
@@ -35,7 +35,7 @@
 
 1. Portal → **Virtual networks** → **Create**
 2. Basics:
-   - Resource group: `k8s-kubevirt-rg`
+   - Resource group: `mansion_resource`
    - Name: `k8s-vnet`
    - Region: 同上
 3. **IP addresses** tab：
@@ -54,7 +54,7 @@
 ### Step 0-3：建立 Network Security Group
 
 1. Portal → **Network security groups** → **Create**
-2. Name: `k8s-nsg`，Resource group: `k8s-kubevirt-rg`
+2. Name: `k8s-nsg`，Resource group: `mansion_resource`
 3. 建立後進入 NSG → **Inbound security rules** → 新增以下規則：
 
 | Priority | Name | Port | Protocol | Source | Action |
