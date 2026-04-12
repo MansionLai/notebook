@@ -378,3 +378,64 @@ kubectl delete pod test-nginx --grace-period=0
 ```
 
 ✅ Pod 成功排程到 k8s-infra，IP 從 Flannel 的 10.244.1.0/24 分配
+
+---
+
+## CNI 替換：Flannel → Cilium（2026-04-12）
+
+### 替換步驟
+
+```bash
+# Step 1: 刪除 Flannel
+kubectl delete -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+
+# Step 2: 三台 VM 各清理殘留
+sudo rm -f /etc/cni/net.d/10-flannel.conflist
+sudo ip link delete flannel.1 2>/dev/null || true
+sudo ip link delete cni0 2>/dev/null || true
+
+# Step 3: 安裝 Cilium CLI（ARM64，在 k8s-master）
+CILIUM_VER=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
+curl -L --remote-name \
+  https://github.com/cilium/cilium-cli/releases/download/${CILIUM_VER}/cilium-linux-arm64.tar.gz
+sudo tar xzf cilium-linux-arm64.tar.gz -C /usr/local/bin
+rm cilium-linux-arm64.tar.gz
+
+# Step 4: 安裝 Cilium
+cilium install \
+  --set ipam.mode=kubernetes \
+  --set kubeProxyReplacement=false
+cilium status --wait
+
+# Step 5: Restart CoreDNS
+kubectl rollout restart deployment/coredns -n kube-system
+```
+
+### 最終狀態
+
+```
+cilium status:
+  Cilium:          OK  (v1.19.1)
+  Operator:        OK
+  Envoy DaemonSet: OK  (3/3)
+  Hubble Relay:    disabled（可選開啟）
+```
+
+### 跨節點 Pod 通訊驗證
+
+```
+test-a (nginx) → k8s-worker  10.244.2.102
+test-b (busybox) → k8s-infra 10.244.1.228
+
+kubectl exec test-b -- wget -qO- http://10.244.2.102
+→ 回傳 nginx HTML ✅ 跨節點通訊正常（Cilium eBPF）
+```
+
+### Flannel vs Cilium 重點差異
+
+| | Flannel | Cilium |
+|---|---|---|
+| 封包路由 | VXLAN overlay | eBPF（kernel 層）|
+| NetworkPolicy | ❌ | ✅ |
+| 可觀測性 | ❌ | Hubble UI（可開啟）|
+| kube-proxy 替換 | ❌ | 可選（kubeProxyReplacement=true）|
