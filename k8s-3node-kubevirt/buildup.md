@@ -36,7 +36,7 @@
 1. Portal → **Virtual networks** → **Create**
 2. Basics:
    - Resource group: `mansion_resource`
-   - Name: `k8s-vnet`
+   - Name: `mansion-k8s-vnet`
    - Region: 同上
 3. **IP addresses** tab：
    - Address space: `10.10.0.0/16`
@@ -89,7 +89,7 @@
 #### Networking Tab
 | 欄位 | 設定 |
 |------|------|
-| Virtual network | `k8s-vnet` |
+| Virtual network | `mansion-k8s-vnet` |
 | Subnet | `k8s-subnet` |
 | Public IP | 建立新的（Static，名稱如 `k8s-master-pip`）|
 | NIC network security group | **Advanced** → 選 `k8s-nsg` |
