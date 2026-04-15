@@ -355,12 +355,97 @@ kubectl apply -f kubevirt-prometheus-rule.yaml
 kubectl get servicemonitor,prometheusrule -n monitoring
 ```
 
-> **取得完整官方 PrometheusRule 規則清單**（再自行修改）：
-> ```bash
-> curl -sL https://raw.githubusercontent.com/kubevirt/kubevirt/v1.5.0/pkg/monitoring/rules/alerts/vms.go
-> ```
-
 > **kube-prometheus-stack 注意**：Prometheus 預設只抓 `release: <helm-release-name>` 的 ServiceMonitor/PrometheusRule。需在 `metadata.labels` 加入對應 label，或修改 Prometheus CR 的 `serviceMonitorSelector` / `ruleSelector`。
+
+---
+
+### 取得官方完整 YAML 的正確方式
+
+> ⚠️ KubeVirt 的 ServiceMonitor / PrometheusRule **沒有獨立的 release YAML 檔**，全部硬編碼在 Go binary 中由 virt-operator 動態生成。要取得完整可 apply 的 YAML，有以下兩種方式：
+
+#### 方式 A：從已安裝的叢集直接 export（最可靠）
+
+virt-operator 兩層條件通過後，資源已建立在 monitoring namespace：
+
+```bash
+# 取得 PrometheusRule（含所有告警規則）
+kubectl get prometheusrule -n monitoring -l prometheus.kubevirt.io -o yaml \
+  | grep -v 'creationTimestamp\|resourceVersion\|uid\|generation\|managedFields' \
+  > kubevirt-prometheus-rule.yaml
+
+# 取得 ServiceMonitor
+kubectl get servicemonitor -n monitoring -l prometheus.kubevirt.io -o yaml \
+  | grep -v 'creationTimestamp\|resourceVersion\|uid\|generation\|managedFields' \
+  > kubevirt-service-monitor.yaml
+```
+
+#### 方式 B：從 virt-operator image dump（無需叢集建立監控資源）
+
+```bash
+# 先確認 virt-operator image tag
+kubectl get deployment -n kubevirt virt-operator -o jsonpath='{.spec.template.spec.containers[0].image}'
+
+# 用同版本 image 執行 dump（需要 Docker / containerd 環境）
+docker run --rm kubevirt/virt-operator:v1.5.0 \
+  /usr/bin/virt-operator --dump-install-strategy 2>/dev/null \
+  | python3 -c "
+import sys, yaml
+docs = list(yaml.safe_load_all(sys.stdin))
+for d in docs:
+    if d and d.get('kind') in ('ServiceMonitor', 'PrometheusRule'):
+        print('---')
+        print(yaml.dump(d, default_flow_style=False))
+"
+```
+
+---
+
+### 升級 KubeVirt 版本後的更新步驟
+
+使用方法二（手動 apply YAML）時，virt-operator **不會**自動更新你手動建立的資源。升級 KubeVirt 後需要手動處理：
+
+#### ServiceMonitor 的變動點（通常不大）
+
+升級時需確認：
+- 是否新增了元件（如 `virt-exportproxy`）需要對應的 metrics endpoint
+- 端點的 port 名稱是否有更名
+
+```bash
+# 比對新版官方 ServiceMonitor 與目前手動版本的差異
+# 1. 先 export 新版（方式 A 需要先讓 virt-operator 在測試叢集上跑一次）
+# 2. diff 比較
+diff kubevirt-service-monitor-old.yaml kubevirt-service-monitor-new.yaml
+```
+
+#### PrometheusRule 的變動點（每個版本都可能有變化）
+
+告警規則變動最頻繁：新增告警、修改 expr、調整 threshold。
+
+```bash
+# Step 1：export 新版 KubeVirt 的 PrometheusRule（用方式 A 或 B 取得）
+# 存為 kubevirt-prometheus-rule-vX.Y.Z.yaml
+
+# Step 2：比對新舊規則差異
+diff <(grep 'alert:' kubevirt-prometheus-rule-old.yaml | sort) \
+     <(grep 'alert:' kubevirt-prometheus-rule-new.yaml | sort)
+
+# Step 3：將新版官方規則 merge 進你的客製化版本
+# - 保留自己新增的 alert rules（客製化部分）
+# - 更新官方規則的 expr / for / labels（避免告警誤報或漏報）
+
+# Step 4：apply 更新後的 YAML
+kubectl apply -f kubevirt-prometheus-rule.yaml
+```
+
+#### 升級 checklist
+
+| 項目 | ServiceMonitor | PrometheusRule |
+|------|---------------|----------------|
+| 新版 release notes 是否提到監控變動 | 查閱 | 查閱 |
+| 新增元件的 endpoint | 確認 | — |
+| 告警規則 expr / threshold 更新 | — | **必須同步** |
+| 新增的告警規則 | — | 建議加入 |
+| 客製化部分是否衝突 | 確認 | 確認 |
 
 ---
 
@@ -369,7 +454,7 @@ kubectl get servicemonitor,prometheusrule -n monitoring
 | 方法 | 適用情境 | 結果 |
 |------|---------|------|
 | **方法一**：刪 Strategy CM + 重啟 virt-operator | 只需預設版本、兩層條件已就緒 | 由 virt-operator 管理，升級時自動同步 |
-| **方法二**：手動 apply YAML | 需客製化 labels / selector / alert rules | 完全自訂，但升級 KubeVirt 後需手動更新 YAML |
+| **方法二**：手動 apply YAML | 需客製化 labels / selector / alert rules | 完全自訂；升級 KubeVirt 後需手動 diff 新版並更新（見「升級步驟」）|
 
 ---
 
