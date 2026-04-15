@@ -38,19 +38,24 @@ flowchart TD
     B --> C[安裝 CRDs\nKubeVirt / VirtualMachine /\nVirtualMachineInstance 等 20+ CRDs]
     C --> D[建立 RBAC\nClusterRole / ClusterRoleBinding /\nServiceAccount]
     D --> E[部署 virt-operator Deployment\n由 K8s scheduler 排程]
-    E --> F([kubectl apply kubevirt-cr.yaml\nkind: KubeVirt CR])
+    E --> E1{Layer 1: virt-operator 啟動時\nAPI Discovery\nservicemonitors.monitoring.coreos.com\nCRD 是否存在？}
+    E1 -->|CRD 不存在| E2[OperatorConfig\nServiceMonitorEnabled = false\n⚠️ 啟動後固定，重啟才更新]
+    E1 -->|CRD 存在| E3[OperatorConfig\nServiceMonitorEnabled = true\n⚠️ 啟動後固定，重啟才更新]
+    E2 & E3 --> F([kubectl apply kubevirt-cr.yaml\nkind: KubeVirt CR])
     F --> G{virt-operator\nWatch KubeVirt CR\nReconcile Loop 啟動}
     G --> H[Phase: Deploying]
     H --> I1[建立 virt-api Deployment\n2 replicas · port 8443\nWebhook + REST API]
     H --> I2[建立 virt-controller Deployment\n2 replicas\n管理 VM 狀態機]
     H --> I3[建立 virt-handler DaemonSet\n每個 node 一個\n直接存取 /dev/kvm]
     I1 & I2 & I3 --> J[等待各元件 Ready\nreadiness probe 通過]
-    J --> K{檢查 Prometheus Operator CRD\nservicemonitors.monitoring.coreos.com\n是否存在？}
-    K -->|CRD 存在| L1[建立 ServiceMonitor x4\nvirt-api / virt-controller\nvirt-operator / virt-handler]
-    K -->|CRD 存在| L2[建立 PrometheusRule\nKubeVirt alerting rules\n約 15 條告警]
-    K -->|CRD 不存在| L3[跳過監控元件\n靜默略過，不報錯]
-    L1 & L2 --> M[建立 kubevirt-prometheus-rule ConfigMap]
-    L3 --> N
+    J --> K1{ServiceMonitorEnabled = true？\nLayer 1 通過？}
+    K1 -->|false| L_skip[跳過監控元件\n靜默略過，不報錯]
+    K1 -->|true| K2{Layer 2: Install Strategy 生成時\nmonitorNamespace 內\nmonitorAccount SA 是否存在？\n預設：monitoring ns\n內的 prometheus-k8s SA}
+    K2 -->|SA 不存在\nisServiceAccountFound=false| L_warn[Warning log\n跳過監控元件\n靜默略過，不報錯]
+    K2 -->|SA 存在\nisServiceAccountFound=true| LM[建立監控資源\nServiceMonitor x4\nPrometheusRule x1]
+    LM --> M[Strategy 結果 cache\n於 install-strategy ConfigMap]
+    L_skip --> N
+    L_warn --> N
     M --> N([Phase: Deployed\nKubeVirt CR status.phase = Deployed])
 ```
 
@@ -83,33 +88,71 @@ flowchart TD
 
 ## ServiceMonitor & PrometheusRule 條件建立機制
 
-### 判斷邏輯
+virt-operator 採用**兩層判斷**決定是否建立監控資源，缺一不可：
 
-virt-operator 在 reconcile loop 中，呼叫 `IsPrometheusDeployed()` 函式：
+### Layer 1：API Discovery（virt-operator 啟動時，一次性）
+
+- **時機**：virt-operator Pod 啟動時執行，結果固定在 `OperatorConfig`，**重啟才會重新判斷**
+- **位置**：`pkg/virt-operator/util/client.go`
+- **邏輯**：使用 `DiscoveryClient` 掃描 cluster 上所有 API groups，確認 `monitoring.coreos.com/v1` 下是否有 `servicemonitors` resource
 
 ```go
-// pkg/virt-operator/resource/generate/components/prometheus.go
-func IsPrometheusDeployed(clientset kubecli.KubevirtClient) (bool, error) {
-    _, err := clientset.ExtensionsClient().
-        ApiextensionsV1().CustomResourceDefinitions().
-        Get(context.Background(),
-            "servicemonitors.monitoring.coreos.com",
-            metav1.GetOptions{})
-    if errors.IsNotFound(err) {
-        return false, nil   // Prometheus Operator 未安裝 → 跳過
+func IsServiceMonitorEnabled(clientset kubecli.KubevirtClient) bool {
+    _, resources, _ := clientset.DiscoveryClient().ServerGroupsAndResources()
+    for _, r := range resources {
+        if r.GroupVersion == "monitoring.coreos.com/v1" {
+            for _, res := range r.APIResources {
+                if res.Name == "servicemonitors" {
+                    return true  // ← 設定 OperatorConfig.ServiceMonitorEnabled = true
+                }
+            }
+        }
     }
-    return err == nil, err  // CRD 存在 → 建立監控資源
+    return false
 }
 ```
 
-| 情境 | CRD 是否存在 | 行為 |
-|------|-------------|------|
-| 有安裝 `kube-prometheus-stack` | ✅ | 自動建立 ServiceMonitor + PrometheusRule |
-| 有安裝 Prometheus Operator（獨立）| ✅ | 自動建立 |
-| 只有原生 Prometheus（無 Operator）| ❌ | 靜默跳過，不報錯 |
-| 完全沒有 Prometheus | ❌ | 靜默跳過，不報錯 |
+### Layer 2：SA 存在判斷（apply kubevirt-cr.yaml 後，生成 Install Strategy 時）
 
-> **對本次建置的意義**：Phase 4a 先安裝 kube-prometheus-stack → Phase 5 安裝 KubeVirt 時，ServiceMonitor 會**自動建立**，不需要手動 apply。
+- **時機**：`GenerateCurrentInstallStrategy()` 被呼叫時（apply KubeVirt CR 觸發 reconcile）
+- **位置**：`pkg/virt-operator/resource/generate/install/strategy.go`
+- **邏輯**：依 `monitorNamespace` + `monitorAccount`（來自 KubeVirt CR spec 或預設值）查找 ServiceAccount 是否存在
+
+```go
+func getMonitorNamespace(client kubecli.KubevirtClient, config *util.KubeVirtDeploymentConfig) (string, bool) {
+    namespace := config.GetMonitorNamespace()   // 預設依序嘗試 openshift-monitoring → monitoring
+    account   := config.GetMonitorAccount()     // 預設 prometheus-k8s
+
+    _, err := client.CoreV1().ServiceAccounts(namespace).
+        Get(context.Background(), account, metav1.GetOptions{})
+    if err != nil {
+        log.Warningf("ServiceAccount %s/%s not found, skipping monitoring resources", namespace, account)
+        return "", false  // ← isServiceAccountFound = false → Strategy 不含監控資源
+    }
+    return namespace, true
+}
+```
+
+- **結果快取**：Strategy 結果寫入 `install-strategy` ConfigMap，不會因為 SA 後來建立而自動重跑
+
+### 兩層判斷組合結果
+
+| Layer 1 (CRD 存在) | Layer 2 (SA 存在) | 結果 |
+|-------------------|-----------------|------|
+| ❌ | 任意 | 跳過，不報錯 |
+| ✅ | ❌ | Warning log，跳過 |
+| ✅ | ✅ | **自動建立 ServiceMonitor + PrometheusRule** |
+
+### 常見踩坑情境
+
+| 情境 | Layer 1 | Layer 2 | 結果 |
+|------|---------|---------|------|
+| 先裝 KubeVirt，後裝 Prometheus Operator | ❌（啟動時 CRD 不在）| ❌ | 跳過 |
+| `servicemonitors` CRD 存在，但 SA 在不同 namespace | ✅ | ❌ | 跳過 |
+| `monitorAccount` 設定了不存在的 SA 名稱 | ✅ | ❌ | 跳過 |
+| 先裝 `kube-prometheus-stack`，再裝 KubeVirt | ✅ | ✅ | 自動建立 ✅ |
+
+> **對本次建置的意義**：Phase 4a 先安裝 kube-prometheus-stack → Phase 5 安裝 KubeVirt 時，兩層判斷都通過，ServiceMonitor + PrometheusRule 會**自動建立**。
 
 ---
 
@@ -175,7 +218,7 @@ func NewPrometheusRule(namespace string) *promv1.PrometheusRule {
 
 - **安裝順序**：`operator.yaml` → 等 virt-operator Running → `cr.yaml`
 - **元件建立**：virt-operator watch KubeVirt CR → Reconcile → 依序建立 virt-api / virt-controller / virt-handler
-- **監控資源**：條件建立，檢查 `servicemonitors.monitoring.coreos.com` CRD 是否存在
+- **監控資源**：**兩層判斷**，Layer 1（virt-operator 啟動時 API Discovery CRD）且 Layer 2（monitorNamespace 內 monitorAccount SA 存在）都通過才建立
 - **Template 來源**：Go source code 硬編碼在 `pkg/virt-operator/resource/generate/components/`，不讀外部 YAML
 
 ---
@@ -219,9 +262,11 @@ kubectl get servicemonitor,prometheusrule -n monitoring
 
 ---
 
-### 方法二：手動 apply ServiceMonitor YAML（可客製化 labels）
+### 方法二：手動 apply YAML（可客製化 labels、selector、告警規則）
 
-**適用**：想自訂 labels 讓特定 Prometheus instance 抓取，或整合到自己的 monitoring stack。
+**適用**：想自訂 labels、scrape 設定，或修改 alerting rules threshold / severity，甚至加入業務告警。
+
+#### ServiceMonitor
 
 ```yaml
 # kubevirt-service-monitor.yaml
@@ -233,12 +278,12 @@ metadata:
   labels:
     prometheus.kubevirt.io: "true"
     k8s-app: kubevirt
-    # ▼ 客製化：加入自己的 label 讓特定 Prometheus selector 匹配
-    # release: kube-prometheus-stack     # 例如 kube-prometheus-stack 預設用這個 label
+    # ▼ 客製化：加入自己的 label 讓特定 Prometheus instance selector 匹配
+    # release: kube-prometheus-stack     # kube-prometheus-stack 預設用此 label 篩選 ServiceMonitor
 spec:
   selector:
     matchLabels:
-      prometheus.kubevirt.io: "true"     # 選出 kubevirt namespace 內的所有 metrics Service
+      prometheus.kubevirt.io: "true"     # 選出 kubevirt namespace 內所有 metrics Service
   namespaceSelector:
     matchNames:
       - kubevirt
@@ -253,18 +298,7 @@ spec:
       # scrapeTimeout: 10s
 ```
 
-```bash
-kubectl apply -f kubevirt-service-monitor.yaml
-kubectl get servicemonitor -n monitoring kubevirt-service-monitor
-```
-
-> **客製化重點**：若使用 `kube-prometheus-stack`，Prometheus 預設只抓 `release: <helm-release-name>` 的 ServiceMonitor。需在 `metadata.labels` 加入對應 label，或修改 Prometheus CR 的 `serviceMonitorSelector`。
-
----
-
-### 方法三：手動 apply PrometheusRule YAML（可客製化告警規則）
-
-**適用**：想修改 threshold、severity、annotations，或加入業務告警（例如特定 VM 長時間離線）。
+#### PrometheusRule
 
 ```yaml
 # kubevirt-prometheus-rule.yaml
@@ -276,7 +310,7 @@ metadata:
   labels:
     prometheus.kubevirt.io: "true"
     k8s-app: kubevirt
-    # ▼ 客製化：同 ServiceMonitor，需匹配 Prometheus CR 的 ruleSelector
+    # ▼ 客製化：需匹配 Prometheus CR 的 ruleSelector
     # release: kube-prometheus-stack
 spec:
   groups:
@@ -303,15 +337,6 @@ spec:
             summary: "VM 卡在 Error 狀態超過 10 分鐘"
             description: "VM {{ $labels.name }} 在 namespace {{ $labels.namespace }} 處於錯誤狀態"
 
-        - alert: KubevirtVMIExcessiveMigrations
-          expr: |
-            kubevirt_migrate_vmi_migration_count > 12
-          for: 1h
-          labels:
-            severity: warning
-          annotations:
-            summary: "VMI 在 1 小時內遷移次數過多"
-
         # ── 客製化規則（範例）──
         - alert: KubevirtVMNotRunning
           expr: |
@@ -325,27 +350,26 @@ spec:
 ```
 
 ```bash
+kubectl apply -f kubevirt-service-monitor.yaml
 kubectl apply -f kubevirt-prometheus-rule.yaml
-kubectl get prometheusrule -n monitoring kubevirt-prometheus-rule
+kubectl get servicemonitor,prometheusrule -n monitoring
 ```
 
-> **取得完整官方規則清單**（再自行修改）：  
+> **取得完整官方 PrometheusRule 規則清單**（再自行修改）：
 > ```bash
-> # 從 GitHub 取得 v1.5.0 所有告警規則
 > curl -sL https://raw.githubusercontent.com/kubevirt/kubevirt/v1.5.0/pkg/monitoring/rules/alerts/vms.go
 > ```
 
+> **kube-prometheus-stack 注意**：Prometheus 預設只抓 `release: <helm-release-name>` 的 ServiceMonitor/PrometheusRule。需在 `metadata.labels` 加入對應 label，或修改 Prometheus CR 的 `serviceMonitorSelector` / `ruleSelector`。
+
 ---
 
-### 三種方法比較
+### 兩種方法比較
 
-| 方法 | 適用情境 | 難度 | 結果 |
-|------|---------|------|------|
-| **方法一**：刪 CM + 重啟 virt-operator | 只要用預設版本、Prometheus 已補裝 | ⭐ 最簡單 | 與 virt-operator 內建完全一致 |
-| **方法二**：手動 apply ServiceMonitor | 需要自訂 labels/selector | ⭐⭐ | 可客製化抓取設定 |
-| **方法三**：手動 apply PrometheusRule | 需要自訂告警 threshold/rules | ⭐⭐ | 可客製化告警邏輯 |
-
-> ⚠️ **注意**：若之後升級 KubeVirt 版本（`virt-operator` 更新），手動 apply 的資源不會被自動更新，需要手動重新 apply 新版 YAML。方法一的資源由 virt-operator 管理，升級時會自動同步。
+| 方法 | 適用情境 | 結果 |
+|------|---------|------|
+| **方法一**：刪 Strategy CM + 重啟 virt-operator | 只需預設版本、兩層條件已就緒 | 由 virt-operator 管理，升級時自動同步 |
+| **方法二**：手動 apply YAML | 需客製化 labels / selector / alert rules | 完全自訂，但升級 KubeVirt 後需手動更新 YAML |
 
 ---
 
