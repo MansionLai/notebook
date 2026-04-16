@@ -3,6 +3,7 @@ title: Commands
 parent: Integration Watchdog
 grand_parent: Home Assistant
 nav_order: 2
+render_with_liquid: false
 ---
 
 # Home Assistant Integration Watchdog — API 指令紀錄

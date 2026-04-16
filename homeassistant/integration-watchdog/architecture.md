@@ -3,6 +3,7 @@ title: Architecture
 parent: Integration Watchdog
 grand_parent: Home Assistant
 nav_order: 1
+render_with_liquid: false
 ---
 
 # Home Assistant Integration 自動修復架構
