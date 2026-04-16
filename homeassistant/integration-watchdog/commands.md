@@ -3,7 +3,6 @@ title: Commands
 parent: Integration Watchdog
 grand_parent: Home Assistant
 nav_order: 2
-render_with_liquid: false
 ---
 
 # Home Assistant Integration Watchdog — API 指令紀錄
@@ -67,6 +66,7 @@ xiaomi_miot                         | 01JXJ6NQK07P96CRRF1DMED2VX | Xiaomi: 17697
 
 ## Step 2：驗證 integration_entities() 模板
 
+{% raw %}
 ```bash
 # 確認各 domain 名稱正確，template 可取到實體
 curl -s -X POST \
@@ -96,6 +96,7 @@ for domain in ['panasonic_smart_app', 'lg_thinq', 'smartthings', 'xiaomi_miot']:
     print(f"{domain:30s}: {trigger_val}")
 EOF
 ```
+{% endraw %}
 
 ### 執行結果
 
@@ -110,6 +111,7 @@ xiaomi_miot                   : 14 total /  0 unavail / trigger=False  ✅
 
 ## Step 3：建立 Automation via REST API
 
+{% raw %}
 ```python
 import json, urllib.request, uuid
 
@@ -184,6 +186,7 @@ req2 = urllib.request.Request(f"{HA_URL}/api/services/automation/reload",
 urllib.request.urlopen(req2)
 print("Automations reloaded ✅")
 ```
+{% endraw %}
 
 ---
 

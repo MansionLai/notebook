@@ -3,7 +3,6 @@ title: Architecture
 parent: Integration Watchdog
 grand_parent: Home Assistant
 nav_order: 1
-render_with_liquid: false
 ---
 
 # Home Assistant Integration 自動修復架構
@@ -80,11 +79,13 @@ graph TD
 
 ### 觸發邏輯（template trigger）
 
+{% raw %}
 ```jinja
 {% set ents = integration_entities('panasonic_smart_app') %}
 {% set total = ents | count %}
 {{ total > 0 and (ents | map('states') | select('equalto', 'unavailable') | list | count) / total >= 0.5 }}
 ```
+{% endraw %}
 
 - `integration_entities('domain')` — HA 內建函數，自動取得該 domain 所有 entity
 - **≥50% 閾值** — 排除個別設備斷線的誤觸（如雲端 API 短暫不穩定）
@@ -114,6 +115,7 @@ graph TD
 
 ## Automation 完整 YAML
 
+{% raw %}
 ```yaml
 alias: "智慧家電 Integration 自動修復"
 description: "偵測 Panasonic / LG / SmartThings / Xiaomi 設備全線失聯（>=50%），自動 reload 對應 integration"
@@ -224,6 +226,7 @@ action:
 mode: parallel
 max: 4
 ```
+{% endraw %}
 
 ---
 
