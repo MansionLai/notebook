@@ -1,3 +1,10 @@
+---
+title: Buildup Guide
+parent: 3-Node Multipass (Mac)
+grand_parent: Kubernetes
+nav_order: 2
+---
+
 # K8s 3-Node Cluster Build-up Log (kubeadm)
 
 > 建立日期：2026-04-11  

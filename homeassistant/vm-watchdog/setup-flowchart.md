@@ -1,3 +1,10 @@
+---
+title: Setup Flowchart
+parent: VM Watchdog
+grand_parent: Home Assistant
+nav_order: 3
+---
+
 # HomeAssistant VM Watchdog 部署流程
 
 > 建立日期：2026-04-11  

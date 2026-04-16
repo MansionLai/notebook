@@ -1,3 +1,10 @@
+---
+title: Commands
+parent: 3-Node KubeVirt (Azure)
+grand_parent: Kubernetes
+nav_order: 3
+---
+
 # K8s 三節點 + KubeVirt 常用指令
 
 > 分類：commands

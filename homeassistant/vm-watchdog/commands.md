@@ -1,3 +1,10 @@
+---
+title: Commands
+parent: VM Watchdog
+grand_parent: Home Assistant
+nav_order: 2
+---
+
 # HomeAssistant VM Watchdog 指令手冊
 
 > 建立日期：2026-04-11  

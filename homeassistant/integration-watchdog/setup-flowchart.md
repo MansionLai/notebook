@@ -1,3 +1,10 @@
+---
+title: Setup Flowchart
+parent: Integration Watchdog
+grand_parent: Home Assistant
+nav_order: 3
+---
+
 # Home Assistant Integration Watchdog — 建置流程
 
 > 建立日期：2026-04-11

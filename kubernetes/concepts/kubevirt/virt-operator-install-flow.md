@@ -1,3 +1,10 @@
+---
+title: virt-operator Install Flow
+parent: Concepts
+grand_parent: Kubernetes
+nav_order: 1
+---
+
 # KubeVirt v1.5.0 — virt-operator 安裝流程與元件建立機制
 
 > 建立日期：2026-04-15  

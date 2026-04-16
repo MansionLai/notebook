@@ -1,3 +1,10 @@
+---
+title: Commands
+parent: Integration Watchdog
+grand_parent: Home Assistant
+nav_order: 2
+---
+
 # Home Assistant Integration Watchdog — API 指令紀錄
 
 > 建立日期：2026-04-11

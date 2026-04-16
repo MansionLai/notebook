@@ -1,3 +1,10 @@
+---
+title: Architecture
+parent: Integration Watchdog
+grand_parent: Home Assistant
+nav_order: 1
+---
+
 # Home Assistant Integration 自動修復架構
 
 > 建立日期：2026-04-11

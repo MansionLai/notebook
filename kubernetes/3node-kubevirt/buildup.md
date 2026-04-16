@@ -1,3 +1,10 @@
+---
+title: Buildup Guide
+parent: 3-Node KubeVirt (Azure)
+grand_parent: Kubernetes
+nav_order: 2
+---
+
 # K8s 3-Node KubeVirt on Azure — Buildup Guide
 
 > 建立日期：2026-04-12  

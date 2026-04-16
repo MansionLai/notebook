@@ -1,3 +1,10 @@
+---
+title: Setup Flowchart
+parent: 3-Node Multipass (Mac)
+grand_parent: Kubernetes
+nav_order: 4
+---
+
 # Mac Mini K8s 三節點建置流程
 
 > 建立日期：2026-04-11  

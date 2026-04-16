@@ -1,3 +1,10 @@
+---
+title: Commands
+parent: 3-Node Multipass (Mac)
+grand_parent: Kubernetes
+nav_order: 3
+---
+
 # Mac Mini K8s 三節點建置指令手冊
 
 > 建立日期：2026-04-11  

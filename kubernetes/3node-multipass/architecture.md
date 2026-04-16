@@ -1,3 +1,10 @@
+---
+title: Architecture
+parent: 3-Node Multipass (Mac)
+grand_parent: Kubernetes
+nav_order: 1
+---
+
 # Mac Mini M4 三節點 K8s 架構（Multipass + Bridge 網路）
 
 > 建立日期：2026-04-11  

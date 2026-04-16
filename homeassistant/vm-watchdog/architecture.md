@@ -1,3 +1,10 @@
+---
+title: Architecture
+parent: VM Watchdog
+grand_parent: Home Assistant
+nav_order: 1
+---
+
 # VirtualBox HomeAssistant VM 自動啟動與 Crash 監控架構
 
 > 建立日期：2026-04-11  
