@@ -59,6 +59,7 @@ lg_thinq                            | 01JV5591HB9C3KTWSZEWG0DZ30 | LG ThinQ
 panasonic_smart_app                 | 01JV59P8J1RJ9H2DVCV3J53CQH | mansion.lai.411@gmail.com
 samsungtv                           | 01K5BYK510KF0PVRXSP5R28C3D | 32" Smart Monitor M7
 smartthings                         | 01JVFETGN4SK49H6JP713Q7GS4 | 星都匯
+tuya                                | 01KPDRX1QFSSSMHQQZ2KXTVC1Q | CHIMEI 奇美清淨機
 xiaomi_miot                         | 01JXJ6NQK07P96CRRF1DMED2VX | Xiaomi: 1769736625
 ```
 
@@ -90,7 +91,7 @@ def render(tpl):
     with urllib.request.urlopen(req) as resp:
         return resp.read().decode().strip()
 
-for domain in ['panasonic_smart_app', 'lg_thinq', 'smartthings', 'xiaomi_miot']:
+for domain in ['panasonic_smart_app', 'lg_thinq', 'smartthings', 'xiaomi_miot', 'tuya']:
     count = render(f"{{{{ integration_entities('{domain}') | count }}}}")
     trigger_val = render(f"""{{% set ents = integration_entities('{domain}') %}}{{% set total = ents | count %}}{{% set unavail = ents | map('states') | select('equalto', 'unavailable') | list | count %}}{{{{ total }}}} total / {{{{ unavail }}}} unavail / trigger={{{{ total > 0 and unavail/total >= 0.5 }}}}""")
     print(f"{domain:30s}: {trigger_val}")
@@ -105,6 +106,7 @@ panasonic_smart_app           : 56 total / 40 unavail / trigger=True   ← 雲�
 lg_thinq                      : 10 total /  0 unavail / trigger=False  ✅
 smartthings                   : 21 total /  0 unavail / trigger=False  ✅
 xiaomi_miot                   : 14 total /  0 unavail / trigger=False  ✅
+tuya                          : 20 total /  0 unavail / trigger=False  ✅
 ```
 
 ---
@@ -128,13 +130,18 @@ def make_reload_sequence(entry_id, label):
              "title": f"⚠️ {label} 自動修復",
              "message": f"偵測到 {label} 設備失聯，已於 {{{{ now().strftime('%Y-%m-%d %H:%M') }}}} 自動重新載入 Integration。"
          }},
+        {"action": "notify.gmail",
+         "data": {
+             "title": f"⚠️ [HA] {label} Integration 自動修復",
+             "message": f"時間：{{{{ now().strftime('%Y-%m-%d %H:%M:%S') }}}}\n事件：{label} 偵測到設備大量失聯（≥50%），已自動重新載入 Integration。\n\n— HomeAssistant 192.168.50.71:8123"
+         }},
         {"delay": {"minutes": 5}}
     ]
 
 automation = {
     "id": AUTOMATION_ID,
     "alias": "智慧家電 Integration 自動修復",
-    "description": "偵測 Panasonic / LG / SmartThings / Xiaomi 設備全線失聯（>=50%），自動 reload 對應 integration",
+    "description": "偵測 Panasonic / LG / SmartThings / Xiaomi / Tuya 設備全線失聯（>=50%），自動 reload 並寄信通知",
     "trigger": [
         {"platform": "template", "id": "panasonic",
          "value_template": "{% set ents = integration_entities('panasonic_smart_app') %}{% set total = ents | count %}{{ total > 0 and (ents | map('states') | select('equalto', 'unavailable') | list | count) / total >= 0.5 }}",
@@ -147,6 +154,9 @@ automation = {
          "for": {"minutes": 3}},
         {"platform": "template", "id": "xiaomi_miot",
          "value_template": "{% set ents = integration_entities('xiaomi_miot') %}{% set total = ents | count %}{{ total > 0 and (ents | map('states') | select('equalto', 'unavailable') | list | count) / total >= 0.5 }}",
+         "for": {"minutes": 3}},
+        {"platform": "template", "id": "tuya",
+         "value_template": "{% set ents = integration_entities('tuya') %}{% set total = ents | count %}{{ total > 0 and (ents | map('states') | select('equalto', 'unavailable') | list | count) / total >= 0.5 }}",
          "for": {"minutes": 3}}
     ],
     "conditions": [],
@@ -159,14 +169,16 @@ automation = {
             {"conditions": [{"condition": "trigger", "id": "smartthings"}],
              "sequence": make_reload_sequence("01JVFETGN4SK49H6JP713Q7GS4", "SmartThings")},
             {"conditions": [{"condition": "trigger", "id": "xiaomi_miot"}],
-             "sequence": make_reload_sequence("01JXJ6NQK07P96CRRF1DMED2VX", "Xiaomi Miot")}
+             "sequence": make_reload_sequence("01JXJ6NQK07P96CRRF1DMED2VX", "Xiaomi Miot")},
+            {"conditions": [{"condition": "trigger", "id": "tuya"}],
+             "sequence": make_reload_sequence("01KPDRX1QFSSSMHQQZ2KXTVC1Q", "Tuya")}
         ],
         "default": [{"action": "notify.persistent_notification",
                      "data": {"title": "✅ Automation 手動測試",
                               "message": "choose block 正常執行（手動觸發，未執行 reload）"}}]
     }],
     "mode": "parallel",
-    "max": 4
+    "max": 5
 }
 
 # POST automation
