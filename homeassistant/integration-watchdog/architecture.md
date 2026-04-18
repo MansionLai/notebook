@@ -15,7 +15,7 @@ nav_order: 1
 
 ## 概述
 
-針對 HACS 安裝的第三方 integration（Panasonic / LG / SmartThings / Xiaomi / Tuya）容易 crash 的問題，
+針對 HACS 安裝的第三方 integration（Panasonic / LG / SmartThings / Xiaomi / LocalTuya）容易 crash 的問題，
 使用 HA 原生 Automation 實現「偵測 ≥50% 設備失聯 → 自動 reload 對應 integration」，
 取代原本的每日 2AM reload all 方案，縮短恢復時間從最長 24h 到 3~8 分鐘。
 
@@ -31,7 +31,7 @@ graph TD
             L[LG ThinQ<br/>10 entities]
             S[SmartThings<br/>21 entities]
             X[Xiaomi Miot<br/>14 entities]
-            TU[Tuya<br/>20 entities]
+            LT[LocalTuya<br/>10 entities]
         end
 
         subgraph Automation["Automation: 智慧家電 Integration 自動修復"]
@@ -39,7 +39,7 @@ graph TD
             T2["Template Trigger: lg_thinq<br/>≥50% unavailable, for 3min"]
             T3["Template Trigger: smartthings<br/>≥50% unavailable, for 3min"]
             T4["Template Trigger: xiaomi_miot<br/>≥50% unavailable, for 3min"]
-            T5["Template Trigger: tuya<br/>≥50% unavailable, for 3min"]
+            T5["Template Trigger: localtuya<br/>≥50% unavailable, for 3min"]
 
             C{choose<br/>trigger.id}
 
@@ -47,7 +47,7 @@ graph TD
             A2["reload_config_entry<br/>LG entry_id"]
             A3["reload_config_entry<br/>SmartThings entry_id"]
             A4["reload_config_entry<br/>Xiaomi entry_id"]
-            A5["reload_config_entry<br/>Tuya entry_id"]
+            A5["reload_config_entry<br/>LocalTuya entry_id"]
 
             N["notify.persistent_notification<br/>通知 HA 介面"]
             G["notify.gmail<br/>Email 通知"]
@@ -59,7 +59,7 @@ graph TD
     L -- "entities go unavailable" --> T2
     S -- "entities go unavailable" --> T3
     X -- "entities go unavailable" --> T4
-    TU -- "entities go unavailable" --> T5
+    LT -- "entities go unavailable" --> T5
 
     T1 --> C
     T2 --> C
@@ -71,7 +71,7 @@ graph TD
     C -- "id=lg_thinq" --> A2
     C -- "id=smartthings" --> A3
     C -- "id=xiaomi_miot" --> A4
-    C -- "id=tuya" --> A5
+    C -- "id=localtuya" --> A5
 
     A1 --> N
     A2 --> N
@@ -119,7 +119,7 @@ graph TD
 | LG ThinQ | `lg_thinq` | `01JV5591HB9C3KTWSZEWG0DZ30` | 10 |
 | SmartThings（星都匯）| `smartthings` | `01JVFETGN4SK49H6JP713Q7GS4` | 21 |
 | Xiaomi Miot | `xiaomi_miot` | `01JXJ6NQK07P96CRRF1DMED2VX` | 14 |
-| Tuya（奇美清淨機）| `tuya` | `01KPDRX1QFSSSMHQQZ2KXTVC1Q` | 20 |
+| LocalTuya（奇美清淨機）| `localtuya` | `01KPFZBPHQY8YYT4TQZD9TFEJV` | 10 |
 
 ---
 
@@ -128,7 +128,7 @@ graph TD
 {% raw %}
 ```yaml
 alias: "智慧家電 Integration 自動修復"
-description: "偵測 Panasonic / LG / SmartThings / Xiaomi / Tuya 設備全線失聯（>=50%），自動 reload 並寄信通知"
+description: "偵測 Panasonic / LG / SmartThings / Xiaomi / LocalTuya 設備全線失聯（>=50%），自動 reload 並寄信通知"
 
 trigger:
   - platform: template
@@ -168,9 +168,9 @@ trigger:
       minutes: 3
 
   - platform: template
-    id: tuya
+    id: localtuya
     value_template: >
-      {% set ents = integration_entities('tuya') %}
+      {% set ents = integration_entities('localtuya') %}
       {% set total = ents | count %}
       {{ total > 0 and (ents | map('states') | select('equalto', 'unavailable') | list | count) / total >= 0.5 }}
     for:
@@ -254,19 +254,19 @@ action:
 
       - conditions:
           - condition: trigger
-            id: tuya
+            id: localtuya
         sequence:
           - action: homeassistant.reload_config_entry
             data:
-              entry_id: "01KPDRX1QFSSSMHQQZ2KXTVC1Q"
+              entry_id: "01KPFZBPHQY8YYT4TQZD9TFEJV"
           - action: notify.persistent_notification
             data:
-              title: "⚠️ Tuya 自動修復"
-              message: "偵測到 Tuya 設備失聯，已於 {{ now().strftime('%Y-%m-%d %H:%M') }} 自動重新載入 Integration。"
+              title: "⚠️ LocalTuya 自動修復"
+              message: "偵測到 LocalTuya 設備失聯，已於 {{ now().strftime('%Y-%m-%d %H:%M') }} 自動重新載入 Integration。"
           - action: notify.gmail
             data:
-              title: "⚠️ [HA] Tuya Integration 自動修復"
-              message: "時間：{{ now().strftime('%Y-%m-%d %H:%M:%S') }}\n事件：Tuya 偵測到設備大量失聯（≥50%），已自動重新載入 Integration。\n\n— HomeAssistant 192.168.50.71:8123"
+              title: "⚠️ [HA] LocalTuya Integration 自動修復"
+              message: "時間：{{ now().strftime('%Y-%m-%d %H:%M:%S') }}\n事件：LocalTuya 偵測到設備大量失聯（≥50%），已自動重新載入 Integration。\n\n— HomeAssistant 192.168.50.71:8123"
           - delay:
               minutes: 5
 

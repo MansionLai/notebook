@@ -59,7 +59,7 @@ lg_thinq                            | 01JV5591HB9C3KTWSZEWG0DZ30 | LG ThinQ
 panasonic_smart_app                 | 01JV59P8J1RJ9H2DVCV3J53CQH | mansion.lai.411@gmail.com
 samsungtv                           | 01K5BYK510KF0PVRXSP5R28C3D | 32" Smart Monitor M7
 smartthings                         | 01JVFETGN4SK49H6JP713Q7GS4 | 星都匯
-tuya                                | 01KPDRX1QFSSSMHQQZ2KXTVC1Q | CHIMEI 奇美清淨機
+localtuya                           | 01KPFZBPHQY8YYT4TQZD9TFEJV | localtuya
 xiaomi_miot                         | 01JXJ6NQK07P96CRRF1DMED2VX | Xiaomi: 1769736625
 ```
 
@@ -91,7 +91,7 @@ def render(tpl):
     with urllib.request.urlopen(req) as resp:
         return resp.read().decode().strip()
 
-for domain in ['panasonic_smart_app', 'lg_thinq', 'smartthings', 'xiaomi_miot', 'tuya']:
+for domain in ['panasonic_smart_app', 'lg_thinq', 'smartthings', 'xiaomi_miot', 'localtuya']:
     count = render(f"{{{{ integration_entities('{domain}') | count }}}}")
     trigger_val = render(f"""{{% set ents = integration_entities('{domain}') %}}{{% set total = ents | count %}}{{% set unavail = ents | map('states') | select('equalto', 'unavailable') | list | count %}}{{{{ total }}}} total / {{{{ unavail }}}} unavail / trigger={{{{ total > 0 and unavail/total >= 0.5 }}}}""")
     print(f"{domain:30s}: {trigger_val}")
@@ -106,7 +106,7 @@ panasonic_smart_app           : 56 total / 40 unavail / trigger=True   ← 雲�
 lg_thinq                      : 10 total /  0 unavail / trigger=False  ✅
 smartthings                   : 21 total /  0 unavail / trigger=False  ✅
 xiaomi_miot                   : 14 total /  0 unavail / trigger=False  ✅
-tuya                          : 20 total /  0 unavail / trigger=False  ✅
+localtuya                     : 10 total /  0 unavail / trigger=False  ✅
 ```
 
 ---
@@ -141,7 +141,7 @@ def make_reload_sequence(entry_id, label):
 automation = {
     "id": AUTOMATION_ID,
     "alias": "智慧家電 Integration 自動修復",
-    "description": "偵測 Panasonic / LG / SmartThings / Xiaomi / Tuya 設備全線失聯（>=50%），自動 reload 並寄信通知",
+    "description": "偵測 Panasonic / LG / SmartThings / Xiaomi / LocalTuya 設備全線失聯（>=50%），自動 reload 並寄信通知",
     "trigger": [
         {"platform": "template", "id": "panasonic",
          "value_template": "{% set ents = integration_entities('panasonic_smart_app') %}{% set total = ents | count %}{{ total > 0 and (ents | map('states') | select('equalto', 'unavailable') | list | count) / total >= 0.5 }}",
@@ -155,8 +155,8 @@ automation = {
         {"platform": "template", "id": "xiaomi_miot",
          "value_template": "{% set ents = integration_entities('xiaomi_miot') %}{% set total = ents | count %}{{ total > 0 and (ents | map('states') | select('equalto', 'unavailable') | list | count) / total >= 0.5 }}",
          "for": {"minutes": 3}},
-        {"platform": "template", "id": "tuya",
-         "value_template": "{% set ents = integration_entities('tuya') %}{% set total = ents | count %}{{ total > 0 and (ents | map('states') | select('equalto', 'unavailable') | list | count) / total >= 0.5 }}",
+        {"platform": "template", "id": "localtuya",
+         "value_template": "{% set ents = integration_entities('localtuya') %}{% set total = ents | count %}{{ total > 0 and (ents | map('states') | select('equalto', 'unavailable') | list | count) / total >= 0.5 }}",
          "for": {"minutes": 3}}
     ],
     "conditions": [],
@@ -170,8 +170,8 @@ automation = {
              "sequence": make_reload_sequence("01JVFETGN4SK49H6JP713Q7GS4", "SmartThings")},
             {"conditions": [{"condition": "trigger", "id": "xiaomi_miot"}],
              "sequence": make_reload_sequence("01JXJ6NQK07P96CRRF1DMED2VX", "Xiaomi Miot")},
-            {"conditions": [{"condition": "trigger", "id": "tuya"}],
-             "sequence": make_reload_sequence("01KPDRX1QFSSSMHQQZ2KXTVC1Q", "Tuya")}
+            {"conditions": [{"condition": "trigger", "id": "localtuya"}],
+             "sequence": make_reload_sequence("01KPFZBPHQY8YYT4TQZD9TFEJV", "LocalTuya")},
         ],
         "default": [{"action": "notify.persistent_notification",
                      "data": {"title": "✅ Automation 手動測試",
