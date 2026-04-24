@@ -545,16 +545,68 @@ kubectl get pods -n local-path-storage
 
 ---
 
-## Phase 3.5：Istio（Service Mesh + Ingress Gateway）
+## Phase 3.5：MetalLB + Istio（Service Mesh + Ingress Gateway）
 
 > 在 **k8s-master** 執行
 
-**目的：** 安裝 Istio 作為 Ingress Gateway，統一管理 Grafana、Prometheus、OpenSearch Dashboards 等服務的外部連線。使用 Azure LoadBalancer 自動 provision Public IP，不需手動設定 NSG port。
+**目的：** 安裝 Istio 作為 Ingress Gateway，統一管理 Grafana、Prometheus、OpenSearch Dashboards 等服務的外部連線。由於本叢集是自建 K8s（非 AKS），使用 **MetalLB** 賦予 LoadBalancer Service 一個真實 IP，再透過 Azure NAT 從外部連入。
 
 **部署策略：**
-- `istiod`（控制面） → **master node**（4C/16G，資源充足）
+- `MetalLB` → 使用 infra 節點的 Private IP（`10.10.10.11`）作為 LB pool，不需 ARP 宣告（Azure 已知此 IP → infra NIC）
+- `istiod`（控制面） → **master node**（4C/16G，資源充足；需加 control-plane toleration）
 - `IngressGateway`（資料面） → **infra node**（與監控服務同節點，路由效率高）
+- 外部存取：`http://20.243.24.191` → Azure NAT → `10.10.10.11:80`
 - Sidecar injection → 只對有需要的 namespace 啟用（`monitoring`、`logging`）
+
+### Step 3.5-0：安裝 MetalLB
+
+> Azure 自建 K8s 不支援 cloud-controller，`LoadBalancer` type Service 預設 EXTERNAL-IP 永遠 Pending。
+> MetalLB 負責將指定 IP pool 中的地址指派給 LoadBalancer Service。
+> 使用 infra 節點現有 Private IP（`10.10.10.11/32`），Azure 已路由此 IP 到 infra NIC，不需額外 Portal 操作。
+
+```bash
+# 安裝 MetalLB（官方 manifest）
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.9/config/manifests/metallb-native.yaml
+
+# 等待 MetalLB controller 與 speaker 就緒
+kubectl wait --namespace metallb-system \
+  --for=condition=ready pod \
+  --selector=app=metallb \
+  --timeout=90s
+
+# 設定 IP pool：使用 infra 節點的現有 Private IP
+cat <<EOF | kubectl apply -f -
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: azure-infra-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 10.10.10.11/32
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: azure-infra-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - azure-infra-pool
+EOF
+```
+
+驗證：
+
+```bash
+kubectl get pods -n metallb-system
+# 預期：controller-* 1/1 Running，speaker-* 1/1 Running（3 pods）
+
+kubectl get IPAddressPool -n metallb-system
+# 預期：azure-infra-pool   True
+```
+
+> 完成後，`istio-ingressgateway` Service 的 EXTERNAL-IP 應自動從 `<pending>` 變為 `10.10.10.11`。
 
 ### Step 3.5-1：下載 istioctl
 
