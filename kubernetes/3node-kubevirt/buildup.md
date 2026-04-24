@@ -511,7 +511,11 @@ ls /etc/cni/net.d/
 
 > 在 **k8s-master** 執行
 
+**目的：** local-path-provisioner 是 Rancher 提供的輕量 StorageClass，直接使用每個 node 本地磁碟（`/opt/local-path-provisioner`），不需要外部 storage backend。後續 Prometheus、OpenSearch 的 PersistentVolumeClaim 都依賴此 StorageClass。
+
 ### Step 3-1：安裝
+
+> 套用官方 YAML，會建立 `local-path-storage` namespace、ServiceAccount、ClusterRole、ConfigMap 及 Deployment。
 
 ```bash
 kubectl apply -f \
@@ -520,6 +524,8 @@ kubectl apply -f \
 
 ### Step 3-2：設為預設 StorageClass
 
+> K8s 叢集預設沒有任何 StorageClass，PVC 若沒有指定 `storageClassName` 會卡在 Pending。將 `local-path` 設為 default 可讓未指定的 PVC 自動使用本地儲存。
+
 ```bash
 kubectl patch storageclass local-path \
   -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
@@ -527,9 +533,14 @@ kubectl patch storageclass local-path \
 
 ### Step 3-3：驗證
 
+> 確認 StorageClass 出現且有 `(default)` 標記；Deployment 在 `local-path-storage` namespace Ready。
+
 ```bash
 kubectl get sc
 # 預期：local-path (default)
+
+kubectl get pods -n local-path-storage
+# 預期：local-path-provisioner-xxx   1/1   Running
 ```
 
 ---
