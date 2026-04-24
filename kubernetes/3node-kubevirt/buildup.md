@@ -1163,14 +1163,14 @@ ip link show vmbr0
 ### Step 5-7：建立 NetworkAttachmentDefinition（在 k8s-master）
 
 ```bash
-kubectl create namespace vmworkloads
+kubectl create namespace vmnetwork
 
 cat > /tmp/vmnet-100-nad.yaml <<'EOF'
 apiVersion: "k8s.cni.cncf.io/v1"
 kind: NetworkAttachmentDefinition
 metadata:
   name: vmnet-100
-  namespace: vmworkloads
+  namespace: vmnetwork
 spec:
   config: '{
     "cniVersion": "0.3.1",
@@ -1185,7 +1185,7 @@ kubectl apply -f /tmp/vmnet-100-nad.yaml
 
 驗證：
 ```bash
-kubectl get network-attachment-definitions -n vmworkloads
+kubectl get network-attachment-definitions -n vmnetwork
 # 預期：vmnet-100
 ```
 
@@ -1193,15 +1193,24 @@ kubectl get network-attachment-definitions -n vmworkloads
 
 ### Step 5-8：安裝 multus-networkpolicy
 
+> **注意：** GitHub raw URL 可能 404（路徑已改變），改用本機 clone 後 scp 到 master。
+
 ```bash
-kubectl apply -f \
-  https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-networkpolicy/master/deployments/multus-networkpolicy-ds.yml
+# 在 Mac 本機 clone（若尚未有）
+git clone https://github.com/k8snetworkplumbingwg/multus-networkpolicy /tmp/multus-networkpolicy
+
+# scp deploy.yml 到 master
+scp -i ~/.ssh/id_ed25519 /tmp/multus-networkpolicy/deploy.yml \
+  ubuntu@<master-ip>:/tmp/multus-networkpolicy-deploy.yml
+
+# 在 k8s-master 執行
+kubectl apply -f /tmp/multus-networkpolicy-deploy.yml
 ```
 
 驗證：
 ```bash
-kubectl get pods -n kube-system -l app=multus-networkpolicy
-# 預期：DaemonSet Running（3 pods）
+kubectl get pods -n kube-system | grep multi-networkpolicy
+# 預期：multi-networkpolicy-ds-amd64-* Running（三台 node 各一個）
 ```
 
 ---
@@ -1216,15 +1225,21 @@ kubectl get kubevirt -n kubevirt
 # 所有 KubeVirt pods
 kubectl get pods -n kubevirt -o wide
 # 預期：
-# virt-api       → k8s-master
-# virt-controller → k8s-master
-# virt-handler   → 三台 node
+# virt-api       → k8s-master（2 replicas）
+# virt-controller → k8s-master（2 replicas）
+# virt-handler   → 三台 node 各一個（DaemonSet）
+# virt-operator  → k8s-master（2 replicas）
 
 # NAD 確認
-kubectl get net-attach-def -A
+kubectl get network-attachment-definitions -n vmnetwork
+# 預期：vmnet-100
 
-# 確認 CRD 已安裝
-kubectl get crd | grep kubevirt.io
+# multus-networkpolicy DaemonSet
+kubectl get ds multi-networkpolicy-ds-amd64 -n kube-system
+# 預期：DESIRED=3 CURRENT=3 READY=3
+
+# virtctl 版本
+virtctl version --client
 ```
 
 ---
