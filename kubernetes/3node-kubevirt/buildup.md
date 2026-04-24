@@ -967,7 +967,7 @@ config:
         Host            opensearch-cluster-master.monitoring.svc.cluster.local
         Port            9200
         HTTP_User       admin
-        HTTP_Passwd     admin
+        HTTP_Passwd     Qr7$mBx2!pZ9vNw#
         Logstash_Format On
         Logstash_Prefix k8s-logs
         Replace_Dots    On
