@@ -700,18 +700,6 @@ istioctl verify-install -f /tmp/istio-operator.yaml
 # 預期：✔ Istio is installed and verified successfully
 ```
 
-### Step 3.5-5：啟用 Sidecar Injection（monitoring namespace）
-
-> Sidecar injection 讓 Istio 自動為 Pod 注入 Envoy proxy，實現 mTLS 和流量觀測。
-> 只對需要的 namespace 開啟，避免影響 kube-system 等系統元件。
-> Fluent Bit 也部署在 monitoring namespace，一併涵蓋。
-
-```bash
-# 在建立 monitoring namespace（Phase 4a）前先執行，讓新 Pod 自動注入
-kubectl create namespace monitoring
-kubectl label namespace monitoring istio-injection=enabled
-```
-
 ---
 
 ## Phase 4a：Prometheus Stack（kube-prometheus-stack）
