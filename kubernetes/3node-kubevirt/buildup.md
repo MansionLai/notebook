@@ -545,6 +545,122 @@ kubectl get pods -n local-path-storage
 
 ---
 
+## Phase 3.5：Istio（Service Mesh + Ingress Gateway）
+
+> 在 **k8s-master** 執行
+
+**目的：** 安裝 Istio 作為 Ingress Gateway，統一管理 Grafana、Prometheus、OpenSearch Dashboards 等服務的外部連線。使用 Azure LoadBalancer 自動 provision Public IP，不需手動設定 NSG port。
+
+**部署策略：**
+- `istiod`（控制面） → **master node**（4C/16G，資源充足）
+- `IngressGateway`（資料面） → **infra node**（與監控服務同節點，路由效率高）
+- Sidecar injection → 只對有需要的 namespace 啟用（`monitoring`、`logging`）
+
+### Step 3.5-1：下載 istioctl
+
+> `istioctl` 是 Istio 的命令列安裝與管理工具。這裡固定安裝 1.22.3（LTS 穩定版）。
+
+```bash
+curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.22.3 sh -
+cd istio-1.22.3
+export PATH=$PWD/bin:$PATH
+istioctl version
+```
+
+### Step 3.5-2：建立 IstioOperator 設定檔
+
+> 使用 `minimal` profile（只含 istiod + IngressGateway，不裝 EgressGateway 省資源）。
+> istiod 需要加上 master 的 `control-plane:NoSchedule` toleration 才能排程到 master；infra 無 taint，只需 nodeSelector。
+
+```bash
+cat > /tmp/istio-operator.yaml <<'EOF'
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: istio-control-plane
+spec:
+  profile: minimal
+  components:
+    pilot:
+      k8s:
+        nodeSelector:
+          role: master
+        tolerations:
+          - key: "node-role.kubernetes.io/control-plane"
+            operator: "Exists"
+            effect: "NoSchedule"
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        k8s:
+          nodeSelector:
+            role: infra
+          service:
+            type: LoadBalancer
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+  values:
+    global:
+      proxy:
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+EOF
+```
+
+### Step 3.5-3：安裝 Istio
+
+> `istioctl install` 讀取 IstioOperator 設定，建立 `istio-system` namespace 並部署 istiod 及 IngressGateway。
+
+```bash
+istioctl install -f /tmp/istio-operator.yaml -y
+```
+
+### Step 3.5-4：驗證
+
+> 確認 istiod 排到 master node、IngressGateway 排到 infra node；Azure 會自動 provision 一個外部 IP 給 LoadBalancer Service。
+
+```bash
+kubectl get pods -n istio-system -o wide
+# 預期：istiod-* 在 mansion-k8s-master
+#        istio-ingressgateway-* 在 mansion-k8s-infra
+
+kubectl get svc -n istio-system
+# 預期：istio-ingressgateway  LoadBalancer  <cluster-ip>  <EXTERNAL-IP>  15021/TCP,80/TCP,443/TCP
+
+istioctl verify-install -f /tmp/istio-operator.yaml
+# 預期：✔ Istio is installed and verified successfully
+```
+
+### Step 3.5-5：啟用 Sidecar Injection（monitoring / logging namespace）
+
+> Sidecar injection 讓 Istio 自動為 Pod 注入 Envoy proxy，實現 mTLS 和流量觀測。
+> 只對需要的 namespace 開啟，避免影響 kube-system 等系統元件。
+
+```bash
+# 安裝 Phase 4a/4b 前先執行，讓新建立的 namespace 自動注入
+kubectl label namespace monitoring istio-injection=enabled
+kubectl label namespace logging istio-injection=enabled
+```
+
+---
+
 ## Phase 4a：Prometheus Stack（kube-prometheus-stack）
 
 > 在 **k8s-master** 執行
