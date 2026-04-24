@@ -824,34 +824,36 @@ helm repo update
 > infra node 無 taint，不需要 toleration。
 > JVM heap 設 512m（與 memory limit 1Gi 搭配，留空間給 OS）。
 
+> **⚠️ OpenSearch 2.12+ 強制要求設定 `OPENSEARCH_INITIAL_ADMIN_PASSWORD`，密碼需符合強度規則（大小寫＋數字＋特殊符號，且不得與 username 相似）。**
+> 建議使用 Python 產生 values 檔以避免 heredoc YAML 格式問題：
+
 ```bash
-cat > /tmp/opensearch-values.yaml <<'EOF'
-singleNode: true
-
-nodeSelector:
-  role: infra
-
-resources:
-  requests:
-    memory: 512Mi
-    cpu: 200m
-  limits:
-    memory: 1Gi
-    cpu: 500m
-
-opensearchJavaOpts: "-Xmx512m -Xms512m"
-
-persistence:
-  enabled: true
-  storageClass: local-path
-  size: 10Gi
-
-config:
-  opensearch.yml: |
-    cluster.name: k8s-lab
-    network.host: 0.0.0.0
-    discovery.type: single-node
-EOF
+python3 -c "
+import yaml
+vals = {
+    'singleNode': True,
+    'nodeSelector': {'role': 'infra'},
+    'resources': {
+        'requests': {'memory': '512Mi', 'cpu': '200m'},
+        'limits': {'memory': '1Gi', 'cpu': '500m'}
+    },
+    'opensearchJavaOpts': '-Xmx512m -Xms512m',
+    'persistence': {
+        'enabled': True,
+        'storageClass': 'local-path',
+        'size': '10Gi'
+    },
+    'config': {
+        'opensearch.yml': 'cluster.name: k8s-lab\nnetwork.host: 0.0.0.0\ndiscovery.type: single-node\n'
+    },
+    'extraEnvs': [
+        {'name': 'OPENSEARCH_INITIAL_ADMIN_PASSWORD', 'value': 'Qr7\$mBx2!pZ9vNw#'}
+    ]
+}
+with open('/tmp/opensearch-values.yaml', 'w') as f:
+    yaml.dump(vals, f, default_flow_style=False)
+print('Done')
+"
 ```
 
 ### Step 4b-3：安裝 OpenSearch
@@ -916,15 +918,15 @@ helm repo add fluent https://fluent.github.io/helm-charts
 helm repo update
 ```
 
-### Step 4c-2：取得 OpenSearch admin 密碼
+### Step 4c-2：確認 OpenSearch admin 密碼
+
+> 帳號：`admin`，密碼：安裝時透過 `OPENSEARCH_INITIAL_ADMIN_PASSWORD` env 設定的值（`Qr7$mBx2!pZ9vNw#`）。
 
 ```bash
-# OpenSearch 預設 admin 密碼在 secret 裡
-kubectl get secret -n monitoring opensearch-cluster-master -o jsonpath='{.data.username}' | base64 -d
-kubectl get secret -n monitoring opensearch-cluster-master -o jsonpath='{.data.password}' | base64 -d
+# 確認 opensearch-cluster-master service 可連線
+kubectl exec -n monitoring opensearch-cluster-master-0 -- \
+  curl -sk -u "admin:Qr7\$mBx2\!pZ9vNw#" "https://localhost:9200/_cluster/health?pretty"
 ```
-
-> 若 secret 不存在，預設帳號：`admin` 密碼：`admin`
 
 ### Step 4c-3：建立 Fluent Bit values
 
