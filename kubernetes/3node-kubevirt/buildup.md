@@ -930,8 +930,13 @@ kubectl exec -n monitoring opensearch-cluster-master-0 -- \
 
 ### Step 4c-3：建立 Fluent Bit values
 
+> **注意事項：**
+> - OpenSearch admin 密碼若含 `$` 字元，`heredoc` 會展開成空字串。實際密碼以 `kubectl exec` 確認容器 env 為準（`Qr7!pZ9vNw#`）。
+> - OpenSearch 2.x 移除了 `_type` 欄位，必須加 `Suppress_Type_Name On`，否則 HTTP 400。
+> - 使用單引號 heredoc delimiter 避免 shell 展開。
+
 ```bash
-cat > /tmp/fluent-bit-values.yaml <<'EOF'
+cat > /tmp/fluent-bit-values.yaml << 'HEREDOC'
 tolerations:
   - key: "node-role.kubernetes.io/control-plane"
     operator: "Exists"
@@ -962,19 +967,20 @@ config:
 
   outputs: |
     [OUTPUT]
-        Name            opensearch
-        Match           kube.*
-        Host            opensearch-cluster-master.monitoring.svc.cluster.local
-        Port            9200
-        HTTP_User       admin
-        HTTP_Passwd     Qr7$mBx2!pZ9vNw#
-        Logstash_Format On
-        Logstash_Prefix k8s-logs
-        Replace_Dots    On
-        Retry_Limit     False
-        tls             On
-        tls.verify      Off
-EOF
+        Name              opensearch
+        Match             kube.*
+        Host              opensearch-cluster-master.monitoring.svc.cluster.local
+        Port              9200
+        HTTP_User         admin
+        HTTP_Passwd       Qr7!pZ9vNw#
+        Logstash_Format   On
+        Logstash_Prefix   k8s-logs
+        Replace_Dots      On
+        Suppress_Type_Name On
+        Retry_Limit       False
+        tls               On
+        tls.verify        Off
+HEREDOC
 ```
 
 ### Step 4c-4：安裝
@@ -991,8 +997,13 @@ helm install fluent-bit fluent/fluent-bit \
 kubectl get pods -n monitoring -o wide | grep fluent
 # 預期：fluent-bit-* 在三台 node 各一個（DaemonSet）
 
-kubectl logs -n monitoring -l app.kubernetes.io/name=fluent-bit --tail=20
-# 預期：看到 OpenSearch output 成功的 log（無 Connection refused）
+kubectl logs -n monitoring -l app.kubernetes.io/name=fluent-bit --since=15s 2>&1 | grep -v 'inotify_fs_add\| info'
+# 預期：無任何 error（無 401/400/connection refused）
+
+# 確認 OpenSearch index 已建立
+kubectl exec -n monitoring opensearch-cluster-master-0 -- \
+  bash -c 'curl -sk -u admin:"$OPENSEARCH_INITIAL_ADMIN_PASSWORD" https://localhost:9200/_cat/indices?v' | grep k8s
+# 預期：k8s-logs-YYYY.MM.DD index，status yellow（single-node 無 replica），有 doc count
 ```
 
 ---
