@@ -1074,6 +1074,11 @@ spec:
         resourceName: virt-controller
         patch: '[{"op":"add","path":"/spec/template/spec/tolerations","value":[{"key":"node-role.kubernetes.io/control-plane","operator":"Exists","effect":"NoSchedule"}]},{"op":"add","path":"/spec/template/spec/nodeSelector","value":{"node-role.kubernetes.io/control-plane":""}}]'
         type: json
+      # virt-handler：只部署在 worker node（DaemonSet）
+      - resourceType: DaemonSet
+        resourceName: virt-handler
+        patch: '[{"op":"add","path":"/spec/template/spec/nodeSelector","value":{"role":"worker"}}]'
+        type: json
 EOF
 
 kubectl apply -f /tmp/kubevirt-cr.yaml
@@ -1093,7 +1098,7 @@ kubectl get pods -n kubevirt -o wide
 # virt-operator-*    Running  k8s-master
 # virt-api-*         Running  k8s-master
 # virt-controller-*  Running  k8s-master
-# virt-handler-*     Running  (每台 node 各一個，DaemonSet)
+# virt-handler-*     Running  (只在 worker node，DaemonSet + nodeSelector role=worker)
 ```
 
 ---
@@ -1227,7 +1232,7 @@ kubectl get pods -n kubevirt -o wide
 # 預期：
 # virt-api       → k8s-master（2 replicas）
 # virt-controller → k8s-master（2 replicas）
-# virt-handler   → 三台 node 各一個（DaemonSet）
+# virt-handler   → 只在 k8s-worker（DaemonSet + nodeSelector role=worker）
 # virt-operator  → k8s-master（2 replicas）
 
 # NAD 確認
@@ -1268,8 +1273,6 @@ kubectl get pods -n kubevirt -o wide
 NAME                              READY   STATUS    NODE
 virt-api-xxx                      1/1     Running   k8s-master
 virt-controller-xxx               1/1     Running   k8s-master
-virt-handler-xxx (master)         1/1     Running   k8s-master
-virt-handler-xxx (infra)          1/1     Running   k8s-infra
 virt-handler-xxx (worker)         1/1     Running   k8s-worker
 virt-operator-xxx                 1/1     Running   k8s-master
 ```
