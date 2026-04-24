@@ -706,7 +706,11 @@ istioctl verify-install -f /tmp/istio-operator.yaml
 
 > 在 **k8s-master** 執行
 
+**目的：** 安裝 kube-prometheus-stack（Prometheus + AlertManager + Grafana + node-exporter + kube-state-metrics），提供完整的叢集監控能力。所有元件釘在 infra node，node-exporter 以 DaemonSet 部署到三台 node。
+
 ### Step 4a-1：新增 Helm repo
+
+> 新增 Prometheus Community Helm repo，包含 kube-prometheus-stack chart。
 
 ```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
@@ -715,16 +719,17 @@ helm repo update
 
 ### Step 4a-2：建立 values 檔
 
+> 各元件透過 `nodeSelector: role: infra` 釘在 infra node。
+> infra node 無 taint，不需要額外 toleration。
+> node-exporter 需加 control-plane toleration 才能部署到 master。
+> Prometheus 使用 local-path SC 建立 10Gi PVC 保存 7 天 metrics。
+
 ```bash
 cat > /tmp/prometheus-values.yaml <<'EOF'
 prometheus:
   prometheusSpec:
     nodeSelector:
       role: infra
-    tolerations:
-      - key: "node-role.kubernetes.io/infra"
-        operator: "Exists"
-        effect: "NoSchedule"
     retention: 7d
     storageSpec:
       volumeClaimTemplate:
@@ -775,9 +780,9 @@ EOF
 
 ### Step 4a-3：安裝
 
-```bash
-kubectl create namespace monitoring
+> `monitoring` namespace 已於 Phase 3.5 建立，直接安裝。
 
+```bash
 helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   -n monitoring \
   -f /tmp/prometheus-values.yaml
@@ -785,13 +790,15 @@ helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
 
 ### Step 4a-4：驗證
 
-```bash
-kubectl get pods -n monitoring
-# 預期：prometheus-*, alertmanager-*, grafana-* 在 k8s-infra
-#        node-exporter-* 在三台 node 各一個
+> 確認所有元件在 infra node，node-exporter 在三台 node 各一個。
 
-kubectl get pods -n monitoring -o wide | grep node-exporter
-# 預期：3 pods，分別在 master/infra/worker
+```bash
+kubectl get pods -n monitoring -o wide
+# 預期：prometheus-*, alertmanager-*, grafana-*, kube-state-metrics-* 在 mansion-k8s-infra
+#        node-exporter-* 在三台 node 各一個（master/infra/worker）
+
+kubectl get pvc -n monitoring
+# 預期：prometheus-kube-prometheus-stack-prometheus-db-... Bound 10Gi
 ```
 
 ---
