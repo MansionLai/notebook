@@ -807,7 +807,11 @@ kubectl get pvc -n monitoring
 
 > 在 **k8s-master** 執行
 
+**目的：** 安裝 OpenSearch（Elasticsearch 相容的搜尋/分析引擎）和 OpenSearch Dashboards（Kibana 相容的視覺化 UI），用於收集和查詢 Fluent Bit 轉送的 log。Single-node 模式，釘在 infra node。
+
 ### Step 4b-1：新增 Helm repo
+
+> 新增 OpenSearch 官方 Helm repo。
 
 ```bash
 helm repo add opensearch https://opensearch-project.github.io/helm-charts/
@@ -815,6 +819,10 @@ helm repo update
 ```
 
 ### Step 4b-2：建立 OpenSearch values
+
+> `singleNode: true` 關閉 cluster 模式，適合 lab 環境節省資源。
+> infra node 無 taint，不需要 toleration。
+> JVM heap 設 512m（與 memory limit 1Gi 搭配，留空間給 OS）。
 
 ```bash
 cat > /tmp/opensearch-values.yaml <<'EOF'
@@ -843,15 +851,12 @@ config:
     cluster.name: k8s-lab
     network.host: 0.0.0.0
     discovery.type: single-node
-
-tolerations:
-  - key: "node-role.kubernetes.io/infra"
-    operator: "Exists"
-    effect: "NoSchedule"
 EOF
 ```
 
 ### Step 4b-3：安裝 OpenSearch
+
+> 安裝到 monitoring namespace，與 Prometheus stack 共用同一個 namespace。
 
 ```bash
 helm install opensearch opensearch/opensearch \
@@ -860,6 +865,8 @@ helm install opensearch opensearch/opensearch \
 ```
 
 ### Step 4b-4：建立 OpenSearch Dashboards values
+
+> Dashboards 連線到 OpenSearch cluster master service（9200 port）。
 
 ```bash
 cat > /tmp/opensearch-dashboards-values.yaml <<'EOF'
@@ -873,11 +880,6 @@ resources:
     memory: 512Mi
 
 opensearchHosts: "https://opensearch-cluster-master:9200"
-
-tolerations:
-  - key: "node-role.kubernetes.io/infra"
-    operator: "Exists"
-    effect: "NoSchedule"
 EOF
 ```
 
@@ -891,9 +893,14 @@ helm install opensearch-dashboards opensearch/opensearch-dashboards \
 
 ### Step 4b-6：驗證
 
+> 確認 OpenSearch 和 Dashboards 都在 infra node，PVC 10Gi Bound。
+
 ```bash
 kubectl get pods -n monitoring -o wide | grep opensearch
-# 預期：opensearch-* 和 opensearch-dashboards-* 都在 k8s-infra
+# 預期：opensearch-cluster-master-0 和 opensearch-dashboards-* 在 mansion-k8s-infra
+
+kubectl get pvc -n monitoring | grep opensearch
+# 預期：opensearch-cluster-master-... Bound 10Gi local-path
 ```
 
 ---
