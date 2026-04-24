@@ -556,7 +556,7 @@ kubectl get pods -n local-path-storage
 - `istiod`（控制面） → **master node**（4C/16G，資源充足；需加 control-plane toleration）
 - `IngressGateway`（資料面） → **infra node**（與監控服務同節點，路由效率高）
 - 外部存取：`http://20.243.24.191` → Azure NAT → `10.10.10.11:80`
-- Sidecar injection → 只對有需要的 namespace 啟用（`monitoring`、`logging`）
+- Sidecar injection → 只對有需要的 namespace 啟用（`monitoring`）
 
 ### Step 3.5-0：安裝 MetalLB
 
@@ -700,15 +700,16 @@ istioctl verify-install -f /tmp/istio-operator.yaml
 # 預期：✔ Istio is installed and verified successfully
 ```
 
-### Step 3.5-5：啟用 Sidecar Injection（monitoring / logging namespace）
+### Step 3.5-5：啟用 Sidecar Injection（monitoring namespace）
 
 > Sidecar injection 讓 Istio 自動為 Pod 注入 Envoy proxy，實現 mTLS 和流量觀測。
 > 只對需要的 namespace 開啟，避免影響 kube-system 等系統元件。
+> Fluent Bit 也部署在 monitoring namespace，一併涵蓋。
 
 ```bash
-# 安裝 Phase 4a/4b 前先執行，讓新建立的 namespace 自動注入
+# 在建立 monitoring namespace（Phase 4a）前先執行，讓新 Pod 自動注入
+kubectl create namespace monitoring
 kubectl label namespace monitoring istio-injection=enabled
-kubectl label namespace logging istio-injection=enabled
 ```
 
 ---
