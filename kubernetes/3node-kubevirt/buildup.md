@@ -1438,6 +1438,87 @@ virt-operator-xxx                 1/1     Running   k8s-master
 
 ---
 
+## Phase 5.5：KubeVirt Monitoring 整合（Prometheus ServiceMonitor + PrometheusRules）
+
+KubeVirt virt-operator 可以自動建立 ServiceMonitor 和 PrometheusRules，但需要在 KubeVirt CR 設定 `monitorNamespace` 和 `monitorAccount`。
+
+### Step 5.5-1：設定 KubeVirt CR monitoring 參數
+
+```bash
+kubectl patch kubevirt kubevirt -n kubevirt --type=merge -p '{
+  "spec": {
+    "monitorNamespace": "monitoring",
+    "monitorAccount": "kube-prometheus-stack-prometheus"
+  }
+}'
+```
+
+- `monitorNamespace`：Prometheus 所在 namespace（ServiceMonitor 會建立在此）
+- `monitorAccount`：Prometheus 使用的 ServiceAccount（virt-operator 會建立對應 RBAC）
+
+virt-operator reconcile 後自動建立：
+- `ServiceMonitor/prometheus-kubevirt-rules`（在 monitoring ns）
+- `PrometheusRule/prometheus-kubevirt-rules`（在 kubevirt ns）
+
+### Step 5.5-2：調整 Prometheus CR selector（選取所有 ServiceMonitor/Rule）
+
+kube-prometheus-stack 預設只選 `release: kube-prometheus-stack` label 的資源，但 KubeVirt 建立的資源使用 `prometheus.kubevirt.io: "true"` label，需要改為全選：
+
+```bash
+kubectl patch prometheus kube-prometheus-stack-prometheus -n monitoring --type=json \
+  -p '[
+    {"op": "replace", "path": "/spec/serviceMonitorSelector", "value": {}},
+    {"op": "replace", "path": "/spec/ruleSelector", "value": {}}
+  ]'
+```
+
+> **替代方案（持久化）**：在 kube-prometheus-stack helm values 加入以下後 `helm upgrade`，避免 CR 被 operator 覆寫：
+> ```yaml
+> prometheus:
+>   prometheusSpec:
+>     serviceMonitorSelectorNilUsesHelmValues: false
+>     ruleSelectorNilUsesHelmValues: false
+>     podMonitorSelectorNilUsesHelmValues: false
+> ```
+
+### Step 5.5-3：驗證
+
+```bash
+# ServiceMonitor 建立
+kubectl get servicemonitor -n monitoring | grep kubevirt
+
+# PrometheusRule 建立
+kubectl get prometheusrule -n kubevirt
+
+# Prometheus 已抓到 KubeVirt targets（預期 6 個 endpoint，status: up）
+kubectl exec -n monitoring prometheus-kube-prometheus-stack-prometheus-0 -c prometheus -- \
+  wget -qO- 'http://localhost:9090/prometheus/api/v1/targets?state=active' | \
+  python3 -c "
+import sys, json
+d = json.load(sys.stdin)['data']['activeTargets']
+kv = [t for t in d if 'kubevirt' in t['labels'].get('job','').lower()]
+print(f'KubeVirt targets: {len(kv)}')
+for t in kv:
+    print(f'  {t[\"labels\"][\"job\"]}: {t[\"health\"]}')
+"
+
+# KubeVirt metrics 有資料
+kubectl exec -n monitoring prometheus-kube-prometheus-stack-prometheus-0 -c prometheus -- \
+  wget -qO- 'http://localhost:9090/prometheus/api/v1/query?query=kubevirt_info' | \
+  python3 -c "import sys,json; r=json.load(sys.stdin); print('kubevirt_info count:', len(r['data']['result']))"
+# 預期：kubevirt_info count: 1
+```
+
+### 踩坑記錄（Phase 5.5）
+
+| 問題 | 原因 | 解法 |
+|------|------|------|
+| ServiceMonitor/PrometheusRule 未自動建立 | KubeVirt CR 未設定 `monitorNamespace`/`monitorAccount` | patch kubevirt CR 加入兩個欄位 |
+| KubeVirt targets 未被 Prometheus 抓取 | kube-prometheus-stack 預設 `serviceMonitorSelector: {matchLabels: {release: kube-prometheus-stack}}`，KubeVirt SM 只有 `prometheus.kubevirt.io: "true"` | patch Prometheus CR `serviceMonitorSelector: {}` 或 helm upgrade 加 `serviceMonitorSelectorNilUsesHelmValues: false` |
+| PrometheusRules 看起來沒載入 | KubeVirt rule group 名稱是 `alerts.rules` / `recordingRules.rules`，不含 "kubevirt" 關鍵字 | 改查 rule expression 內容，例如 `kubevirt_vmi_` 前綴的 metrics |
+
+---
+
 ## Phase 6：建立 KubeVirt VM（ub24-01）並解決外網連線
 
 ### 架構說明
