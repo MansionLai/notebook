@@ -1008,6 +1008,165 @@ kubectl exec -n monitoring opensearch-cluster-master-0 -- \
 
 ---
 
+## Step 4d：Monitoring Dashboard 對外存取（Istio VirtualService）
+
+透過 Istio IngressGateway（MetalLB IP `10.10.10.11`）以 subpath 方式對外暴露 Grafana、Prometheus、OpenSearch Dashboards。
+
+### Step 4d-1：建立 Istio Gateway + VirtualService
+
+```bash
+cat << 'EOF' | kubectl apply -f -
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: monitoring-gateway
+  namespace: monitoring
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: grafana-vs
+  namespace: monitoring
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - monitoring-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /grafana
+    route:
+    - destination:
+        host: kube-prometheus-stack-grafana
+        port:
+          number: 80
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: prometheus-vs
+  namespace: monitoring
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - monitoring-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /prometheus
+    route:
+    - destination:
+        host: kube-prometheus-stack-prometheus
+        port:
+          number: 9090
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: opensearch-dashboards-vs
+  namespace: monitoring
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - monitoring-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /opensearch
+    route:
+    - destination:
+        host: opensearch-dashboards
+        port:
+          number: 5601
+EOF
+```
+
+### Step 4d-2：停用 mTLS（monitoring namespace 無 sidecar）
+
+```bash
+# monitoring namespace 沒有 Istio sidecar，需停用 mTLS 否則 IngressGateway 回 503
+cat << 'EOF' | kubectl apply -f -
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: monitoring-no-mtls
+  namespace: monitoring
+spec:
+  host: "*.monitoring.svc.cluster.local"
+  trafficPolicy:
+    tls:
+      mode: DISABLE
+EOF
+```
+
+### Step 4d-3：各服務 subpath 配置
+
+**Grafana** — 在 `grafana-values.yaml` 加入 env var 後 `helm upgrade`：
+```yaml
+grafana:
+  env:
+    GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/grafana"
+    GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+```
+
+**Prometheus** — patch CRD：
+```bash
+kubectl patch prometheus -n monitoring kube-prometheus-stack-prometheus \
+  --type=merge -p '{
+    "spec": {
+      "routePrefix": "/prometheus",
+      "externalUrl": "http://10.10.10.11/prometheus"
+    }
+  }'
+```
+
+**OpenSearch Dashboards** — 在 `opensearch-dashboards-values.yaml` 加入後 `helm upgrade`：
+```yaml
+extraEnvs:
+  - name: SERVER_BASEPATH
+    value: "/opensearch"
+  - name: SERVER_REWRITEBASEPATH
+    value: "true"
+```
+
+### Step 4d-4：驗證
+
+```bash
+# 內部測試（從 cluster 內任意節點）
+curl -s -o /dev/null -w 'Grafana: %{http_code}\n' http://10.10.10.11/grafana/login
+curl -s -o /dev/null -w 'Prometheus: %{http_code}\n' http://10.10.10.11/prometheus/graph
+curl -s -o /dev/null -w 'OpenSearch: %{http_code}\n' http://10.10.10.11/opensearch/
+
+# 預期：三個都回 302（redirect to login）
+
+# 外部存取（需 Azure NSG 開放 port 80 給 infra 節點）
+# http://20.243.24.191/grafana     (admin / <grafana-password>)
+# http://20.243.24.191/prometheus
+# http://20.243.24.191/opensearch  (admin / admin)
+```
+
+### 踩坑記錄（Step 4d）
+
+| 問題 | 原因 | 解法 |
+|------|------|------|
+| OpenSearch Dashboards 回 503 | monitoring namespace 無 Istio sidecar，IngressGateway 嘗試 mTLS 失敗 | 建立 DestinationRule 停用 `*.monitoring.svc.cluster.local` 的 mTLS |
+| Grafana/Prometheus subpath 不工作 | 未設定 `GF_SERVER_SERVE_FROM_SUB_PATH` 或 `routePrefix` | 分別 patch Grafana env 和 Prometheus CRD |
+
+---
+
 ## Phase 5：KubeVirt + Multus NAD + multus-networkpolicy
 
 ### Step 5-1：確認 Worker 支援 Nested Virtualization
