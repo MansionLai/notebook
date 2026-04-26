@@ -851,7 +851,7 @@ vals = {
         'opensearch.yml': 'cluster.name: k8s-lab\nnetwork.host: 0.0.0.0\ndiscovery.type: single-node\n'
     },
     'extraEnvs': [
-        {'name': 'OPENSEARCH_INITIAL_ADMIN_PASSWORD', 'value': 'Qr7\$mBx2!pZ9vNw#'}
+        {'name': 'OPENSEARCH_INITIAL_ADMIN_PASSWORD', 'value': 'Qr7!pZ9vNw#'}
     ]
 }
 with open('/tmp/opensearch-values.yaml', 'w') as f:
@@ -924,18 +924,17 @@ helm repo update
 
 ### Step 4c-2：確認 OpenSearch admin 密碼
 
-> 帳號：`admin`，密碼：安裝時透過 `OPENSEARCH_INITIAL_ADMIN_PASSWORD` env 設定的值（`Qr7$mBx2!pZ9vNw#`）。
+> 帳號：`admin`，密碼：安裝時透過 `OPENSEARCH_INITIAL_ADMIN_PASSWORD` env 設定的值（`Qr7!pZ9vNw#`）。
 
 ```bash
 # 確認 opensearch-cluster-master service 可連線
 kubectl exec -n monitoring opensearch-cluster-master-0 -- \
-  curl -sk -u "admin:Qr7\$mBx2\!pZ9vNw#" "https://localhost:9200/_cluster/health?pretty"
+  curl -sk -u "admin:Qr7!pZ9vNw#" "https://localhost:9200/_cluster/health?pretty"
 ```
 
 ### Step 4c-3：建立 Fluent Bit values
 
 > **注意事項：**
-> - OpenSearch admin 密碼若含 `$` 字元，`heredoc` 會展開成空字串。實際密碼以 `kubectl exec` 確認容器 env 為準（`Qr7!pZ9vNw#`）。
 > - OpenSearch 2.x 移除了 `_type` 欄位，必須加 `Suppress_Type_Name On`，否則 HTTP 400。
 > - 使用單引號 heredoc delimiter 避免 shell 展開。
 
