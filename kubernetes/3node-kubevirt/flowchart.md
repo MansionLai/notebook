@@ -8,7 +8,7 @@ nav_order: 4
 # K8s 三節點 + KubeVirt 架設流程
 
 > 分類：flowchart  
-> 架構決策:Option A — Master 僅承載 K8s Control Plane,Infra 部署基礎設施服務與 KubeVirt 管理面
+> 架構決策：Option A — Master 僅承載 K8s Control Plane，Infra 部署基礎設施服務與 KubeVirt 管理面
 
 ## 架設流程圖
 
