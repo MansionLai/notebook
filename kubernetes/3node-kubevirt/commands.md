@@ -62,21 +62,18 @@ kubeadm token create --print-join-command
 
 ---
 
-## 設定 Node 角色（Option B）
+## 設定 Node 角色（Option A）
 
 ```bash
-# Master: 移除 NoSchedule taint，允許 KubeVirt 管理面元件排程
-# （kubeadm init 預設會加 control-plane taint，需先移除才能排 KubeVirt mgmt pods）
-kubectl taint nodes master node-role.kubernetes.io/control-plane:NoSchedule-
+# Master: 維持 control-plane taint，不讓一般 workload 與 KubeVirt 管理面排入
+# （kubeadm init 預設已加 control-plane taint，無需額外操作）
 
-# 加上自訂 label 供 KubeVirt 管理面元件 nodeSelector 使用
-kubectl label nodes master kubevirt-management=true
-
-# 標記並 taint Infra 節點（只跑基礎設施 Pod）
+# Infra: 跑基礎設施 Pod 與 KubeVirt 管理面
 kubectl label nodes infra node-role.kubernetes.io/infra=
+kubectl label nodes infra kubevirt-management=true
 kubectl taint nodes infra node-role.kubernetes.io/infra=:NoSchedule
 
-# 標記 Worker 節點（只跑 virt-handler + VM workload）
+# Worker: 跑 virt-handler + VM workload
 kubectl label nodes worker node-role.kubernetes.io/worker=
 kubectl label nodes worker kubevirt-workload=true
 
@@ -85,25 +82,25 @@ kubectl get nodes -o wide
 kubectl get nodes --show-labels
 ```
 
-### KubeVirt 管理面元件 — NodeSelector / Toleration（Option B）
+### KubeVirt 管理面元件 — NodeSelector / Toleration（Option A）
 
 > 安裝 KubeVirt 後，透過 `KubeVirt` CR 的 `infra` 欄位指定管理面元件位置
 
 ```yaml
-# kubevirt-cr-optionb.yaml
+# kubevirt-cr-optiona.yaml
 apiVersion: kubevirt.io/v1
 kind: KubeVirt
 metadata:
   name: kubevirt
   namespace: kubevirt
 spec:
-  # 讓 virt-operator / virt-api / virt-controller 排到 Master
+  # 讓 virt-operator / virt-api / virt-controller 排到 Infra
   infra:
     nodePlacement:
       nodeSelector:
         kubevirt-management: "true"
       tolerations:
-      - key: node-role.kubernetes.io/control-plane
+      - key: node-role.kubernetes.io/infra
         operator: Exists
         effect: NoSchedule
   # 讓 virt-handler DaemonSet 只跑在 Worker
@@ -114,9 +111,9 @@ spec:
 ```
 
 ```bash
-kubectl apply -f kubevirt-cr-optionb.yaml
+kubectl apply -f kubevirt-cr-optiona.yaml
 
-# 確認管理面元件在 Master
+# 確認管理面元件在 Infra
 kubectl get pods -n kubevirt -o wide | grep -E 'virt-operator|virt-api|virt-controller'
 
 # 確認 virt-handler 在 Worker
