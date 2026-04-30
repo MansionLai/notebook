@@ -5,14 +5,14 @@ grand_parent: Kubernetes
 nav_order: 1
 ---
 
-# K8s 三節點架構：Master / Infra / Worker + KubeVirt（Option B）
+# K8s 三節點架構：Master / Infra / Worker + KubeVirt（Option A）
 
 > 分類：architecture  
-> 架構決策：KubeVirt 管理面（virt-operator/virt-api/virt-controller）與 K8s Control Plane 同放 Master
+> 架構決策：目前主方案採用 Option A — Master 只承載 K8s Control Plane，Infra 承載基礎設施服務與 KubeVirt 管理面
 
 ## 概述
 
-使用三台 x86 VM 在 Azure 上架設 Kubernetes Cluster。本文最終採用 **Option B** 架構：Master 同時承載 K8s 控制面與 KubeVirt 管理面（概念一致，適合 Lab 環境），Infra 專責基礎設施服務，Worker 執行 VM workload。
+使用三台 x86 VM 在 Azure 上架設 Kubernetes Cluster。本文目前主採用 **Option A** 架構：Master 只承載 K8s 控制面，Infra 同時承載基礎設施服務與 KubeVirt 管理面，Worker 專責執行 virt-handler、virt-launcher 與 VM workload。
 
 ---
 
@@ -21,35 +21,28 @@ nav_order: 1
 ```mermaid
 graph TB
     subgraph Azure["Azure Cloud"]
-        subgraph Master["Master Node (Standard_D4s_v5 · 4C/16G)"]
-            direction TB
-            subgraph K8sCP["K8s Control Plane"]
-                API[kube-apiserver]
-                ETCD[(etcd)]
-                SCH[kube-scheduler]
-                CM[kube-controller-manager]
-                API <--> ETCD
-                API <--> SCH
-                API <--> CM
-            end
-            subgraph KVCtrl["KubeVirt Management Plane"]
-                VO[virt-operator]
-                VA[virt-api]
-                VC[virt-controller]
-                VO -- manages --> VA
-                VO -- manages --> VC
-            end
-            VA -- registers with --> API
-            VC -- watches --> API
+        subgraph Master["Master Node (Standard_D2s_v5 · 2C/8G)"]
+            API[kube-apiserver]
+            ETCD[(etcd)]
+            SCH[kube-scheduler]
+            CM[kube-controller-manager]
+            API <--> ETCD
+            API <--> SCH
+            API <--> CM
         end
 
-        subgraph Infra["Infra Node (Standard_D2s_v5 · 2C/8G)"]
+        subgraph Infra["Infra Node (Standard_D4s_v5 · 4C/16G)"]
             DNS[CoreDNS]
             ING[Ingress Controller]
             MS[Metrics Server]
             PROM[Prometheus]
             GRAF[Grafana]
             FLUE[Fluentd / Loki]
+            VO[virt-operator]
+            VA[virt-api]
+            VC[virt-controller]
+            VO --> VA
+            VO --> VC
         end
 
         subgraph Worker["Worker Node (Standard_D4s_v5 · 4C/16G · Nested Virt)"]
@@ -63,11 +56,12 @@ graph TB
 
         Infra  -- "kubelet registers" --> API
         Worker -- "kubelet registers" --> API
-        ING    -- "routes traffic"    --> Worker
-        VC     -- "schedules VMI"     --> Worker
+        ING    -- "routes traffic" --> Worker
+        VC     -- "schedules VMI" --> Worker
+        VA     -- "talks to" --> API
     end
 
-    User((User))   -- HTTPS   --> ING
+    User((User))   -- HTTPS --> ING
     Admin((Admin)) -- kubectl --> API
     Admin          -- virtctl --> VA
 ```
@@ -76,7 +70,7 @@ graph TB
 
 ## 元件分配表
 
-### Master Node — K8s 控制面 + KubeVirt 管理面
+### Master Node — K8s 控制面
 
 | 類別 | 元件 | 功能 | CPU 消耗 |
 |------|------|------|---------|
@@ -84,16 +78,12 @@ graph TB
 | K8s CP | `etcd` | 儲存全部 Cluster 狀態 | 0.1–0.3 vCPU |
 | K8s CP | `kube-scheduler` | 決定 Pod 排程到哪個 Node | <0.05 vCPU |
 | K8s CP | `kube-controller-manager` | 維護期望狀態（RS/Node/SA） | 0.05–0.2 vCPU |
-| KubeVirt | `virt-operator` | 管理 KubeVirt 自身生命週期 | <0.05 vCPU（平時極輕量） |
-| KubeVirt | `virt-api` | 處理 VM/VMI API 請求 | 0.1–0.3 vCPU |
-| KubeVirt | `virt-controller` | 管理 VM 狀態機 | 0.1–0.3 vCPU |
 | | `kubelet` | 管理 Master 上的 Pod | — |
-| | **合計** | | **~0.7–2 vCPU** |
+| | **合計** | | **~0.4–1.2 vCPU** |
 
-> ⚠️ etcd 對延遲敏感，Master 需使用 **D-series（非 Burstable B-series）**，確保穩定 CPU  
-> 💡 virt-operator 平時幾乎不消耗資源，只在安裝/升級 KubeVirt 時才活躍
+> ⚠️ etcd 對延遲敏感，Master 需使用 **D-series（非 Burstable B-series）**，確保穩定 CPU
 
-### Infra Node — Cluster 基礎設施服務
+### Infra Node — Cluster 基礎設施服務 + KubeVirt 管理面
 
 | 元件 | 功能 | CPU 消耗 | 備註 |
 |------|------|---------|------|
@@ -103,7 +93,12 @@ graph TB
 | `Prometheus` | Cluster 監控 | **0.5–1.5 vCPU** | 資源消耗大，需獨立 |
 | `Grafana` | 監控視覺化儀表板 | 0.1–0.3 vCPU | 搭配 Prometheus |
 | `Fluentd / Loki` | Log 收集與彙整 | 0.2–0.5 vCPU | I/O 密集型 |
-| **合計** | | **~1–3 vCPU** | Prometheus 是大戶 |
+| `virt-operator` | 管理 KubeVirt 自身生命週期 | <0.05 vCPU | 平時極輕量 |
+| `virt-api` | 處理 VM/VMI API 請求 | 0.1–0.3 vCPU | 與 K8s API 協作 |
+| `virt-controller` | 管理 VM 狀態機 | 0.1–0.3 vCPU | 負責 VMI 排程 |
+| **合計** | | **~1.3–3.6 vCPU** | Prometheus + KubeVirt 管理面 |
+
+> 💡 virt-operator 平時幾乎不消耗資源，只在安裝/升級 KubeVirt 時才活躍
 
 ### Worker Node — virt-handler + VM Workload
 
@@ -120,77 +115,89 @@ graph TB
 
 ---
 
-## Option A（原始方案）回顧
+## Option B（保留參考）
 
-> 備註：此方案為早期設計，**最後沒有採用**；實際落地使用的是 **Option B**。
+> 備註：此方案保留作為 Lab / 對照參考；目前主方案為 **Option A**。
 
-Option A 的核心想法是：**Master 只保留 Kubernetes Control Plane，KubeVirt 管理面另外放到 Infra Node**。這樣可以讓 etcd 與 K8s API Server 鄰居更單純，代價則是管理面被拆散到兩台機器，概念上沒有 Option B 直觀。
+Option B 的核心想法是：**Master 同時承載 K8s Control Plane 與 KubeVirt 管理面**。這樣可以讓所有管理元件集中在同一台機器，概念上較為一致，適合 Lab 環境。代價是 Master 需要更多資源，且單點故障影響範圍更大。
 
-| 節點 | Option A 的角色 |
+| 節點 | Option B 的角色 |
 |------|-----------------|
-| Master | `kube-apiserver`、`etcd`、`kube-scheduler`、`kube-controller-manager` |
-| Infra | `CoreDNS`、`Ingress Controller`、`Metrics Server`、`Prometheus`、`Grafana`、`Fluentd/Loki`、`virt-operator`、`virt-api`、`virt-controller` |
+| Master | `kube-apiserver`、`etcd`、`kube-scheduler`、`kube-controller-manager`、`virt-operator`、`virt-api`、`virt-controller` |
+| Infra | `CoreDNS`、`Ingress Controller`、`Metrics Server`、`Prometheus`、`Grafana`、`Fluentd/Loki` |
 | Worker | `virt-handler`、`virt-launcher`、`Ubuntu 24.04 VM`、`/dev/kvm` |
 
-### Option A 簡圖
+### Option B 簡圖
 
 ```mermaid
 graph TB
     subgraph Azure["Azure Cloud"]
-        subgraph MasterA["Master Node"]
-            APIA[kube-apiserver]
-            ETCDA[(etcd)]
-            SCHA[kube-scheduler]
-            CMA[kube-controller-manager]
-            APIA <--> ETCDA
+        subgraph MasterB["Master Node"]
+            direction TB
+            subgraph K8sCP["K8s Control Plane"]
+                APIB[kube-apiserver]
+                ETCDB[(etcd)]
+                SCHB[kube-scheduler]
+                CMB[kube-controller-manager]
+                APIB <--> ETCDB
+                APIB <--> SCHB
+                APIB <--> CMB
+            end
+            subgraph KVCtrl["KubeVirt Management Plane"]
+                VOB[virt-operator]
+                VAB[virt-api]
+                VCB[virt-controller]
+                VOB -- manages --> VAB
+                VOB -- manages --> VCB
+            end
+            VAB -- registers with --> APIB
+            VCB -- watches --> APIB
         end
 
-        subgraph InfraA["Infra Node"]
-            DNSA[CoreDNS]
-            INGA[Ingress Controller]
-            PROMA[Prometheus]
-            GRAFA[Grafana]
-            LOGA[Fluentd / Loki]
-            VOA[virt-operator]
-            VAA[virt-api]
-            VCA[virt-controller]
-            VOA --> VAA
-            VOA --> VCA
+        subgraph InfraB["Infra Node"]
+            DNSB[CoreDNS]
+            INGB[Ingress Controller]
+            PROMB[Prometheus]
+            GRAFB[Grafana]
+            LOGB[Fluentd / Loki]
         end
 
-        subgraph WorkerA["Worker Node"]
-            VHA[virt-handler]
-            VLA[virt-launcher]
-            VBA[Ubuntu 24.04 VM]
-            KVMA["dev kvm"]
-            VHA --> VLA --> VBA
-            VBA --> KVMA
+        subgraph WorkerB["Worker Node"]
+            VHB[virt-handler]
+            VLB[virt-launcher]
+            VBB[Ubuntu 24.04 VM]
+            KVMB["/dev/kvm"]
+            VHB --> VLB --> VBB
+            VBB --> KVMB
         end
 
-        InfraA  -- "kubelet registers" --> APIA
-        WorkerA -- "kubelet registers" --> APIA
-        INGA    -- "routes traffic" --> WorkerA
-        VCA     -- "schedules VMI" --> WorkerA
-        VAA     -- "talks to" --> APIA
+        InfraB  -- "kubelet registers" --> APIB
+        WorkerB -- "kubelet registers" --> APIB
+        INGB    -- "routes traffic" --> WorkerB
+        VCB     -- "schedules VMI" --> WorkerB
     end
+
+    UserB((User))   -- HTTPS   --> INGB
+    AdminB((Admin)) -- kubectl --> APIB
+    AdminB          -- virtctl --> VAB
 ```
 
-### 為什麼後來改成 Option B
+### Option B 的特點
 
-1. Option A 把 K8s 管理面與 KubeVirt 管理面拆成兩個管理中心，閱讀與維運時比較不直觀。
-2. Option B 讓 `virt-api` / `virt-controller` 更靠近 Control Plane，整體概念更一致，對 Lab 環境更容易理解。
-3. 目前這份文件中的 VM 規格、Mermaid 主圖與元件分配表，都是以 **Option B** 為準。
+1. Option B 讓 `virt-api` / `virt-controller` 與 K8s Control Plane 放在一起，整體概念更一致，對 Lab 環境更容易理解。
+2. 代價是 Master 需要較多資源（Standard_D4s_v5 4C/16G），且單點故障會同時失去 K8s CP 與 KubeVirt 管理面。
+3. 適合 Lab / 中低 VM 密度環境；高 VM 密度生產環境建議採用 **Option A**。
 
 ---
 
-## Azure VM 規格建議（Option B）
+## Azure VM 規格建議（Option A）
 
 ### Lab / Dev 環境
 
 | 節點 | 推薦 VM | vCPU | RAM | 月費(約) | 說明 |
 |------|---------|------|-----|---------|------|
-| Master | **Standard_D4s_v5** | 4 | 16GB | ~$140 USD | K8s CP + KubeVirt 管理面，需較多資源 |
-| Infra | **Standard_D2s_v5** | 2 | 8GB | ~$70 USD | 基礎設施服務 |
+| Master | **Standard_D2s_v5** | 2 | 8GB | ~$70 USD | K8s Control Plane only |
+| Infra | **Standard_D4s_v5** | 4 | 16GB | ~$140 USD | 基礎設施服務 + KubeVirt 管理面 |
 | Worker | **Standard_D4s_v5** | 4 | 16GB | ~$140 USD | Nested Virt + Ubuntu VM |
 | **合計** | | **10 vCPU** | **40GB** | **~$350/月** | |
 
@@ -198,22 +205,23 @@ graph TB
 
 | 節點 | 推薦 VM | vCPU | RAM | 月費(約) | 說明 |
 |------|---------|------|-----|---------|------|
-| Master | **Standard_D4s_v5** | 4 | 16GB | ~$140 USD | 足夠應付 CP + KubeVirt 管理面高峰 |
-| Infra | **Standard_D4s_v5** | 4 | 16GB | ~$140 USD | Prometheus + Loki 同時重載 |
+| Master | **Standard_D2s_v5** | 2 | 8GB | ~$70 USD | K8s CP 穩定配置 |
+| Infra | **Standard_D4s_v5** | 4 | 16GB | ~$140 USD | Prometheus + Loki + KubeVirt 管理面 |
 | Worker | **Standard_D8s_v5** | 8 | 32GB | ~$280 USD | 可跑多個 KubeVirt VM |
-| **合計** | | **16 vCPU** | **64GB** | **~$560/月** | |
+| **合計** | | **14 vCPU** | **56GB** | **~$490/月** | |
 
 ---
 
-## 架構決策說明（Option B vs A）
+## 架構決策說明（Option A vs B）
 
-| | Option A（原始）| Option B（採用）|
+| | Option A（採用）| Option B（參考）|
 |-|----------------|-----------------|
-| KubeVirt 管理面 | Infra Node | **Master Node** |
-| 概念一致性 | 管理面分散兩處 | ✅ 管理面集中 |
-| etcd 鄰居風險 | 低 | 中（需 D4s_v5） |
-| 適合情境 | 高 VM 密度生產 | ✅ Lab / 中低密度 |
-| Master 掛掉影響 | 只失去 K8s CP | K8s CP + KubeVirt 管理面 |
+| KubeVirt 管理面 | **Infra Node** | Master Node |
+| 概念一致性 | 管理面分散兩處 | 管理面集中 |
+| etcd 鄰居風險 | ✅ 低（Master 單純） | 中（需 D4s_v5） |
+| 適合情境 | ✅ 高 VM 密度生產 | Lab / 中低密度 |
+| Master 掛掉影響 | ✅ 只失去 K8s CP | K8s CP + KubeVirt 管理面 |
+| 資源彈性 | ✅ Infra 可獨立擴充 | Master 需更大規格 |
 
 ---
 
