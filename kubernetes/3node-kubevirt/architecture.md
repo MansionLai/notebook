@@ -12,7 +12,7 @@ nav_order: 1
 
 ## 概述
 
-使用三台 x86 VM 在 Azure 上架設 Kubernetes Cluster。採用 **Option B** 架構：Master 同時承載 K8s 控制面與 KubeVirt 管理面（概念一致，適合 Lab 環境），Infra 專責基礎設施服務，Worker 執行 VM workload。
+使用三台 x86 VM 在 Azure 上架設 Kubernetes Cluster。本文最終採用 **Option B** 架構：Master 同時承載 K8s 控制面與 KubeVirt 管理面（概念一致，適合 Lab 環境），Infra 專責基礎設施服務，Worker 執行 VM workload。
 
 ---
 
@@ -117,6 +117,69 @@ graph TB
 | **合計** | | **≥4 vCPU** | 建議 6–8 |
 
 > ⚠️ Worker 必須選支援 **Nested Virtualization** 的 Azure VM（Dv3/Dv4/Dv5 系列）
+
+---
+
+## Option A（原始方案）回顧
+
+> 備註：此方案為早期設計，**最後沒有採用**；實際落地使用的是 **Option B**。
+
+Option A 的核心想法是：**Master 只保留 Kubernetes Control Plane，KubeVirt 管理面另外放到 Infra Node**。這樣可以讓 etcd 與 K8s API Server 鄰居更單純，代價則是管理面被拆散到兩台機器，概念上沒有 Option B 直觀。
+
+| 節點 | Option A 的角色 |
+|------|-----------------|
+| Master | `kube-apiserver`、`etcd`、`kube-scheduler`、`kube-controller-manager` |
+| Infra | `CoreDNS`、`Ingress Controller`、`Metrics Server`、`Prometheus`、`Grafana`、`Fluentd/Loki`、`virt-operator`、`virt-api`、`virt-controller` |
+| Worker | `virt-handler`、`virt-launcher`、`Ubuntu 24.04 VM`、`/dev/kvm` |
+
+### Option A 簡圖
+
+```mermaid
+graph TB
+    subgraph Azure["Azure Cloud"]
+        subgraph MasterA["Master Node"]
+            APIA[kube-apiserver]
+            ETCDA[(etcd)]
+            SCHA[kube-scheduler]
+            CMA[kube-controller-manager]
+            APIA <--> ETCDA
+        end
+
+        subgraph InfraA["Infra Node"]
+            DNSA[CoreDNS]
+            INGA[Ingress Controller]
+            PROMA[Prometheus]
+            GRAFA[Grafana]
+            LOGA[Fluentd / Loki]
+            VOA[virt-operator]
+            VAA[virt-api]
+            VCA[virt-controller]
+            VOA --> VAA
+            VOA --> VCA
+        end
+
+        subgraph WorkerA["Worker Node"]
+            VHA[virt-handler]
+            VLA[virt-launcher]
+            VBA[Ubuntu 24.04 VM]
+            KVMA["dev kvm"]
+            VHA --> VLA --> VBA
+            VBA --> KVMA
+        end
+
+        InfraA  -- "kubelet registers" --> APIA
+        WorkerA -- "kubelet registers" --> APIA
+        INGA    -- "routes traffic" --> WorkerA
+        VCA     -- "schedules VMI" --> WorkerA
+        VAA     -- "talks to" --> APIA
+    end
+```
+
+### 為什麼後來改成 Option B
+
+1. Option A 把 K8s 管理面與 KubeVirt 管理面拆成兩個管理中心，閱讀與維運時比較不直觀。
+2. Option B 讓 `virt-api` / `virt-controller` 更靠近 Control Plane，整體概念更一致，對 Lab 環境更容易理解。
+3. 目前這份文件中的 VM 規格、Mermaid 主圖與元件分配表，都是以 **Option B** 為準。
 
 ---
 
