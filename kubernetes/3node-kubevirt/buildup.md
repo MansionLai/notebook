@@ -17,8 +17,8 @@ nav_order: 2
 
 | 節點 | Azure VM | Private IP | 角色 |
 |------|----------|------------|------|
-| mansion-k8s-master | Standard_D4s_v4 (4C/16G) | 10.10.10.10 | K8s CP + KubeVirt 管理面 |
-| mansion-k8s-infra | Standard_D2s_v4 (2C/8G) | 10.10.10.11 | Prometheus + OpenSearch + Fluent Bit |
+| mansion-k8s-master | Standard_D2s_v4 (2C/8G) | 10.10.10.10 | K8s CP |
+| mansion-k8s-infra | Standard_D4s_v4 (4C/16G) | 10.10.10.11 | Prometheus + OpenSearch + Fluent Bit + KubeVirt 管理面 |
 | mansion-k8s-worker | Standard_D4s_v4 (4C/16G) | 10.10.10.12 | KubeVirt VM workload |
 
 **Pod 網段：** 10.244.0.0/16（Cilium）  
@@ -85,7 +85,7 @@ nav_order: 2
 |------|-----------|-----------|-----------|
 | VM name | `mansion-k8s-master` | `mansion-k8s-infra` | `mansion-k8s-worker` |
 | Image | Ubuntu Server 24.04 LTS (Gen2) | 同左 | 同左 |
-| Size | Standard_D4s_v4 | Standard_D2s_v4 | Standard_D4s_v4 |
+| Size | Standard_D2s_v4 | Standard_D4s_v4 | Standard_D4s_v4 |
 | Auth type | SSH public key | 同左 | 同左 |
 | Username | `ubuntu` | 同左 | 同左 |
 | SSH key | 貼上你的 public key | 同左 | 同左 |
@@ -423,6 +423,13 @@ kubectl label node k8s-worker node-role.kubernetes.io/worker=
 kubectl label node k8s-infra  role=infra
 kubectl label node k8s-worker role=worker
 kubectl label node k8s-master role=master
+
+# KubeVirt placement labels
+kubectl label node k8s-infra  kubevirt-management=true
+kubectl label node k8s-worker kubevirt-workload=true
+
+# Taint infra node to prevent general workload
+kubectl taint node k8s-infra node-role.kubernetes.io/infra=:NoSchedule
 ```
 
 驗證：
@@ -553,7 +560,7 @@ kubectl get pods -n local-path-storage
 
 **部署策略：**
 - `MetalLB` → 使用 infra 節點的 Private IP（`10.10.10.11`）作為 LB pool，不需 ARP 宣告（Azure 已知此 IP → infra NIC）
-- `istiod`（控制面） → **master node**（4C/16G，資源充足；需加 control-plane toleration）
+- `istiod`（控制面） → **infra node**（與監控服務同節點；需加 infra toleration）
 - `IngressGateway`（資料面） → **infra node**（與監控服務同節點，路由效率高）
 - 外部存取：`http://20.243.24.191` → Azure NAT → `10.10.10.11:80`
 - Sidecar injection → 只對有需要的 namespace 啟用（`monitoring`）
@@ -636,9 +643,9 @@ spec:
     pilot:
       k8s:
         nodeSelector:
-          role: master
+          role: infra
         tolerations:
-          - key: "node-role.kubernetes.io/control-plane"
+          - key: "node-role.kubernetes.io/infra"
             operator: "Exists"
             effect: "NoSchedule"
         resources:
@@ -777,6 +784,9 @@ prometheus-node-exporter:
   # DaemonSet，部署到所有 node
   tolerations:
     - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+    - key: "node-role.kubernetes.io/infra"
       operator: "Exists"
       effect: "NoSchedule"
 EOF
@@ -942,6 +952,9 @@ kubectl exec -n monitoring opensearch-cluster-master-0 -- \
 cat > /tmp/fluent-bit-values.yaml << 'HEREDOC'
 tolerations:
   - key: "node-role.kubernetes.io/control-plane"
+    operator: "Exists"
+    effect: "NoSchedule"
+  - key: "node-role.kubernetes.io/infra"
     operator: "Exists"
     effect: "NoSchedule"
 
@@ -1207,7 +1220,7 @@ kubectl get pods -n kubevirt -l kubevirt.io=virt-operator
 
 ### Step 5-3：建立 KubeVirt CR
 
-KubeVirt 管理面（virt-api/virt-controller）需要 toleration 才能排程到 master：
+KubeVirt 管理面（virt-api/virt-controller）排程到 Infra node：
 
 ```bash
 cat > /tmp/kubevirt-cr.yaml <<'EOF'
@@ -1229,20 +1242,20 @@ spec:
         - Sidecar
   customizeComponents:
     patches:
-      # virt-api：加 toleration 到 master
+      # virt-api：排到 Infra
       - resourceType: Deployment
         resourceName: virt-api
-        patch: '[{"op":"add","path":"/spec/template/spec/tolerations","value":[{"key":"node-role.kubernetes.io/control-plane","operator":"Exists","effect":"NoSchedule"}]},{"op":"add","path":"/spec/template/spec/nodeSelector","value":{"node-role.kubernetes.io/control-plane":""}}]'
+        patch: '[{"op":"add","path":"/spec/template/spec/tolerations","value":[{"key":"node-role.kubernetes.io/infra","operator":"Exists","effect":"NoSchedule"}]},{"op":"add","path":"/spec/template/spec/nodeSelector","value":{"kubevirt-management":"true"}}]'
         type: json
-      # virt-controller：加 toleration 到 master
+      # virt-controller：排到 Infra
       - resourceType: Deployment
         resourceName: virt-controller
-        patch: '[{"op":"add","path":"/spec/template/spec/tolerations","value":[{"key":"node-role.kubernetes.io/control-plane","operator":"Exists","effect":"NoSchedule"}]},{"op":"add","path":"/spec/template/spec/nodeSelector","value":{"node-role.kubernetes.io/control-plane":""}}]'
+        patch: '[{"op":"add","path":"/spec/template/spec/tolerations","value":[{"key":"node-role.kubernetes.io/infra","operator":"Exists","effect":"NoSchedule"}]},{"op":"add","path":"/spec/template/spec/nodeSelector","value":{"kubevirt-management":"true"}}]'
         type: json
       # virt-handler：只部署在 worker node（DaemonSet）
       - resourceType: DaemonSet
         resourceName: virt-handler
-        patch: '[{"op":"add","path":"/spec/template/spec/nodeSelector","value":{"role":"worker"}}]'
+        patch: '[{"op":"add","path":"/spec/template/spec/nodeSelector","value":{"kubevirt-workload":"true"}}]'
         type: json
 EOF
 
@@ -1260,10 +1273,10 @@ kubectl wait kv kubevirt -n kubevirt \
 
 kubectl get pods -n kubevirt -o wide
 # 預期：
-# virt-operator-*    Running  k8s-master
-# virt-api-*         Running  k8s-master
-# virt-controller-*  Running  k8s-master
-# virt-handler-*     Running  (只在 worker node，DaemonSet + nodeSelector role=worker)
+# virt-operator-*    Running  k8s-infra
+# virt-api-*         Running  k8s-infra
+# virt-controller-*  Running  k8s-infra
+# virt-handler-*     Running  k8s-worker（DaemonSet + nodeSelector kubevirt-workload=true）
 ```
 
 ---
@@ -1395,10 +1408,10 @@ kubectl get kubevirt -n kubevirt
 # 所有 KubeVirt pods
 kubectl get pods -n kubevirt -o wide
 # 預期：
-# virt-api       → k8s-master（2 replicas）
-# virt-controller → k8s-master（2 replicas）
-# virt-handler   → 只在 k8s-worker（DaemonSet + nodeSelector role=worker）
-# virt-operator  → k8s-master（2 replicas）
+# virt-api       → k8s-infra（2 replicas）
+# virt-controller → k8s-infra（2 replicas）
+# virt-handler   → 只在 k8s-worker（DaemonSet + nodeSelector kubevirt-workload=true）
+# virt-operator  → k8s-infra（2 replicas）
 
 # NAD 確認
 kubectl get network-attachment-definitions -n vmnetwork
@@ -1420,7 +1433,7 @@ virtctl version --client
 |------|------|------|
 | `kubeadm init` 失敗 — sandbox image 不一致 | CRI-O 預設已對應正確 pause image，通常不會出現此問題 | 若出現，檢查 `/etc/crio/crio.conf` 的 `pause_image` |
 | CoreDNS Pending | 未安裝 CNI | 先裝 Cilium，CoreDNS 才會 Running |
-| virt-api/controller 一直排程到 worker | master 有 NoSchedule taint | 在 KubeVirt CR 的 customizeComponents 加 toleration + nodeSelector |
+| virt-api/controller 一直排程到 worker | Infra 節點未標記或無 toleration | 在 KubeVirt CR 的 customizeComponents 加 toleration + nodeSelector (kubevirt-management=true) |
 | Worker bridge 模式流量被丟棄 | Azure NIC MAC filtering | Portal → NIC (eth1) → Enable IP Forwarding |
 
 ---
@@ -1436,10 +1449,10 @@ k8s-worker   Ready    worker          -     v1.32.x
 
 kubectl get pods -n kubevirt -o wide
 NAME                              READY   STATUS    NODE
-virt-api-xxx                      1/1     Running   k8s-master
-virt-controller-xxx               1/1     Running   k8s-master
+virt-api-xxx                      1/1     Running   k8s-infra
+virt-controller-xxx               1/1     Running   k8s-infra
 virt-handler-xxx (worker)         1/1     Running   k8s-worker
-virt-operator-xxx                 1/1     Running   k8s-master
+virt-operator-xxx                 1/1     Running   k8s-infra
 ```
 
 ---
