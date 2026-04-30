@@ -629,7 +629,7 @@ istioctl version
 ### Step 3.5-2：建立 IstioOperator 設定檔
 
 > 使用 `minimal` profile（只含 istiod + IngressGateway，不裝 EgressGateway 省資源）。
-> istiod 需要加上 master 的 `control-plane:NoSchedule` toleration 才能排程到 master；infra 無 taint，只需 nodeSelector。
+> istiod 以 Infra 為目標，使用 infra taint / toleration 模型來排程到 infra node。
 
 ```bash
 cat > /tmp/istio-operator.yaml <<'EOF'
@@ -693,11 +693,11 @@ istioctl install -f /tmp/istio-operator.yaml -y
 
 ### Step 3.5-4：驗證
 
-> 確認 istiod 排到 master node、IngressGateway 排到 infra node；Azure 會自動 provision 一個外部 IP 給 LoadBalancer Service。
+> 確認 istiod 與 IngressGateway 都排到 infra node；Azure 會自動 provision 一個外部 IP 給 LoadBalancer Service。
 
 ```bash
 kubectl get pods -n istio-system -o wide
-# 預期：istiod-* 在 mansion-k8s-master
+# 預期：istiod-* 在 mansion-k8s-infra
 #        istio-ingressgateway-* 在 mansion-k8s-infra
 
 kubectl get svc -n istio-system
@@ -1657,4 +1657,3 @@ ping 8.8.8.8               # ❌ Azure NAT GW 不支援 ICMP（正常）
 | Worker vmbr0 MAC 不對 | vmbr0 bridge 預設 MAC ≠ eth1 registered MAC → Azure 不回 ARP | netplan 設 `macaddress: 7c:1e:52:4d:3b:a4` on vmbr0 |
 | VM outbound 無法連外 | 10.10.100.0/24 subnet 未設定 NAT Gateway | Azure Portal → 建立 NAT Gateway + 關聯 subnet |
 | ping 8.8.8.8 不通（VM 內） | Azure NAT Gateway 不支援 ICMP | 正常，改用 curl/TCP 驗證 |
-
