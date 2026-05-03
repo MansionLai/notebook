@@ -2,7 +2,7 @@
 title: Architecture
 parent: 3-Node KubeVirt (Azure)
 grand_parent: Kubernetes
-nav_order: 1
+nav_order: 20
 ---
 
 # K8s 三節點架構：Master / Infra / Worker + KubeVirt（Option A）
