@@ -311,3 +311,7 @@ kubectl config rename-context kubernetes-admin@kubernetes k8s-kubevirt
 kubectl config use-context k8s-kubevirt
 kubectl get nodes
 ```
+
+---
+
+
