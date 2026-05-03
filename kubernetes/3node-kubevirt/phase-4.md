@@ -31,7 +31,7 @@ helm repo update
 > 各元件透過 `nodeSelector: role: infra` 釘在 infra node。
 > infra node 無 taint，不需要額外 toleration。
 > node-exporter 需加 control-plane toleration 才能部署到 master。
-> Prometheus 使用 local-path SC 建立 10Gi PVC保存 7 天 metrics。
+> Prometheus 使用 local-path SC 建立 10Gi PVC 保存 7 天 metrics。
 
 ```bash
 cat > /tmp/prometheus-values.yaml <<'EOF'
