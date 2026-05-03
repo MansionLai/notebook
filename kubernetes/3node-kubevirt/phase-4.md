@@ -94,9 +94,15 @@ prometheus-node-exporter:
 EOF
 ```
 
-### Step 4a-3：安裝
+### Step 4a-3：建立 monitoring namespace
 
-> `monitoring` namespace 已於 Phase 3.5 建立，直接安裝。
+```bash
+kubectl create namespace monitoring
+```
+
+### Step 4a-4：安裝
+
+> 如果 monitoring namespace 尚未建立，請先建立（或執行上一步）。
 
 ```bash
 helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
@@ -104,7 +110,7 @@ helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   -f /tmp/prometheus-values.yaml
 ```
 
-### Step 4a-4：驗證
+### Step 4a-5：驗證
 
 > 確認所有元件在 infra node，node-exporter 在三台 node 各一個。
 
