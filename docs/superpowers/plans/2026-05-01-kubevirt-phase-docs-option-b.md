@@ -521,6 +521,9 @@ git commit -m $'docs: split kubevirt phases 4 to 6\n\nCo-authored-by: Copilot <2
 **Files:**
 - Modify: `kubernetes/3node-kubevirt/buildup.md`
 - Modify: `kubernetes/3node-kubevirt/index.md`
+- Modify: `kubernetes/3node-kubevirt/architecture.md`
+- Modify: `kubernetes/3node-kubevirt/commands.md`
+- Modify: `kubernetes/3node-kubevirt/flowchart.md`
 - Verify: `kubernetes/3node-kubevirt/phase-0.md`
 - Verify: `kubernetes/3node-kubevirt/phase-1.md`
 - Verify: `kubernetes/3node-kubevirt/phase-2.md`
@@ -579,26 +582,70 @@ Expected:
 
 - Both `index.md` and `buildup.md` link to all phase documents.
 
-- [ ] **Step 3: Run a final structure check**
+- [ ] **Step 3: Reorder reference-doc navigation after the phase pages**
+
+Update front matter nav orders so the sidebar reflects the intended primary reading path:
+
+```md
+---
+nav_order: 20
+---
+```
+
+in `kubernetes/3node-kubevirt/architecture.md`,
+
+```md
+---
+nav_order: 21
+---
+```
+
+in `kubernetes/3node-kubevirt/commands.md`, and
+
+```md
+---
+nav_order: 22
+---
+```
+
+in `kubernetes/3node-kubevirt/flowchart.md`.
+
+Expected:
+
+- The sidebar order becomes `Phase 0` through `Phase 6` first, then reference docs.
+- `index.md` remains the landing page and `buildup.md` remains the transition page.
+
+- [ ] **Step 4: Run a final structure check**
 
 ```bash
 cd /Users/mansionlai/Documents/code/notebook-sync
 ls kubernetes/3node-kubevirt
 printf '\nPHASE_HEADINGS\n'
 for f in kubernetes/3node-kubevirt/phase-*.md; do echo \"== $f ==\"; grep -n '^# ' \"$f\"; done
+printf '\nNAV_ORDER_AUDIT\n'
+grep -n 'nav_order:' kubernetes/3node-kubevirt/index.md \
+  kubernetes/3node-kubevirt/buildup.md \
+  kubernetes/3node-kubevirt/architecture.md \
+  kubernetes/3node-kubevirt/commands.md \
+  kubernetes/3node-kubevirt/flowchart.md \
+  kubernetes/3node-kubevirt/phase-*.md
 ```
 
 Expected:
 
 - `index.md`, `buildup.md`, and `phase-0.md` through `phase-6.md` all exist.
 - Each phase file has the correct top heading.
+- `phase-0.md` through `phase-6.md` sort ahead of the reference docs by `nav_order`.
 
-- [ ] **Step 4: Review the final diff**
+- [ ] **Step 5: Review the final diff**
 
 ```bash
 cd /Users/mansionlai/Documents/code/notebook-sync
 git --no-pager diff -- kubernetes/3node-kubevirt/index.md \
   kubernetes/3node-kubevirt/buildup.md \
+  kubernetes/3node-kubevirt/architecture.md \
+  kubernetes/3node-kubevirt/commands.md \
+  kubernetes/3node-kubevirt/flowchart.md \
   kubernetes/3node-kubevirt/phase-0.md \
   kubernetes/3node-kubevirt/phase-1.md \
   kubernetes/3node-kubevirt/phase-2.md \
@@ -612,14 +659,18 @@ Expected:
 
 - `buildup.md` becomes a transition page.
 - `index.md` becomes an agenda page.
+- The reference docs move below the phase pages in sidebar ordering.
 - The phase files contain the extracted detailed steps.
 
-- [ ] **Step 5: Commit the final reorganization**
+- [ ] **Step 6: Commit the final reorganization**
 
 ```bash
 cd /Users/mansionlai/Documents/code/notebook-sync
 git add kubernetes/3node-kubevirt/index.md \
   kubernetes/3node-kubevirt/buildup.md \
+  kubernetes/3node-kubevirt/architecture.md \
+  kubernetes/3node-kubevirt/commands.md \
+  kubernetes/3node-kubevirt/flowchart.md \
   kubernetes/3node-kubevirt/phase-0.md \
   kubernetes/3node-kubevirt/phase-1.md \
   kubernetes/3node-kubevirt/phase-2.md \
@@ -630,7 +681,7 @@ git add kubernetes/3node-kubevirt/index.md \
 git commit -m $'docs: split kubevirt buildup into phase guides\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>'
 ```
 
-- [ ] **Step 6: Hand off to branch completion**
+- [ ] **Step 7: Hand off to branch completion**
 
 ```bash
 cd /Users/mansionlai/Documents/code/notebook-sync
