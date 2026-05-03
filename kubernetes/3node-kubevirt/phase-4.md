@@ -6,3 +6,481 @@ nav_order: 14
 ---
 
 # Phase 4 — Observability
+
+## 範圍
+
+本頁整合原本的 `Phase 4a`、`Phase 4b`、`Phase 4c`，因為三者都屬於 observability / logging stack。
+
+## Phase 4a：Prometheus Stack（kube-prometheus-stack）
+
+> 在 **k8s-master** 執行
+
+**目的：** 安裝 kube-prometheus-stack（Prometheus + AlertManager + Grafana + node-exporter + kube-state-metrics），提供完整的叢集監控能力。所有元件釘在 infra node，node-exporter 以 DaemonSet 部署到三台 node。
+
+### Step 4a-1：新增 Helm repo
+
+> 新增 Prometheus Community Helm repo，包含 kube-prometheus-stack chart。
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+```
+
+### Step 4a-2：建立 values 檔
+
+> 各元件透過 `nodeSelector: role: infra` 釘在 infra node。
+> infra node 無 taint，不需要額外 toleration。
+> node-exporter 需加 control-plane toleration 才能部署到 master。
+> Prometheus 使用 local-path SC 建立 10Gi PVC保存 7 天 metrics。
+
+```bash
+cat > /tmp/prometheus-values.yaml <<'EOF'
+prometheus:
+  prometheusSpec:
+    nodeSelector:
+      role: infra
+    retention: 7d
+    # 讓 Prometheus 選取所有 namespace 的 ServiceMonitor/Rule（含 KubeVirt 等第三方）
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 200m
+      limits:
+        memory: 1Gi
+        cpu: 500m
+
+alertmanager:
+  alertmanagerSpec:
+    nodeSelector:
+      role: infra
+
+grafana:
+  nodeSelector:
+    role: infra
+  resources:
+    requests:
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+prometheusOperator:
+  nodeSelector:
+    role: infra
+
+kube-state-metrics:
+  nodeSelector:
+    role: infra
+
+prometheus-node-exporter:
+  # DaemonSet，部署到所有 node
+  tolerations:
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+    - key: "node-role.kubernetes.io/infra"
+      operator: "Exists"
+      effect: "NoSchedule"
+EOF
+```
+
+### Step 4a-3：安裝
+
+> `monitoring` namespace 已於 Phase 3.5 建立，直接安裝。
+
+```bash
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  -n monitoring \
+  -f /tmp/prometheus-values.yaml
+```
+
+### Step 4a-4：驗證
+
+> 確認所有元件在 infra node，node-exporter 在三台 node 各一個。
+
+```bash
+kubectl get pods -n monitoring -o wide
+# 預期：prometheus-*, alertmanager-*, grafana-*, kube-state-metrics-* 在 mansion-k8s-infra
+#        node-exporter-* 在三台 node 各一個（master/infra/worker）
+
+kubectl get pvc -n monitoring
+# 預期：prometheus-kube-prometheus-stack-prometheus-db-... Bound 10Gi
+```
+
+---
+
+## Phase 4b：OpenSearch + OpenSearch Dashboards
+
+> 在 **k8s-master** 執行
+
+**目的：** 安裝 OpenSearch（Elasticsearch 相容的搜尋/分析引擎）和 OpenSearch Dashboards（Kibana 相容的視覺化 UI），用於收集和查詢 Fluent Bit 轉送的 log。Single-node 模式，釘在 infra node。
+
+### Step 4b-1：新增 Helm repo
+
+> 新增 OpenSearch 官方 Helm repo。
+
+```bash
+helm repo add opensearch https://opensearch-project.github.io/helm-charts/
+helm repo update
+```
+
+### Step 4b-2：建立 OpenSearch values
+
+> `singleNode: true` 關閉 cluster 模式，適合 lab 環境節省資源。
+> infra node 無 taint，不需要 toleration。
+> JVM heap 設 512m（與 memory limit 1Gi 搭配，留空間給 OS）。
+
+> **⚠️ OpenSearch 2.12+ 強制要求設定 `OPENSEARCH_INITIAL_ADMIN_PASSWORD`，密碼需符合強度規則（大小寫＋數字＋特殊符號，且不得與 username 相似）。**
+> 建議使用 Python 產生 values 檔以避免 heredoc YAML 格式問題：
+
+```bash
+python3 -c "
+import yaml
+vals = {
+    'singleNode': True,
+    'nodeSelector': {'role': 'infra'},
+    'resources': {
+        'requests': {'memory': '512Mi', 'cpu': '200m'},
+        'limits': {'memory': '1Gi', 'cpu': '500m'}
+    },
+    'opensearchJavaOpts': '-Xmx512m -Xms512m',
+    'persistence': {
+        'enabled': True,
+        'storageClass': 'local-path',
+        'size': '10Gi'
+    },
+    'config': {
+        'opensearch.yml': 'cluster.name: k8s-lab\nnetwork.host: 0.0.0.0\ndiscovery.type: single-node\n'
+    },
+    'extraEnvs': [
+        {'name': 'OPENSEARCH_INITIAL_ADMIN_PASSWORD', 'value': 'Qr7!pZ9vNw#'}
+    ]
+}
+with open('/tmp/opensearch-values.yaml', 'w') as f:
+    yaml.dump(vals, f, default_flow_style=False)
+print('Done')
+"
+```
+
+### Step 4b-3：安裝 OpenSearch
+
+> 安裝到 monitoring namespace，與 Prometheus stack 共用同一個 namespace。
+
+```bash
+helm install opensearch opensearch/opensearch \
+  -n monitoring \
+  -f /tmp/opensearch-values.yaml
+```
+
+### Step 4b-4：建立 OpenSearch Dashboards values
+
+> Dashboards 連線到 OpenSearch cluster master service（9200 port）。
+
+```bash
+cat > /tmp/opensearch-dashboards-values.yaml <<'EOF'
+nodeSelector:
+  role: infra
+
+resources:
+  requests:
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+opensearchHosts: "https://opensearch-cluster-master:9200"
+EOF
+```
+
+### Step 4b-5：安裝 OpenSearch Dashboards
+
+```bash
+helm install opensearch-dashboards opensearch/opensearch-dashboards \
+  -n monitoring \
+  -f /tmp/opensearch-dashboards-values.yaml
+```
+
+### Step 4b-6：驗證
+
+> 確認 OpenSearch 和 Dashboards 都在 infra node，PVC 10Gi Bound。
+
+```bash
+kubectl get pods -n monitoring -o wide | grep opensearch
+# 預期：opensearch-cluster-master-0 和 opensearch-dashboards-* 在 mansion-k8s-infra
+
+kubectl get pvc -n monitoring | grep opensearch
+# 預期：opensearch-cluster-master-... Bound 10Gi local-path
+```
+
+---
+
+## Phase 4c：Fluent Bit
+
+> 在 **k8s-master** 執行
+
+### Step 4c-1：新增 Helm repo
+
+```bash
+helm repo add fluent https://fluent.github.io/helm-charts
+helm repo update
+```
+
+### Step 4c-2：確認 OpenSearch admin 密碼
+
+> 帳號：`admin`，密碼：安裝時透過 `OPENSEARCH_INITIAL_ADMIN_PASSWORD` env 設定的值（`Qr7!pZ9vNw#`）。
+
+```bash
+# 確認 opensearch-cluster-master service 可連線
+kubectl exec -n monitoring opensearch-cluster-master-0 -- \
+  curl -sk -u "admin:Qr7!pZ9vNw#" "https://localhost:9200/_cluster/health?pretty"
+```
+
+### Step 4c-3：建立 Fluent Bit values
+
+> **注意事項：**
+> - OpenSearch 2.x 移除了 `_type` 欄位，必須加 `Suppress_Type_Name On`，否則 HTTP 400。
+> - 使用單引號 heredoc delimiter 避免 shell 展開。
+
+```bash
+cat > /tmp/fluent-bit-values.yaml << 'HEREDOC'
+tolerations:
+  - key: "node-role.kubernetes.io/control-plane"
+    operator: "Exists"
+    effect: "NoSchedule"
+  - key: "node-role.kubernetes.io/infra"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+config:
+  inputs: |
+    [INPUT]
+        Name              tail
+        Path              /var/log/containers/*.log
+        multiline.parser  docker, cri
+        Tag               kube.*
+        Mem_Buf_Limit     5MB
+        Skip_Long_Lines   On
+
+  filters: |
+    [FILTER]
+        Name                kubernetes
+        Match               kube.*
+        Kube_URL            https://kubernetes.default.svc:443
+        Kube_CA_File        /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        Kube_Token_File     /var/run/secrets/kubernetes.io/serviceaccount/token
+        Kube_Tag_Prefix     kube.var.log.containers.
+        Merge_Log           On
+        Keep_Log            Off
+        K8S-Logging.Parser  On
+        K8S-Logging.Exclude Off
+
+  outputs: |
+    [OUTPUT]
+        Name              opensearch
+        Match             kube.*
+        Host              opensearch-cluster-master.monitoring.svc.cluster.local
+        Port              9200
+        HTTP_User         admin
+        HTTP_Passwd       Qr7!pZ9vNw#
+        Logstash_Format   On
+        Logstash_Prefix   k8s-logs
+        Replace_Dots      On
+        Suppress_Type_Name On
+        Retry_Limit       False
+        tls               On
+        tls.verify        Off
+HEREDOC
+```
+
+### Step 4c-4：安裝
+
+```bash
+helm install fluent-bit fluent/fluent-bit \
+  -n monitoring \
+  -f /tmp/fluent-bit-values.yaml
+```
+
+### Step 4c-5：驗證
+
+```bash
+kubectl get pods -n monitoring -o wide | grep fluent
+# 預期：fluent-bit-* 在三台 node 各一個（DaemonSet）
+
+kubectl logs -n monitoring -l app.kubernetes.io/name=fluent-bit --since=15s 2>&1 | grep -v 'inotify_fs_add\| info'
+# 預期：無任何 error（無 401/400/connection refused）
+
+# 確認 OpenSearch index 已建立
+kubectl exec -n monitoring opensearch-cluster-master-0 -- \
+  bash -c 'curl -sk -u admin:"$OPENSEARCH_INITIAL_ADMIN_PASSWORD" https://localhost:9200/_cat/indices?v' | grep k8s
+# 預期：k8s-logs-YYYY.MM.DD index，status yellow（single-node 無 replica），有 doc count
+```
+
+---
+
+## Step 4d：Monitoring Dashboard 對外存取（Istio VirtualService）
+
+透過 Istio IngressGateway（MetalLB IP `10.10.10.11`）以 subpath 方式對外暴露 Grafana、Prometheus、OpenSearch Dashboards。
+
+### Step 4d-1：建立 Istio Gateway + VirtualService
+
+```bash
+cat << 'EOF' | kubectl apply -f -
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: monitoring-gateway
+  namespace: monitoring
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: grafana-vs
+  namespace: monitoring
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - monitoring-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /grafana
+    route:
+    - destination:
+        host: kube-prometheus-stack-grafana
+        port:
+          number: 80
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: prometheus-vs
+  namespace: monitoring
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - monitoring-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /prometheus
+    route:
+    - destination:
+        host: kube-prometheus-stack-prometheus
+        port:
+          number: 9090
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: opensearch-dashboards-vs
+  namespace: monitoring
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - monitoring-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /opensearch
+    route:
+    - destination:
+        host: opensearch-dashboards
+        port:
+          number: 5601
+EOF
+```
+
+### Step 4d-2：停用 mTLS（monitoring namespace 無 sidecar）
+
+```bash
+# monitoring namespace 沒有 Istio sidecar，需停用 mTLS 否則 IngressGateway 回 503
+cat << 'EOF' | kubectl apply -f -
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: monitoring-no-mtls
+  namespace: monitoring
+spec:
+  host: "*.monitoring.svc.cluster.local"
+  trafficPolicy:
+    tls:
+      mode: DISABLE
+EOF
+```
+
+### Step 4d-3：各服務 subpath 配置
+
+**Grafana** — 在 `grafana-values.yaml` 加入 env var 後 `helm upgrade`：
+```yaml
+grafana:
+  env:
+    GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/grafana"
+    GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+```
+
+**Prometheus** — patch CRD：
+```bash
+kubectl patch prometheus -n monitoring kube-prometheus-stack-prometheus \
+  --type=merge -p '{
+    "spec": {
+      "routePrefix": "/prometheus",
+      "externalUrl": "http://10.10.10.11/prometheus"
+    }
+  }'
+```
+
+**OpenSearch Dashboards** — 在 `opensearch-dashboards-values.yaml` 加入後 `helm upgrade`：
+```yaml
+extraEnvs:
+  - name: SERVER_BASEPATH
+    value: "/opensearch"
+  - name: SERVER_REWRITEBASEPATH
+    value: "true"
+```
+
+### Step 4d-4：驗證
+
+```bash
+# 內部測試（從 cluster 內任意節點）
+curl -s -o /dev/null -w 'Grafana: %{http_code}\n' http://10.10.10.11/grafana/login
+curl -s -o /dev/null -w 'Prometheus: %{http_code}\n' http://10.10.10.11/prometheus/graph
+curl -s -o /dev/null -w 'OpenSearch: %{http_code}\n' http://10.10.10.11/opensearch/
+
+# 預期：三個都回 302（redirect to login）
+
+# 外部存取（需 Azure NSG 開放 port 80 給 infra 節點）
+# http://20.243.24.191/grafana     (admin / <grafana-password>)
+# http://20.243.24.191/prometheus
+# http://20.243.24.191/opensearch  (admin / admin)
+```
+
+### 踩坑記錄（Step 4d）
+
+| 問題 | 原因 | 解法 |
+|------|------|------|
+| OpenSearch Dashboards 回 503 | monitoring namespace 無 Istio sidecar，IngressGateway 嘗試 mTLS 失敗 | 建立 DestinationRule 停用 `*.monitoring.svc.cluster.local` 的 mTLS |
+| Grafana/Prometheus subpath 不工作 | 未設定 `GF_SERVER_SERVE_FROM_SUB_PATH` 或 `routePrefix` | 分別 patch Grafana env 和 Prometheus CRD |
+
+---
