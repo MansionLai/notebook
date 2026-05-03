@@ -166,7 +166,7 @@ ssh ubuntu@<WORKER_PUBLIC_IP>
 ip addr show
 # master 應看到 eth0: 10.10.10.10
 # infra  應看到 eth0: 10.10.10.11
-# worker 應看到 eth0: 10.10.10.12 + eth1: 10.10.100.1
+# worker 應看到 eth0: 10.10.10.12 + eth1: 10.10.100.12
 ```
 
 三台互 ping（確認 NSG 允許內部流量）：
