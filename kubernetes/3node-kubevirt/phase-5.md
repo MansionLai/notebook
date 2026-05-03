@@ -7,7 +7,6 @@ nav_order: 15
 
 # Phase 5 — KubeVirt 平台層
 
-## Phase 5：KubeVirt + Multus NAD + multus-networkpolicy
 
 ### Step 5-1：確認 Worker 支援 Nested Virtualization
 

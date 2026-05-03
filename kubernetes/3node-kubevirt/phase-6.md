@@ -7,7 +7,6 @@ nav_order: 16
 
 # Phase 6 — VM Workload
 
-## Phase 6：建立 KubeVirt VM（ub24-01）並解決外網連線
 
 ### 架構說明
 
