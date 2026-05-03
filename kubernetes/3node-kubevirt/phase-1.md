@@ -7,8 +7,6 @@ nav_order: 11
 
 # Phase 1 — OS 基礎 + kubeadm + Cilium
 
-## Phase 1：OS 基礎 + kubeadm + Cilium
-
 > **以下 Step 1-1 ~ 1-7 在三台 VM 各執行一遍**（可開三個 Terminal）
 
 ### Step 1-1：/etc/hosts 設定

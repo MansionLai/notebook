@@ -7,8 +7,6 @@ nav_order: 12
 
 # Phase 2 — Multus CNI
 
-## Phase 2：Multus CNI
-
 > 在 **k8s-master** 執行
 
 ### Step 2-1：安裝 Multus Thick Plugin（multus namespace）
