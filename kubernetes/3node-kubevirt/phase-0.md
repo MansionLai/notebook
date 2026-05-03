@@ -21,12 +21,6 @@ nav_order: 10
 | SSH public key | 由使用者提供 |
 | NSG allowed source | 使用者的固定 Public IP 或 CIDR |
 
-## 建置模式
-
-| 模式 | 適用情境 | 說明 |
-|------|----------|------|
-| Option A | 第一次熟悉 Azure Portal | 手動建立 RG、VNet、NSG、VM、NIC 與 IP |
-| Option B | 未來重建 / 重複部署 | 在 Mac mini 上由本地 Copilot CLI 透過 Azure MCP + IaC 代執行 |
 
 ## 環境概覽
 
@@ -40,6 +34,13 @@ nav_order: 10
 **KubeVirt VM 網段：** 10.10.100.0/24（kubevirt-subnet，Worker eth1）
 
 ---
+
+## 建置模式
+
+| 模式 | 適用情境 | 說明 |
+|------|----------|------|
+| Option A | 第一次熟悉 Azure Portal | 手動建立 RG、VNet、NSG、VM、NIC 與 IP |
+| Option B | 未來重建 / 重複部署 | 在 Mac mini 上由本地 Copilot CLI 透過 Azure MCP + IaC 代執行 |
 
 ## Option A：Azure VM 建立（Portal GUI）
 
