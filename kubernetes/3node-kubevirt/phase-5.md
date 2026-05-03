@@ -259,3 +259,24 @@ virtctl version --client
 | CoreDNS Pending | 未安裝 CNI | 先裝 Cilium，CoreDNS 才會 Running |
 | virt-api/controller 一直排程到 worker | Infra 節點未標記或無 toleration | 在 KubeVirt CR 的 customizeComponents 加 toleration + nodeSelector (kubevirt-management=true) |
 | Worker bridge 模式流量被丟棄 | Azure NIC MAC filtering | Portal → NIC (eth1) → Enable IP Forwarding |
+
+---
+
+## 實際結果
+
+```
+kubectl get nodes
+NAME         STATUS   ROLES           AGE   VERSION
+k8s-infra    Ready    infra           -     v1.32.x
+k8s-master   Ready    control-plane   -     v1.32.x
+k8s-worker   Ready    worker          -     v1.32.x
+
+kubectl get pods -n kubevirt -o wide
+NAME                              READY   STATUS    NODE
+virt-api-xxx                      1/1     Running   k8s-infra
+virt-controller-xxx               1/1     Running   k8s-infra
+virt-handler-xxx (worker)         1/1     Running   k8s-worker
+virt-operator-xxx                 1/1     Running   k8s-infra
+```
+
+---
