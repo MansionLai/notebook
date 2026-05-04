@@ -3,6 +3,7 @@ title: Phase 3 - Storage + Ingress
 parent: 3-Node KubeVirt (Azure)
 grand_parent: Kubernetes
 nav_order: 13
+permalink: /kubernetes/3node-kubevirt/phase-3/
 ---
 
 # Phase 3 — Storage + Ingress
@@ -205,5 +206,4 @@ istioctl verify-install -f /tmp/istio-operator.yaml
 ```
 
 ---
-
 

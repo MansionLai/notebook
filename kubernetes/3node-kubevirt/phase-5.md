@@ -3,6 +3,7 @@ title: Phase 5 - KubeVirt 平台層
 parent: 3-Node KubeVirt (Azure)
 grand_parent: Kubernetes
 nav_order: 15
+permalink: /kubernetes/3node-kubevirt/phase-5/
 ---
 
 # Phase 5 — KubeVirt 平台層

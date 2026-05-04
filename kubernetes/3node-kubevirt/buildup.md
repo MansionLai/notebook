@@ -3,6 +3,7 @@ title: Buildup Guide
 parent: 3-Node KubeVirt (Azure)
 grand_parent: Kubernetes
 nav_order: 2
+permalink: /kubernetes/3node-kubevirt/buildup/
 ---
 
 # K8s 3-Node KubeVirt on Azure — Buildup Guide

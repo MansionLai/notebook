@@ -3,6 +3,7 @@ title: Phase 4 - Observability
 parent: 3-Node KubeVirt (Azure)
 grand_parent: Kubernetes
 nav_order: 14
+permalink: /kubernetes/3node-kubevirt/phase-4/
 ---
 
 # Phase 4 — Observability
@@ -331,4 +332,3 @@ kubectl exec -n monitoring opensearch-cluster-master-0 -- \
 ```
 
 ---
-

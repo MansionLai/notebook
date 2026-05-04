@@ -3,6 +3,7 @@ title: Setup Flowchart
 parent: 3-Node KubeVirt (Azure)
 grand_parent: Kubernetes
 nav_order: 22
+permalink: /kubernetes/3node-kubevirt/flowchart/
 ---
 
 # K8s 三節點 + KubeVirt 架設流程

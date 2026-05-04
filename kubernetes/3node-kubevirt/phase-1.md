@@ -3,6 +3,7 @@ title: Phase 1 - OS 基礎 + kubeadm + Cilium
 parent: 3-Node KubeVirt (Azure)
 grand_parent: Kubernetes
 nav_order: 11
+permalink: /kubernetes/3node-kubevirt/phase-1/
 ---
 
 # Phase 1 — OS 基礎 + kubeadm + Cilium
@@ -311,5 +312,4 @@ kubectl get nodes
 ```
 
 ---
-
 

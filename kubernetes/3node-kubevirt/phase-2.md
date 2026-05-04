@@ -3,6 +3,7 @@ title: Phase 2 - Multus CNI
 parent: 3-Node KubeVirt (Azure)
 grand_parent: Kubernetes
 nav_order: 12
+permalink: /kubernetes/3node-kubevirt/phase-2/
 ---
 
 # Phase 2 — Multus CNI
@@ -48,5 +49,4 @@ ls /etc/cni/net.d/
 ```
 
 ---
-
 
