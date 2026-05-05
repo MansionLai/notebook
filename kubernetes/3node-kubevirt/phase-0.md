@@ -239,7 +239,7 @@ flowchart TD
 
 1. 在 Mac mini 開啟本地 Copilot CLI
 2. 驗證 Azure MCP 可用
-3. 載入 IaC 模板與參數檔（見 [IaC README](./iac/)）
+3. 載入 IaC 模板與參數檔（見 [IaC README](../iac/)）
 4. 建立以下 Azure 資源：
    - Resource Group
    - VNet + 2 個 Subnet
