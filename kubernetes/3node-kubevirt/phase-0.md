@@ -208,7 +208,7 @@ ping -c 3 10.10.10.12  # worker
 flowchart TD
     User[User] --> Mac[Mac mini]
 
-    subgraph Local["Mac mini"]
+    subgraph Local["Mac mini (local host)"]
         CLI[Copilot CLI]
         MCP[Azure MCP Server]
         IaC[IaC / Bicep Files]
