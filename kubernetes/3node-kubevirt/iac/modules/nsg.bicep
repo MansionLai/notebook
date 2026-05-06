@@ -1,8 +1,12 @@
 targetScope = 'resourceGroup'
 
+@description('Azure region for the NSG.')
 param location string
+@description('Network security group name.')
 param networkSecurityGroupName string
+@description('External source CIDR allowed in.')
 param allowedSourceCidr string
+@description('Internal source CIDR allowed in.')
 param internalSourceCidr string
 
 resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {

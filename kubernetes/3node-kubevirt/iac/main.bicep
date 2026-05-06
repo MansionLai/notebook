@@ -1,13 +1,22 @@
 targetScope = 'resourceGroup'
 
+@description('Azure region for deployment.')
 param location string = 'japaneast'
+@description('Name of the virtual network.')
 param virtualNetworkName string
+@description('CIDR for the virtual network.')
 param virtualNetworkAddressPrefix string
+@description('Name of the Kubernetes subnet.')
 param k8sSubnetName string
+@description('CIDR for the Kubernetes subnet.')
 param k8sSubnetPrefix string
+@description('Name of the KubeVirt subnet.')
 param kubevirtSubnetName string
+@description('CIDR for the KubeVirt subnet.')
 param kubevirtSubnetPrefix string
+@description('Name of the network security group.')
 param networkSecurityGroupName string
+@description('Trusted source CIDR for inbound rules.')
 param allowedSourceCidr string
 
 module network './modules/network.bicep' = {

@@ -8,4 +8,5 @@ param k8sSubnetPrefix = '10.10.10.0/24'
 param kubevirtSubnetName = 'kubevirt-subnet'
 param kubevirtSubnetPrefix = '10.10.100.0/24'
 param networkSecurityGroupName = 'k8s-nsg'
+// Documentation placeholder; replace before deployment.
 param allowedSourceCidr = '203.0.113.10/32'
