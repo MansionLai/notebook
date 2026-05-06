@@ -1,0 +1,11 @@
+using './main.bicep'
+
+param resourceGroupName = 'mansion_resource'
+param location = 'Japan East'
+param virtualNetworkName = 'mansion-k8s-vnet'
+param virtualNetworkAddressPrefix = '10.10.0.0/16'
+param k8sSubnetName = 'k8s-subnet'
+param k8sSubnetPrefix = '10.10.10.0/24'
+param kubevirtSubnetName = 'kubevirt-subnet'
+param kubevirtSubnetPrefix = '10.10.100.0/24'
+param networkSecurityGroupName = 'mansion-k8s-nsg'
