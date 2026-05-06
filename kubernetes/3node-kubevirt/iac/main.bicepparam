@@ -1,7 +1,6 @@
 using './main.bicep'
 
-param resourceGroupName = 'mansion_resource'
-param location = 'Japan East'
+param location = 'japaneast'
 param virtualNetworkName = 'mansion-k8s-vnet'
 param virtualNetworkAddressPrefix = '10.10.0.0/16'
 param k8sSubnetName = 'k8s-subnet'

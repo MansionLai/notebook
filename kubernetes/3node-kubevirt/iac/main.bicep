@@ -1,7 +1,6 @@
 targetScope = 'resourceGroup'
 
-param location string = 'Japan East'
-param resourceGroupName string
+param location string = 'japaneast'
 param virtualNetworkName string
 param virtualNetworkAddressPrefix string
 param k8sSubnetName string
@@ -34,7 +33,8 @@ module nsg './modules/nsg.bicep' = {
   }
 }
 
-output targetResourceGroupName string = resourceGroupName
+// NSG is created here and later attached to NICs in Task 2.
+output targetResourceGroupName string = resourceGroup().name
 output virtualNetworkId string = network.outputs.virtualNetworkId
 output k8sSubnetId string = network.outputs.k8sSubnetId
 output kubevirtSubnetId string = network.outputs.kubevirtSubnetId
