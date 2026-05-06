@@ -204,11 +204,42 @@ ping -c 3 10.10.10.12  # worker
 | IaC（建議 Bicep） | 定義 RG、VNet、Subnet、NSG、NIC、VM 的藍圖 |
 | Mac mini | 本地控制主機，承載登入狀態、MCP server 與 IaC 模板 |
 
+```mermaid
+flowchart TD
+    User[User] --> Mac[Mac mini]
+
+    subgraph Local["Mac mini (local host)"]
+        CLI[Copilot CLI]
+        MCP[Azure MCP Server]
+        IaC[IaC / Bicep Files]
+    end
+
+    Mac --> CLI
+    CLI --> MCP
+    CLI --> IaC
+    MCP --> ARM[Azure API / ARM]
+    IaC --> ARM
+
+    subgraph Azure["Azure"]
+        RG[Resource Group]
+        NET[VNet / Subnets]
+        NSG[NSG]
+        VMS[3 Azure VMs]
+        NIC2[Worker NIC2]
+    end
+
+    ARM --> RG
+    ARM --> NET
+    ARM --> NSG
+    ARM --> VMS
+    ARM --> NIC2
+```
+
 ### Option B 執行流程
 
 1. 在 Mac mini 開啟本地 Copilot CLI
 2. 驗證 Azure MCP 可用
-3. 載入 IaC 模板與參數檔
+3. 載入 IaC 模板與參數檔（見 [IaC README](../iac/)）
 4. 建立以下 Azure 資源：
    - Resource Group
    - VNet + 2 個 Subnet
