@@ -30,6 +30,7 @@ module nsg './modules/nsg.bicep' = {
     location: location
     networkSecurityGroupName: networkSecurityGroupName
     allowedSourceCidr: allowedSourceCidr
+    internalSourceCidr: virtualNetworkAddressPrefix
   }
 }
 
