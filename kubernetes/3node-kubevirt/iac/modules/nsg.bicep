@@ -2,6 +2,7 @@ targetScope = 'resourceGroup'
 
 param location string
 param networkSecurityGroupName string
+param allowedSourceCidr string
 
 resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
   name: networkSecurityGroupName
@@ -17,7 +18,7 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2023-11-0
           protocol: 'Tcp'
           sourcePortRange: '*'
           destinationPortRange: '22'
-          sourceAddressPrefix: '*'
+          sourceAddressPrefix: allowedSourceCidr
           destinationAddressPrefix: '*'
         }
       }
@@ -30,7 +31,7 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2023-11-0
           protocol: 'Tcp'
           sourcePortRange: '*'
           destinationPortRange: '6443'
-          sourceAddressPrefix: '*'
+          sourceAddressPrefix: allowedSourceCidr
           destinationAddressPrefix: '*'
         }
       }
@@ -43,7 +44,7 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2023-11-0
           protocol: 'Tcp'
           sourcePortRange: '*'
           destinationPortRange: '30000-32767'
-          sourceAddressPrefix: '*'
+          sourceAddressPrefix: allowedSourceCidr
           destinationAddressPrefix: '*'
         }
       }

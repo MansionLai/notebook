@@ -9,6 +9,7 @@ param k8sSubnetPrefix string
 param kubevirtSubnetName string
 param kubevirtSubnetPrefix string
 param networkSecurityGroupName string
+param allowedSourceCidr string
 
 module network './modules/network.bicep' = {
   name: 'network'
@@ -28,6 +29,7 @@ module nsg './modules/nsg.bicep' = {
   params: {
     location: location
     networkSecurityGroupName: networkSecurityGroupName
+    allowedSourceCidr: allowedSourceCidr
   }
 }
 
