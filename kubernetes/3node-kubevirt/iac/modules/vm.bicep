@@ -9,6 +9,7 @@ param nicIds array
 @description('Administrator username for the Linux VM.')
 param adminUsername string = 'ubuntu'
 @description('SSH public key content for the Linux VM admin user.')
+@secure()
 param adminPublicKey string
 @description('Azure Marketplace image publisher.')
 param imagePublisher string
@@ -39,7 +40,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
         createOption: 'FromImage'
         caching: 'ReadWrite'
         managedDisk: {
-          storageAccountType: 'Premium_LRS'
+          storageAccountType: 'StandardSSD_LRS'
         }
       }
     }
@@ -70,3 +71,4 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
 }
 
 output vmId string = vm.id
+output vmName string = vm.name

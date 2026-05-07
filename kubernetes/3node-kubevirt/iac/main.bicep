@@ -202,3 +202,18 @@ output workerPublicIpAddress string = workerNic.outputs.publicIpAddress
 output masterVmId string = masterVm.outputs.vmId
 output infraVmId string = infraVm.outputs.vmId
 output workerVmId string = workerVm.outputs.vmId
+output vmNames array = [
+  masterVmName
+  infraVmName
+  workerVmName
+]
+output vmPrivateIps array = [
+  masterPrivateIp
+  infraPrivateIp
+  workerPrivateIp
+]
+output publicIpAddresses array = [
+  masterNic.outputs.publicIpAddress
+  infraNic.outputs.publicIpAddress
+  workerNic.outputs.publicIpAddress
+]
