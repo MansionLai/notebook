@@ -14,12 +14,12 @@ param publicIpName string
 param privateIp string
 @description('Whether to create a secondary NIC.')
 param createSecondaryNic bool = false
-@description('Secondary NIC name.')
-param secondaryNicName string = ''
-@description('Secondary subnet resource ID.')
-param secondarySubnetId string = ''
-@description('Secondary private IP.')
-param secondaryPrivateIp string = ''
+@description('Required when createSecondaryNic is true.')
+param secondaryNicName string = 'unset'
+@description('Required when createSecondaryNic is true.')
+param secondarySubnetId string = 'unset'
+@description('Required when createSecondaryNic is true.')
+param secondaryPrivateIp string = 'unset'
 
 resource publicIp 'Microsoft.Network/publicIPAddresses@2023-11-01' = {
   name: publicIpName
@@ -63,6 +63,7 @@ resource secondaryNic 'Microsoft.Network/networkInterfaces@2023-11-01' = if (cre
   name: secondaryNicName
   location: location
   properties: {
+    // Secondary NIC must forward traffic for the kubevirt workload.
     enableIPForwarding: true
     networkSecurityGroup: {
       id: networkSecurityGroupId
@@ -83,5 +84,6 @@ resource secondaryNic 'Microsoft.Network/networkInterfaces@2023-11-01' = if (cre
 }
 
 output nicId string = nic.id
+@description('Returns an empty string when createSecondaryNic is false.')
 output secondaryNicId string = createSecondaryNic ? secondaryNic.id : ''
 output publicIpAddress string = publicIp.properties.ipAddress
