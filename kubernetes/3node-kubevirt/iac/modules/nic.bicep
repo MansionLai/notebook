@@ -2,40 +2,27 @@ targetScope = 'resourceGroup'
 
 @description('Azure region for NIC and public IP resources.')
 param location string
-@description('Network security group resource ID shared by all NICs.')
+@description('Network security group resource ID shared by the NICs.')
 param networkSecurityGroupId string
-@description('Kubernetes subnet resource ID.')
-param k8sSubnetId string
-@description('KubeVirt subnet resource ID.')
-param kubevirtSubnetId string
+@description('Primary subnet resource ID.')
+param subnetId string
+@description('Primary NIC name.')
+param nicName string
+@description('Primary public IP name.')
+param publicIpName string
+@description('Primary private IP.')
+param privateIp string
+@description('Whether to create a secondary NIC.')
+param createSecondaryNic bool = false
+@description('Secondary NIC name.')
+param secondaryNicName string = ''
+@description('Secondary subnet resource ID.')
+param secondarySubnetId string = ''
+@description('Secondary private IP.')
+param secondaryPrivateIp string = ''
 
-@description('Master NIC name.')
-param masterNicName string
-@description('Infra NIC name.')
-param infraNicName string
-@description('Worker primary NIC name.')
-param workerNicName string
-@description('Worker secondary NIC name.')
-param workerSecondaryNicName string
-
-@description('Master Public IP name.')
-param masterPublicIpName string
-@description('Infra Public IP name.')
-param infraPublicIpName string
-@description('Worker Public IP name.')
-param workerPublicIpName string
-
-@description('Master private IP.')
-param masterPrivateIp string
-@description('Infra private IP.')
-param infraPrivateIp string
-@description('Worker private IP.')
-param workerPrivateIp string
-@description('Worker secondary private IP.')
-param workerSecondaryPrivateIp string
-
-resource masterPublicIp 'Microsoft.Network/publicIPAddresses@2023-11-01' = {
-  name: masterPublicIpName
+resource publicIp 'Microsoft.Network/publicIPAddresses@2023-11-01' = {
+  name: publicIpName
   location: location
   sku: {
     name: 'Standard'
@@ -46,32 +33,8 @@ resource masterPublicIp 'Microsoft.Network/publicIPAddresses@2023-11-01' = {
   }
 }
 
-resource infraPublicIp 'Microsoft.Network/publicIPAddresses@2023-11-01' = {
-  name: infraPublicIpName
-  location: location
-  sku: {
-    name: 'Standard'
-  }
-  properties: {
-    publicIPAllocationMethod: 'Static'
-    publicIPAddressVersion: 'IPv4'
-  }
-}
-
-resource workerPublicIp 'Microsoft.Network/publicIPAddresses@2023-11-01' = {
-  name: workerPublicIpName
-  location: location
-  sku: {
-    name: 'Standard'
-  }
-  properties: {
-    publicIPAllocationMethod: 'Static'
-    publicIPAddressVersion: 'IPv4'
-  }
-}
-
-resource masterNic 'Microsoft.Network/networkInterfaces@2023-11-01' = {
-  name: masterNicName
+resource nic 'Microsoft.Network/networkInterfaces@2023-11-01' = {
+  name: nicName
   location: location
   properties: {
     enableIPForwarding: false
@@ -83,12 +46,12 @@ resource masterNic 'Microsoft.Network/networkInterfaces@2023-11-01' = {
         name: 'ipconfig1'
         properties: {
           privateIPAllocationMethod: 'Static'
-          privateIPAddress: masterPrivateIp
+          privateIPAddress: privateIp
           subnet: {
-            id: k8sSubnetId
+            id: subnetId
           }
           publicIPAddress: {
-            id: masterPublicIp.id
+            id: publicIp.id
           }
         }
       }
@@ -96,60 +59,8 @@ resource masterNic 'Microsoft.Network/networkInterfaces@2023-11-01' = {
   }
 }
 
-resource infraNic 'Microsoft.Network/networkInterfaces@2023-11-01' = {
-  name: infraNicName
-  location: location
-  properties: {
-    enableIPForwarding: false
-    networkSecurityGroup: {
-      id: networkSecurityGroupId
-    }
-    ipConfigurations: [
-      {
-        name: 'ipconfig1'
-        properties: {
-          privateIPAllocationMethod: 'Static'
-          privateIPAddress: infraPrivateIp
-          subnet: {
-            id: k8sSubnetId
-          }
-          publicIPAddress: {
-            id: infraPublicIp.id
-          }
-        }
-      }
-    ]
-  }
-}
-
-resource workerNic 'Microsoft.Network/networkInterfaces@2023-11-01' = {
-  name: workerNicName
-  location: location
-  properties: {
-    enableIPForwarding: false
-    networkSecurityGroup: {
-      id: networkSecurityGroupId
-    }
-    ipConfigurations: [
-      {
-        name: 'ipconfig1'
-        properties: {
-          privateIPAllocationMethod: 'Static'
-          privateIPAddress: workerPrivateIp
-          subnet: {
-            id: k8sSubnetId
-          }
-          publicIPAddress: {
-            id: workerPublicIp.id
-          }
-        }
-      }
-    ]
-  }
-}
-
-resource workerSecondaryNic 'Microsoft.Network/networkInterfaces@2023-11-01' = {
-  name: workerSecondaryNicName
+resource secondaryNic 'Microsoft.Network/networkInterfaces@2023-11-01' = if (createSecondaryNic) {
+  name: secondaryNicName
   location: location
   properties: {
     enableIPForwarding: true
@@ -161,9 +72,9 @@ resource workerSecondaryNic 'Microsoft.Network/networkInterfaces@2023-11-01' = {
         name: 'ipconfig1'
         properties: {
           privateIPAllocationMethod: 'Static'
-          privateIPAddress: workerSecondaryPrivateIp
+          privateIPAddress: secondaryPrivateIp
           subnet: {
-            id: kubevirtSubnetId
+            id: secondarySubnetId
           }
         }
       }
@@ -171,15 +82,6 @@ resource workerSecondaryNic 'Microsoft.Network/networkInterfaces@2023-11-01' = {
   }
 }
 
-output masterNicId string = masterNic.id
-output infraNicId string = infraNic.id
-output workerNicId string = workerNic.id
-output workerSecondaryNicId string = workerSecondaryNic.id
-
-output masterPublicIpId string = masterPublicIp.id
-output infraPublicIpId string = infraPublicIp.id
-output workerPublicIpId string = workerPublicIp.id
-
-output masterPublicIpAddress string = masterPublicIp.properties.ipAddress
-output infraPublicIpAddress string = infraPublicIp.properties.ipAddress
-output workerPublicIpAddress string = workerPublicIp.properties.ipAddress
+output nicId string = nic.id
+output secondaryNicId string = createSecondaryNic ? secondaryNic.id : ''
+output publicIpAddress string = publicIp.properties.ipAddress
