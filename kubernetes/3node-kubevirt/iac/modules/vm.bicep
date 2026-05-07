@@ -63,7 +63,6 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
     networkProfile: {
       networkInterfaces: [for (nicId, index) in nicIds: {
         id: nicId
-        deleteOption: 'Delete'
         properties: {
           primary: index == 0
         }
