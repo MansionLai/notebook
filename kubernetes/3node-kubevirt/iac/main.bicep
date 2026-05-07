@@ -46,6 +46,24 @@ param infraPrivateIp string = '10.10.10.11'
 param workerPrivateIp string = '10.10.10.12'
 @description('Worker secondary private IP.')
 param workerSecondaryPrivateIp string = '10.10.100.12'
+@description('Administrator username for the Linux VMs.')
+param adminUsername string = 'ubuntu'
+@description('SSH public key content for the Linux VM admin user.')
+param adminPublicKey string
+@description('Master VM size.')
+param masterVmSize string = 'Standard_D2s_v5'
+@description('Infra VM size.')
+param infraVmSize string = 'Standard_D4s_v5'
+@description('Worker VM size.')
+param workerVmSize string = 'Standard_D4s_v5'
+@description('Ubuntu image publisher.')
+param imagePublisher string = 'Canonical'
+@description('Ubuntu image offer.')
+param imageOffer string = '0001-com-ubuntu-server-noble'
+@description('Ubuntu image SKU.')
+param imageSku string = '24_04-lts-gen2'
+@description('Ubuntu image version.')
+param imageVersion string = 'latest'
 
 module network './modules/network.bicep' = {
   name: 'network'
@@ -110,6 +128,61 @@ module workerNic './modules/nic.bicep' = {
   }
 }
 
+module masterVm './modules/vm.bicep' = {
+  name: 'masterVm'
+  params: {
+    location: location
+    vmName: masterVmName
+    nicIds: [
+      masterNic.outputs.nicId
+    ]
+    adminUsername: adminUsername
+    adminPublicKey: adminPublicKey
+    vmSize: masterVmSize
+    imagePublisher: imagePublisher
+    imageOffer: imageOffer
+    imageSku: imageSku
+    imageVersion: imageVersion
+  }
+}
+
+module infraVm './modules/vm.bicep' = {
+  name: 'infraVm'
+  params: {
+    location: location
+    vmName: infraVmName
+    nicIds: [
+      infraNic.outputs.nicId
+    ]
+    adminUsername: adminUsername
+    adminPublicKey: adminPublicKey
+    vmSize: infraVmSize
+    imagePublisher: imagePublisher
+    imageOffer: imageOffer
+    imageSku: imageSku
+    imageVersion: imageVersion
+  }
+}
+
+module workerVm './modules/vm.bicep' = {
+  name: 'workerVm'
+  params: {
+    location: location
+    vmName: workerVmName
+    nicIds: [
+      workerNic.outputs.nicId
+      workerNic.outputs.secondaryNicId
+    ]
+    adminUsername: adminUsername
+    adminPublicKey: adminPublicKey
+    vmSize: workerVmSize
+    imagePublisher: imagePublisher
+    imageOffer: imageOffer
+    imageSku: imageSku
+    imageVersion: imageVersion
+  }
+}
+
 output targetResourceGroupName string = resourceGroup().name
 output virtualNetworkId string = network.outputs.virtualNetworkId
 output k8sSubnetId string = network.outputs.k8sSubnetId
@@ -126,3 +199,6 @@ output workerSecondaryPrivateIpAddress string = workerSecondaryPrivateIp
 output masterPublicIpAddress string = masterNic.outputs.publicIpAddress
 output infraPublicIpAddress string = infraNic.outputs.publicIpAddress
 output workerPublicIpAddress string = workerNic.outputs.publicIpAddress
+output masterVmId string = masterVm.outputs.vmId
+output infraVmId string = infraVm.outputs.vmId
+output workerVmId string = workerVm.outputs.vmId
