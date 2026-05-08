@@ -65,6 +65,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
         id: nicId
         properties: {
           primary: index == 0
+          deleteOption: 'Delete'
         }
       }]
     }
