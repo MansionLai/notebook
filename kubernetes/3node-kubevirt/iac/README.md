@@ -36,3 +36,9 @@ permalink: /kubernetes/3node-kubevirt/iac/
 - [`modules/nsg.bicep`](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/iac/modules/nsg.bicep) : 定義 Phase 0 所需的 NSG 規則。
 - [`modules/nic.bicep`](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/iac/modules/nic.bicep) : 建立 NIC、Public IP 與 worker 的第二張網卡設定。
 - [`modules/vm.bicep`](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/iac/modules/vm.bicep) : 建立 Ubuntu VM 並掛載對應網卡。
+
+## SSH 連線提醒
+
+- 目前 Phase 0 VM 的管理帳號是 `ubuntu`
+- 連線格式：`ssh ubuntu@<public-ip>`
+- 若要明確指定金鑰：`ssh -i ~/.ssh/id_ed25519 ubuntu@<public-ip>`
