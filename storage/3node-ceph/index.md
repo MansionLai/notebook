@@ -13,7 +13,7 @@ permalink: /storage/3node-ceph/
 
 | Phase | 主題 | 說明 |
 |------|------|------|
-| [Phase 0](phase-0/) | Azure 資源建立 | Azure 網路、NSG、3 台 VM 與 managed disk |
+| [Phase 0](phase-0/) | Azure 資源建立 | Azure MCP + Bicep 建立 Azure 網路、NSG、3 台 VM 與 managed disk |
 | [Phase 1](phase-1/) | OS 與磁碟準備 | Hostname、hosts、網路驗證與磁碟檢查 |
 | [Phase 2](phase-2/) | Ceph v19.2.2 安裝 | Docker、cephadm、SSH key 與環境準備 |
 | [Phase 3](phase-3/) | Cluster bootstrap | Bootstrap、加入節點、部署 MON/MGR/OSD |
