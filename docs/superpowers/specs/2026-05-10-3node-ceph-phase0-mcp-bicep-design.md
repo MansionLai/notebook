@@ -8,11 +8,11 @@ title: 3-Node Ceph Phase 0 MCP Bicep Design
 
 目前 `storage/3node-ceph/phase-0.md` 與 `storage/3node-ceph/commands.md` 的 Azure 建置流程是以直接執行 `az` CLI 指令為主，雖然可操作，但這種寫法容易和「Azure MCP」混淆，也不符合這個主題後續可重複部署、可預覽變更、可維護的方向。
 
-另外，Phase 0 目前使用的 Resource Group 名稱是 `ceph-resource`，需要同步調整為 `mansion_ceph_resource`，以符合目前使用者偏好的命名方式。
+另外，Phase 0 目前使用的 Resource Group 名稱是 `ceph-resource`，需要同步調整為 `mansion_ceph_resource`，而且其餘 Phase 0 相關 Azure 物件也應盡量以 `mansion_` 作為前綴，方便在共用 subscription 中快速辨識哪些資源屬於使用者本人。
 
 ## Goal
 
-將 `storage/3node-ceph/` 的 Phase 0 文件改為以 **Azure MCP + Bicep（推薦）** 為主軸，並把相關文件中的 Resource Group 名稱統一更新為 `mansion_ceph_resource`。
+將 `storage/3node-ceph/` 的 Phase 0 文件改為以 **Azure MCP + Bicep（推薦）** 為主軸，並把相關文件中的 Resource Group 名稱統一更新為 `mansion_ceph_resource`，同時建立一致的 `mansion_` 命名規則。
 
 完成後，文件應清楚表達：
 
@@ -21,6 +21,7 @@ title: 3-Node Ceph Phase 0 MCP Bicep Design
    - 由本地 Copilot CLI / Azure MCP 驅動
    - 使用 Bicep 作為 IaC 定義
 3. 後續重建、刪除、比對變更時，應以 Bicep 與 `what-if` / deploy workflow 為主
+4. 主要 Azure 物件名稱應優先使用 `mansion_` prefix，提升 subscription 內的可辨識性
 
 ## Chosen Approach
 
@@ -80,6 +81,7 @@ title: 3-Node Ceph Phase 0 MCP Bicep Design
 - 更新 `storage/3node-ceph/buildup.md`
 - 必要時更新 `storage/3node-ceph/index.md` 中對 Phase 0 的描述
 - 統一 Resource Group 名稱為 `mansion_ceph_resource`
+- 統一 Phase 0 相關 Azure 物件命名為 `mansion_` prefix 優先
 
 ### Out of Scope
 
@@ -104,6 +106,7 @@ title: 3-Node Ceph Phase 0 MCP Bicep Design
    - `mansion_ceph_resource`
    - Region
    - VNet / subnet / NIC / VM / disks baseline
+   - 命名規則以 `mansion_` prefix 為優先
 4. 說明推薦流程：
    - 準備本地 Azure / MCP / Bicep
    - 撰寫或調整 Bicep
@@ -143,6 +146,27 @@ Phase 0 說明要改成：
 mansion_ceph_resource
 ```
 
+### 5. Azure Object Naming Convention
+
+除了 Resource Group 之外，其餘 Phase 0 相關 Azure 物件也應盡量採用：
+
+```text
+mansion_<domain>_<role>
+```
+
+例如：
+
+- `mansion_ceph_vnet`
+- `mansion_ceph_public_subnet`
+- `mansion_ceph_cluster_subnet`
+- `mansion_ceph_nsg`
+- `mansion_ceph_node_01`
+- `mansion_ceph_node_01_nic_pub`
+- `mansion_ceph_node_01_nic_cls`
+- `mansion_ceph_node_01_osd_disk_01`
+
+不要求所有物件名稱完全相同格式，但文件主文與範例應優先使用 `mansion_` 前綴，讓使用者在與朋友共用 subscription 時能快速辨識自己的資源。
+
 ## Expected Result
 
 完成後，`storage/3node-ceph/` 的讀者會得到一個更一致的訊息：
@@ -150,4 +174,5 @@ mansion_ceph_resource
 1. Ceph Phase 0 的推薦做法是 **Azure MCP + Bicep**
 2. 直接 `az` command 不是 Azure MCP 本身
 3. `mansion_ceph_resource` 是這份文件的標準 Resource Group 名稱
-4. 後續若補 Ceph 專用 IaC，文件不需要再大改方向
+4. Phase 0 的主要 Azure 物件都優先以 `mansion_` 前綴命名
+5. 後續若補 Ceph 專用 IaC，文件不需要再大改方向
