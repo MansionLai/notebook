@@ -12,181 +12,70 @@ permalink: /storage/3node-ceph/commands/
 
 ---
 
-## Azure 資源建立
+## Azure Phase 0（Azure MCP + Bicep）
 
-### Resource Group
+本節以 Azure MCP + Bicep 為主，建議以 Bicep 檔案進行資源生命週期管理，統一命名採用 mansion_ 前綴。
 
-```bash
-# 建立 Resource Group
-az group create \
-  --name ceph-resource \
-  --location eastasia
-```
+### Bicep 檔案與參數準備
 
-### Virtual Network 與 Subnets
+請先準備好 main.bicep 及 main.bicepparam，內容依照 lab 架構設計，資源名稱建議如下：
+- Resource Group: `mansion_ceph_resource`
+- VNet: `mansion_ceph_vnet`
+- NSG: `mansion_ceph_nsg`
+- VM: `mansion_ceph_node_01`、`mansion_ceph_node_02`、`mansion_ceph_node_03`
+- NIC: `mansion_ceph_node_01_nic_pub`、`mansion_ceph_node_01_nic_cls` ...
 
-```bash
-# 建立 VNet，雙 address space
-az network vnet create \
-  --resource-group ceph-resource \
-  --name ceph-vnet \
-  --address-prefixes 10.10.0.0/16 172.10.0.0/16 \
-  --location eastasia
-
-# 建立 public subnet (10.10.10.0/24)
-az network vnet subnet create \
-  --resource-group ceph-resource \
-  --vnet-name ceph-vnet \
-  --name ceph-public \
-  --address-prefix 10.10.10.0/24
-
-# 建立 cluster subnet (172.10.10.0/24)
-az network vnet subnet create \
-  --resource-group ceph-resource \
-  --vnet-name ceph-vnet \
-  --name ceph-cluster \
-  --address-prefix 172.10.10.0/24
-```
-
-### Network Security Group
+### What-If 預覽
 
 ```bash
-# 建立 NSG
-az network nsg create \
-  --resource-group ceph-resource \
-  --name ceph-nsg \
-  --location eastasia
-
-# 允許 SSH（記得替換 <YOUR_IP>）
-az network nsg rule create \
-  --resource-group ceph-resource \
-  --nsg-name ceph-nsg \
-  --name Allow-SSH \
-  --priority 100 \
-  --source-address-prefixes <YOUR_IP> \
-  --destination-port-ranges 22 \
-  --access Allow \
-  --protocol Tcp
-
-# 允許 Ceph MON ports (6789, 3300)
-az network nsg rule create \
-  --resource-group ceph-resource \
-  --nsg-name ceph-nsg \
-  --name Allow-Ceph-MON \
-  --priority 200 \
-  --source-address-prefixes 10.10.0.0/16 172.10.0.0/16 \
-  --destination-port-ranges 6789 3300 \
-  --access Allow \
-  --protocol Tcp
-
-# 允許 Ceph OSD ports (6800-7300)
-az network nsg rule create \
-  --resource-group ceph-resource \
-  --nsg-name ceph-nsg \
-  --name Allow-Ceph-OSD \
-  --priority 300 \
-  --source-address-prefixes 10.10.0.0/16 172.10.0.0/16 \
-  --destination-port-ranges 6800-7300 \
-  --access Allow \
-  --protocol Tcp
-
-# 允許內部所有流量
-az network nsg rule create \
-  --resource-group ceph-resource \
-  --nsg-name ceph-nsg \
-  --name Allow-Internal \
-  --priority 1000 \
-  --source-address-prefixes 10.10.0.0/16 172.10.0.0/16 \
-  --destination-address-prefixes 10.10.0.0/16 172.10.0.0/16 \
-  --access Allow \
-  --protocol '*'
+az deployment group what-if \
+  --resource-group mansion_ceph_resource \
+  --name mansion-ceph-phase0-preview \
+  --template-file main.bicep \
+  --parameters main.bicepparam
 ```
 
-### VM 建立（以 ceph-node-01 為例）
+### 套用 Deployment
 
 ```bash
-# 建立 Public NIC
-az network nic create \
-  --resource-group ceph-resource \
-  --name ceph-node-01-nic-pub \
-  --vnet-name ceph-vnet \
-  --subnet ceph-public \
-  --network-security-group ceph-nsg \
-  --private-ip-address 10.10.10.10
-
-# 建立 Cluster NIC
-az network nic create \
-  --resource-group ceph-resource \
-  --name ceph-node-01-nic-cls \
-  --vnet-name ceph-vnet \
-  --subnet ceph-cluster \
-  --private-ip-address 172.10.10.10
-
-# 建立 Public IP
-az network public-ip create \
-  --resource-group ceph-resource \
-  --name ceph-node-01-pip \
-  --sku Standard \
-  --allocation-method Static
-
-# 將 Public IP 掛到 Public NIC
-az network nic ip-config update \
-  --resource-group ceph-resource \
-  --nic-name ceph-node-01-nic-pub \
-  --name ipconfig1 \
-  --public-ip-address ceph-node-01-pip
-
-# 建立 VM（記得替換 <YOUR_SSH_PUBLIC_KEY>）
-az vm create \
-  --resource-group ceph-resource \
-  --name ceph-node-01 \
-  --location eastasia \
-  --size Standard_D4s_v4 \
-  --nics ceph-node-01-nic-pub ceph-node-01-nic-cls \
-  --image Ubuntu2204 \
-  --os-disk-size-gb 64 \
-  --admin-username ubuntu \
-  --ssh-key-values "<YOUR_SSH_PUBLIC_KEY>"
-
-# 加入 OSD disk 1
-az vm disk attach \
-  --resource-group ceph-resource \
-  --vm-name ceph-node-01 \
-  --name ceph-node-01-osd-disk1 \
-  --size-gb 64 \
-  --sku Premium_LRS \
-  --new
-
-# 加入 OSD disk 2
-az vm disk attach \
-  --resource-group ceph-resource \
-  --vm-name ceph-node-01 \
-  --name ceph-node-01-osd-disk2 \
-  --size-gb 64 \
-  --sku Premium_LRS \
-  --new
-
-# 啟用 Cluster NIC IP forwarding
-az network nic update \
-  --resource-group ceph-resource \
-  --name ceph-node-01-nic-cls \
-  --ip-forwarding true
+az deployment group create \
+  --resource-group mansion_ceph_resource \
+  --name mansion-ceph-phase0 \
+  --template-file main.bicep \
+  --parameters main.bicepparam
 ```
 
-> 💡 對 `ceph-node-02` 與 `ceph-node-03` 重複以上步驟，修改對應的 IP 與名稱
-
-### Azure 資源驗證
+### 查詢 Deployment Outputs
 
 ```bash
-# 列出所有 VMs
-az vm list --resource-group ceph-resource --output table
-
-# 取得所有 Public IPs
-az network public-ip list \
-  --resource-group ceph-resource \
-  --query "[].{Name:name, IP:ipAddress}" \
-  --output table
+az deployment group show \
+  --resource-group mansion_ceph_resource \
+  --name mansion-ceph-phase0 \
+  --query properties.outputs
 ```
+
+### 查詢 VM / NIC / Disk 狀態
+
+```bash
+# 查詢所有 VM 狀態
+az vm list -d -g mansion_ceph_resource -o table
+
+# 查詢所有 NIC
+az network nic list -g mansion_ceph_resource -o table
+
+# 查詢所有 Disk
+az disk list -g mansion_ceph_resource -o table
+```
+
+### 整批刪除 Resource Group
+
+```bash
+az group delete --name mansion_ceph_resource --yes --no-wait
+```
+
+> 💡 建議所有資源命名皆以 mansion_ 為前綴，便於 lab 管理與辨識。
+
+---
 
 ---
 
