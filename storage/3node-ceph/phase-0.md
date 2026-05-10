@@ -23,31 +23,73 @@ permalink: /storage/3node-ceph/phase-0/
 
 ## 建置模式
 
-> ⚠️ **本 Phase 僅提供單一選項：Azure MCP / Azure CLI**
+> ✅ **唯一推薦：Azure MCP + Bicep**
 
-與 `kubernetes/3node-kubevirt` 不同，此文件不包含 Option A（Portal GUI），理由：
+本 Phase 採用 Azure MCP + Bicep 為唯一建議路徑：
 
-- Ceph 架設重複性較低
-- 本文件偏向自動化參考範本
-- 未來若需 Portal 步驟可另行擴充
+- 由 Copilot CLI 協調 Azure MCP server，統一資源管理
+- 以 Bicep 定義所有 Azure 資源，確保可重現、可維護
+- 部署前先執行 what-if 預覽變更，確認無誤再 create
+- 直接 az 指令僅作為底層工具或驗證介面，非主要建議路徑
+
+> 備註：不再提供 Portal GUI 或純 az CLI 手動逐步建立流程
 
 ---
 
-## Azure MCP / Azure CLI 建立流程
-
-### 共通輸入
+### 共通輸入與命名範例
 
 | 項目 | 值 |
 |------|----|
-| Resource Group | `ceph-resource` |
+| Resource Group | `mansion_ceph_resource` |
 | Region | 例如 `East Asia` |
-| VNet | `ceph-vnet` |
+| VNet | `mansion_ceph_vnet` |
 | Address space | `10.10.0.0/16` + `172.10.0.0/16` |
-| `ceph-public` subnet | `10.10.10.0/24` |
-| `ceph-cluster` subnet | `172.10.10.0/24` |
+| Public subnet | `mansion_ceph_public_subnet` / `10.10.10.0/24` |
+| Cluster subnet | `mansion_ceph_cluster_subnet` / `172.10.10.0/24` |
 | SSH user | `ubuntu` |
 | SSH public key | 由使用者提供 |
+| NSG | `mansion_ceph_nsg` |
 | NSG allowed source | 使用者的固定 Public IP 或 CIDR |
+
+> Phase 0 Azure 物件命名建議一律加上 `mansion_` 前綴，方便在共用訂閱中辨識
+
+---
+
+## Bicep 部署生命週期（推薦流程）
+
+### Step 0-1：準備本地 Azure / MCP / Bicep 環境
+
+- 確認已安裝 Copilot CLI、Azure CLI、Bicep 工具
+- 登入 Azure 帳號，設定正確訂閱
+
+### Step 0-2：準備或調整 Ceph Phase 0 Bicep 檔案
+
+- 取得或編輯 `main.bicep`、`main.bicepparam`，定義所有資源
+
+### Step 0-3：預覽部署變更（what-if）
+
+```bash
+az deployment group what-if \
+  --resource-group mansion_ceph_resource \
+  --name mansion-ceph-phase0-preview \
+  --template-file main.bicep \
+  --parameters main.bicepparam
+```
+
+### Step 0-4：正式部署（create）
+
+```bash
+az deployment group create \
+  --resource-group mansion_ceph_resource \
+  --name mansion-ceph-phase0 \
+  --template-file main.bicep \
+  --parameters main.bicepparam
+```
+
+### Step 0-5：查詢輸出與資源狀態
+
+- 查詢 Bicep 輸出參數、Azure 資源狀態
+- 可用 az CLI、Portal、MCP 查驗
 
 ---
 
