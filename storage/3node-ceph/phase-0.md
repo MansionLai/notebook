@@ -16,8 +16,8 @@ permalink: /storage/3node-ceph/phase-0/
 | ceph-node-02 | Standard_D4s_v4 (4C/16G) | 10.10.10.11 | 172.10.10.11 | MON + MGR + OSD x2 |
 | ceph-node-03 | Standard_D4s_v4 (4C/16G) | 10.10.10.12 | 172.10.10.12 | MON + MGR + OSD x2 |
 
-**Public Network:** 10.10.10.0/24 (`ceph-public`)  
-**Cluster Network:** 172.10.10.0/24 (`ceph-cluster`)
+**Public Network:** 10.10.10.0/24 (`mansion_ceph_public_subnet`)  
+**Cluster Network:** 172.10.10.0/24 (`mansion_ceph_cluster_subnet`)
 
 ---
 
