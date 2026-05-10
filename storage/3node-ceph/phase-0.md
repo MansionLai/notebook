@@ -68,6 +68,8 @@ permalink: /storage/3node-ceph/phase-0/
 
 ### 步驟 3：預覽部署變更（what-if）
 
+> **建議操作：請以 Copilot CLI 協調 Azure MCP 進行 Bicep 部署全流程。下方 az deployment group 指令僅供底層等效指令參考或本地驗證，非推薦主流程。**
+
 ```bash
 az deployment group what-if \
   --resource-group mansion_ceph_resource \
