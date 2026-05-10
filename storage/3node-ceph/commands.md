@@ -27,6 +27,12 @@ permalink: /storage/3node-ceph/commands/
 
 ### What-If 預覽
 
+> **前置步驟：請先建立目標 Resource Group**
+
+```bash
+az group create --name mansion_ceph_resource --location <your-location>
+```
+
 ```bash
 az deployment group what-if \
   --resource-group mansion_ceph_resource \
