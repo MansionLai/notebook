@@ -17,6 +17,7 @@ permalink: /
 |------|------|
 | [🏠 Home Assistant](homeassistant/) | HA 整合自動修復、VM Watchdog 監控 |
 | [☸️ Kubernetes](kubernetes/) | K8s 叢集建置、KubeVirt、監控觀念 |
+| [💾 Storage](storage/) | Ceph cluster、RBD pool 與儲存實驗筆記 |
 
 ---
 
