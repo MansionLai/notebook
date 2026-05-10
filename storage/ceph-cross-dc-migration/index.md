@@ -232,14 +232,11 @@ ssh -i /etc/ceph/ceph.pub ceph-admin@<dc2-node> hostname
 
 **原則**：每次加入 1 台 MON，檢查 quorum 後再加下一台
 
+**📝 說明**：MON 節點不參與 CRUSH placement，因此不需要執行 `ceph osd crush` 指令。文件中提到的 MON rack labels (m4, m5, m6) 僅作為**操作員命名與分組參考**，幫助識別哪些 MON 位於 dc2，但並非 CRUSH map 操作。
+
 ```bash
 # 1. 加入 dc2-mon-01
 ceph orch host add dc2-mon-01 <dc2-mon-01-ip> --labels _admin,mon
-
-# 設定 rack location
-ceph osd crush add-bucket m4 rack
-ceph osd crush move m4 root=default
-ceph osd crush move dc2-mon-01 rack=m4
 
 # 2. 檢查 MON quorum
 ceph quorum_status | jq '.quorum_names'
@@ -252,10 +249,6 @@ ceph -s
 # 4. 加入 dc2-mon-02
 ceph orch host add dc2-mon-02 <dc2-mon-02-ip> --labels _admin,mon
 
-ceph osd crush add-bucket m5 rack
-ceph osd crush move m5 root=default
-ceph osd crush move dc2-mon-02 rack=m5
-
 # 5. 再次檢查 quorum
 ceph quorum_status | jq '.quorum_names'
 
@@ -265,10 +258,6 @@ ceph -s
 
 # 7. 加入 dc2-mon-03
 ceph orch host add dc2-mon-03 <dc2-mon-03-ip> --labels _admin,mon
-
-ceph osd crush add-bucket m6 rack
-ceph osd crush move m6 root=default
-ceph osd crush move dc2-mon-03 rack=m6
 
 # 8. 最終 quorum 檢查
 ceph quorum_status | jq '.quorum_names'
@@ -570,13 +559,11 @@ ceph orch host rm dc2-mon-01
 ceph orch host rm dc2-mon-02
 ceph orch host rm dc2-mon-03
 
-# 5. 清理 CRUSH map
+# 5. 清理 CRUSH map (僅移除 OSD racks)
 ceph osd crush rm o4
 ceph osd crush rm o5
 ceph osd crush rm o6
-ceph osd crush rm m4
-ceph osd crush rm m5
-ceph osd crush rm m6
+# 注意：m4/m5/m6 是 MON 的命名參考，不在 CRUSH map 中，無需移除
 
 # 6. 驗證回復至 dc1-only 狀態
 ceph osd tree
