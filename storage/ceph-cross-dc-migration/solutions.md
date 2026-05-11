@@ -6,7 +6,26 @@ permalink: /storage/ceph-cross-dc-migration/solutions/
 
 # Migration Strategy Comparison
 
-本文比較三種 Ceph 跨 DC 遷移的**執行節奏（migration rhythm）**，協助選擇最適合的操作模式。三種方案在遷移總體策略上相同（都是將 dc2 節點加入現有 cluster、等待 rebalance、再移除 dc1 節點），差異在於**批次大小與頻率**。
+## 背景說明：高層策略選擇 vs 執行節奏選擇
+
+本文件討論的是**執行節奏（migration rhythm）** 的選擇，而非高層架構策略的選擇。在 Ceph 跨 DC 遷移的規劃中，有兩個層級的決策：
+
+### 第一層：高層架構策略（已選定）
+
+在高層架構層面，存在兩種主要策略：
+
+- **Option A**: Two-cluster migration — 建立獨立的 dc2 cluster，透過 RBD mirroring 或 RGW multi-site 同步資料，最後進行 cutover
+- **Option B**: Same-cluster migration — 將 dc2 節點加入現有 cluster，透過 CRUSH rebalance 完成資料搬遷，再移除 dc1 節點
+
+**本專案已選擇 Option B (same-cluster migration)**，因為它無需額外的 cluster 與同步機制，操作更直接且資源效率更高。
+
+### 第二層:執行節奏選擇（本文重點）
+
+在確定採用 Option B 後，接下來要決定的是**以什麼節奏執行遷移**。本文比較三種執行節奏，協助選擇最適合的操作模式。三種方案在遷移總體策略上相同（都是將 dc2 節點加入現有 cluster、等待 rebalance、再移除 dc1 節點），差異在於**批次大小與頻率**：
+
+1. **Option 1 (Big Bang)**: 一次性加入所有 dc2 節點，再一次性移除所有 dc1 節點
+2. **Option 2 (Rack-by-Rack)**: 以 rack 為單位交替新增與移除
+3. **Option 3 (Node-by-Node)**: 以單一節點為單位交替新增與移除
 
 ---
 
