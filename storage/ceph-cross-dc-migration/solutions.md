@@ -156,17 +156,17 @@ permalink: /storage/ceph-cross-dc-migration/solutions/
 
 ## 相關連結
 
-- **[← 回到主文件](./)**  
+- **[← 回到主文件](../)**  
   返回 Ceph Cross-DC Migration 主題入口，查看架構概述與場景說明
 
-- **[→ 執行步驟詳細手冊](detail_runbook/)**  
+- **[→ 執行步驟詳細手冊](../detail_runbook/)**  
   前往 Detail Runbook，取得分階段執行步驟、前置驗證與 rollback 規則
 
 ---
 
 ## 後續行動
 
-選定 Option 2 (Rack-by-Rack) 後，請參考 [Detail Runbook](detail_runbook/) 取得：
+選定 Option 2 (Rack-by-Rack) 後，請參考 [Detail Runbook](../detail_runbook/) 取得：
 
 - 分階段執行步驟（Phase 0-7）
 - 每個階段的 gate criteria 與驗證檢查點

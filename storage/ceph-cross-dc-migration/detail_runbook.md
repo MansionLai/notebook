@@ -8,7 +8,7 @@ permalink: /storage/ceph-cross-dc-migration/detail_runbook/
 
 本文件提供跨資料中心 Ceph 遷移的**實際執行手冊**，包含分階段步驟、前置驗證、cutover 檢查點、rollback 規則與指令參考。
 
-關於遷移策略的分析與決策依據，請參考 [Solutions Overview](solutions/)。關於場景與架構概述，請參考[主文件](./)。
+關於遷移策略的分析與決策依據，請參考 [Solutions Overview](../solutions/)。關於場景與架構概述，請參考[主文件](../)。
 
 ---
 
@@ -674,10 +674,10 @@ ceph osd unset nodeep-scrub
 
 ## 相關連結
 
-- **[← 回到主文件](./)**  
+- **[← 回到主文件](../)**  
   返回 Ceph Cross-DC Migration 主題入口，查看場景說明與架構圖
 
-- **[← 遷移策略分析](solutions/)**  
+- **[← 遷移策略分析](../solutions/)**  
   查看 Rack-by-Rack 方案的選擇理由與其他方案的比較
 
 ---
