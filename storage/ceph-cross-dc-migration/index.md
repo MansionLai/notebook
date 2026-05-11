@@ -51,9 +51,6 @@ permalink: /storage/ceph-cross-dc-migration/
   - `datacenter=dc2`
   - `room=r2`
 
-
-**📝 說明**：MON rack 命名僅作為操作員識別參考，MON 節點不參與 CRUSH placement。
-
 ### 遷移策略：Option B
 
 本文件採用 **Option B 單一 cluster 擴展模式**，而非第二 cluster 遷移：
