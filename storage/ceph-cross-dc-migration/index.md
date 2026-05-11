@@ -139,7 +139,7 @@ graph TB
 
 深入探討遷移策略的比較與決策依據：
 
-- **[Solutions Overview](solutions/README.md)**
+- **[Solutions Overview](solutions/)**
   - Option A vs Option B 比較
   - 設計取捨分析
   - 風險評估與緩解措施
@@ -148,7 +148,7 @@ graph TB
 
 遷移執行的詳細步驟指南：
 
-- **[Detail Runbook](detail_runbook/README.md)**
+- **[Detail Runbook](detail_runbook/)**
   - 完整分階段執行步驟
   - 前置驗證與 gate criteria
   - Cutover 檢查點與 rollback 規則

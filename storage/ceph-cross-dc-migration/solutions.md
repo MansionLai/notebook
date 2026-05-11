@@ -168,7 +168,7 @@ permalink: /storage/ceph-cross-dc-migration/solutions/
 
 選定 Option 2 (Rack-by-Rack) 後，請參考 [Detail Runbook](detail_runbook/) 取得：
 
-- 分階段執行步驟（Phase 1-5）
+- 分階段執行步驟（Phase 0-7）
 - 每個階段的 gate criteria 與驗證檢查點
 - CRUSH map 更新範例指令
 - Cutover 前後的檢查清單
