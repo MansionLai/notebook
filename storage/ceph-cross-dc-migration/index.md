@@ -40,6 +40,8 @@ permalink: /storage/ceph-cross-dc-migration/
   - OSD racks: `o4`, `o5`, `o6`
   - MON racks: `m4`, `m5`, `m6`
 
+**📝 說明**：MON rack 命名僅作為操作員識別參考，MON 節點不參與 CRUSH placement。
+
 ### Topology Metadata
 
 - **dc1 nodes**
@@ -49,12 +51,6 @@ permalink: /storage/ceph-cross-dc-migration/
   - `datacenter=dc2`
   - `room=r2`
 
-### CRUSH 設計原則
-
-- Host location metadata 會記錄 `datacenter`、`room`、`rack`
-- **不分離 datacenter bucket**：CRUSH 模型保持單一邏輯 dc
-- **Failure domain 維持 rack 級別**
-- `datacenter` 與 `room` 僅作為拓樸描述資訊，不作為 replica placement 邊界
 
 **📝 說明**：MON rack 命名僅作為操作員識別參考，MON 節點不參與 CRUSH placement。
 
@@ -68,8 +64,10 @@ permalink: /storage/ceph-cross-dc-migration/
 
 ### CRUSH 設計原則
 
+- Host location metadata 會記錄 `datacenter`、`room`、`rack`
 - **不分離 datacenter bucket**：CRUSH 模型保持單一邏輯 dc
 - **Failure domain 維持 rack 級別**
+- `datacenter` 與 `room` 僅作為拓樸描述資訊，不作為 replica placement 邊界
 - Rack 命名已採用不重複方式（見上方 Rack 命名規範），避免混淆新舊節點
 
 ---
