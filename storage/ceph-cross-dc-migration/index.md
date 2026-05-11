@@ -417,10 +417,11 @@ watch -n 5 'ceph osd df tree'
 
 **重複 Phase D 流程**，分批加入剩餘 12 台：
 
-- **Batch 2**: dc2-osd-04 ~ 06 (rack o4 剩餘 2 台 + rack o5 開始)
-- **Batch 3**: dc2-osd-07 ~ 09 (rack o5 剩餘)
-- **Batch 4**: dc2-osd-10 ~ 12 (rack o6)
-- **Batch 5**: dc2-osd-13 ~ 15 (rack o6 剩餘)
+- **Batch 2**: dc2-osd-04 ~ 05 (rack o4 剩餘)
+- **Batch 3**: dc2-osd-06 ~ 08 (rack o5)
+- **Batch 4**: dc2-osd-09 ~ 10 (rack o5 剩餘)
+- **Batch 5**: dc2-osd-11 ~ 13 (rack o6)
+- **Batch 6**: dc2-osd-14 ~ 15 (rack o6 剩餘)
 
 **每批次之間必須等待 recovery 完成**
 
