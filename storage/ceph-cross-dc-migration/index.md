@@ -15,19 +15,32 @@ permalink: /storage/ceph-cross-dc-migration/
 ### 現況
 
 - **dc1 現有 cluster**
-  - 3 台 MON 節點，12 台 OSD 節點
+  - 3 台 MON 節點，15 台 OSD 節點
   - 每台 OSD 節點有 10 顆 OSD disk
   - 現有 RBD pool 服務 KubeVirt 虛擬機
-  - 現有 OSD racks: `o1`, `o2`, `o3`
-  - 現有 MON racks: `m1`, `m2`, `m3`
 
 - **dc2 目標硬體**
-  - 硬體規格與 dc1 相同：3 MON + 12 OSD 節點
+  - 硬體規格與 dc1 相同：3 MON + 15 OSD 節點
+  - 每台 OSD 節點有 10 顆 OSD disk
 
 - **網路拓樸**
-  - dc1 與 dc2 之間有 Layer 2 連通
+  - dc1 與 dc2 之間有 Layer 2 連通（stretched Layer 2）
   - Server OS 與 Ceph private network 使用相同的 IP segment
   - 所有 IP 位址在兩個 site 間都是唯一的（無衝突）
+
+### Rack 命名規範
+
+為確保操作時能清楚區分新舊節點，兩個 DC 採用不重複的 rack 命名：
+
+- **dc1 racks**
+  - OSD racks: `o1`, `o2`, `o3`
+  - MON racks: `m1`, `m2`, `m3`
+
+- **dc2 racks**
+  - OSD racks: `o4`, `o5`, `o6`
+  - MON racks: `m4`, `m5`, `m6`
+
+**📝 說明**：MON rack 命名僅作為操作員識別參考，MON 節點不參與 CRUSH placement。
 
 ### 遷移策略：Option B
 
@@ -41,14 +54,84 @@ permalink: /storage/ceph-cross-dc-migration/
 
 - **不分離 datacenter bucket**：CRUSH 模型保持單一邏輯 dc
 - **Failure domain 維持 rack 級別**
-- **dc2 新 rack 命名建議**：
-  - OSD racks: `o4`, `o5`, `o6`
-  - MON racks: `m4`, `m5`, `m6`
-- 避免重複使用 dc1 的 rack 名稱，以利操作時清楚區分新舊節點
+- Rack 命名已採用不重複方式（見上方 Rack 命名規範），避免混淆新舊節點
 
 ---
 
-## 2. Best Practice Analysis
+## 2. Architecture Diagram
+
+### Two-DC Server / Rack Topology
+
+```mermaid
+graph TB
+    subgraph DC1["🏢 dc1"]
+        subgraph MON_DC1["MON Nodes (3)"]
+            M1["mon-01<br/>rack: m1"]
+            M2["mon-02<br/>rack: m2"]
+            M3["mon-03<br/>rack: m3"]
+        end
+        
+        subgraph OSD_DC1["OSD Nodes (15 hosts, 150 OSDs)"]
+            O1["rack o1<br/>5 hosts × 10 disks"]
+            O2["rack o2<br/>5 hosts × 10 disks"]
+            O3["rack o3<br/>5 hosts × 10 disks"]
+        end
+    end
+    
+    subgraph DC2["🏢 dc2"]
+        subgraph MON_DC2["MON Nodes (3)"]
+            M4["mon-01<br/>rack: m4"]
+            M5["mon-02<br/>rack: m5"]
+            M6["mon-03<br/>rack: m6"]
+        end
+        
+        subgraph OSD_DC2["OSD Nodes (15 hosts, 150 OSDs)"]
+            O4["rack o4<br/>5 hosts × 10 disks"]
+            O5["rack o5<br/>5 hosts × 10 disks"]
+            O6["rack o6<br/>5 hosts × 10 disks"]
+        end
+    end
+    
+    CLUSTER["⚙️ Single Ceph Cluster<br/>Failure Domain: rack"]
+    
+    CLUSTER -.-> MON_DC1
+    CLUSTER -.-> MON_DC2
+    CLUSTER -.-> OSD_DC1
+    CLUSTER -.-> OSD_DC2
+    
+    NET["🌐 Stretched Layer 2 Network<br/>Same IP Segment<br/>Unique IPs across DCs"]
+    
+    DC1 <-->|L2 Connectivity| DC2
+    
+    RBD["💾 Existing RBD Pool<br/>Serves KubeVirt VMs"]
+    CLUSTER --> RBD
+    
+    classDef dcStyle fill:#e1f5ff,stroke:#0366d6,stroke-width:2px
+    classDef monStyle fill:#fff3cd,stroke:#856404,stroke-width:1px
+    classDef osdStyle fill:#d4edda,stroke:#155724,stroke-width:1px
+    classDef clusterStyle fill:#f8d7da,stroke:#721c24,stroke-width:2px
+    classDef netStyle fill:#e2e3e5,stroke:#383d41,stroke-width:1px
+    classDef rbdStyle fill:#cfe2ff,stroke:#084298,stroke-width:1px
+    
+    class DC1,DC2 dcStyle
+    class MON_DC1,MON_DC2,M1,M2,M3,M4,M5,M6 monStyle
+    class OSD_DC1,OSD_DC2,O1,O2,O3,O4,O5,O6 osdStyle
+    class CLUSTER clusterStyle
+    class NET netStyle
+    class RBD rbdStyle
+```
+
+**圖說**：
+- 單一 Ceph cluster 橫跨兩個資料中心（dc1 與 dc2）
+- 每個 DC 各有 3 台 MON 節點與 15 台 OSD 節點
+- OSD 節點分布於 3 個 racks，每個 rack 有 5 台 host，每台 host 有 10 顆 OSD disk
+- 兩個 DC 透過 stretched Layer 2 網路連通，使用同一 IP segment，所有 IP 唯一
+- Failure domain 為 rack 級別（不是 datacenter 級別）
+- 現有 RBD pool 持續服務 KubeVirt VM
+
+---
+
+## 3. Best Practice Analysis
 
 ### 優勢
 
@@ -88,65 +171,59 @@ permalink: /storage/ceph-cross-dc-migration/
 
 ---
 
-## 3. Current and Target Rack Layout
+## 4. Current and Target Rack Layout
 
 ### Current (dc1 only)
 
 ```
 cluster
-├─ host-mon-01  [rack=m1]
-├─ host-mon-02  [rack=m2]
-├─ host-mon-03  [rack=m3]
-├─ host-osd-01  [rack=o1] → 10 OSDs
-├─ host-osd-02  [rack=o1] → 10 OSDs
-├─ host-osd-03  [rack=o1] → 10 OSDs
-├─ host-osd-04  [rack=o1] → 10 OSDs
-├─ host-osd-05  [rack=o2] → 10 OSDs
-├─ host-osd-06  [rack=o2] → 10 OSDs
-├─ host-osd-07  [rack=o2] → 10 OSDs
-├─ host-osd-08  [rack=o2] → 10 OSDs
-├─ host-osd-09  [rack=o3] → 10 OSDs
-├─ host-osd-10  [rack=o3] → 10 OSDs
-├─ host-osd-11  [rack=o3] → 10 OSDs
-└─ host-osd-12  [rack=o3] → 10 OSDs
+├─ MON Nodes (3 台)
+│  ├─ host-mon-01  [rack=m1]
+│  ├─ host-mon-02  [rack=m2]
+│  └─ host-mon-03  [rack=m3]
+│
+└─ OSD Nodes (15 台，共 150 OSDs)
+   ├─ rack o1: host-osd-01 ~ 05  [5 hosts × 10 disks = 50 OSDs]
+   ├─ rack o2: host-osd-06 ~ 10  [5 hosts × 10 disks = 50 OSDs]
+   └─ rack o3: host-osd-11 ~ 15  [5 hosts × 10 disks = 50 OSDs]
 ```
 
 ### Target (dc1 + dc2, before dc1 removal)
 
 ```
 cluster
-├─ dc1-mon-01   [rack=m1]
-├─ dc1-mon-02   [rack=m2]
-├─ dc1-mon-03   [rack=m3]
-├─ dc2-mon-01   [rack=m4] ← 新增
-├─ dc2-mon-02   [rack=m5] ← 新增
-├─ dc2-mon-03   [rack=m6] ← 新增
-├─ dc1-osd-01   [rack=o1] → 10 OSDs
-├─ dc1-osd-02   [rack=o1] → 10 OSDs
-├─ ...
-├─ dc1-osd-12   [rack=o3] → 10 OSDs
-├─ dc2-osd-01   [rack=o4] → 10 OSDs ← 新增
-├─ dc2-osd-02   [rack=o4] → 10 OSDs ← 新增
-├─ ...
-└─ dc2-osd-12   [rack=o6] → 10 OSDs ← 新增
+├─ MON Nodes (6 台)
+│  ├─ dc1: mon-01~03  [racks m1, m2, m3]
+│  └─ dc2: mon-01~03  [racks m4, m5, m6] ← 新增
+│
+└─ OSD Nodes (30 台，共 300 OSDs)
+   ├─ dc1 (15 台，150 OSDs)
+   │  ├─ rack o1: dc1-osd-01 ~ 05  [5 hosts × 10 disks = 50 OSDs]
+   │  ├─ rack o2: dc1-osd-06 ~ 10  [5 hosts × 10 disks = 50 OSDs]
+   │  └─ rack o3: dc1-osd-11 ~ 15  [5 hosts × 10 disks = 50 OSDs]
+   │
+   └─ dc2 (15 台，150 OSDs) ← 新增
+      ├─ rack o4: dc2-osd-01 ~ 05  [5 hosts × 10 disks = 50 OSDs]
+      ├─ rack o5: dc2-osd-06 ~ 10  [5 hosts × 10 disks = 50 OSDs]
+      └─ rack o6: dc2-osd-11 ~ 15  [5 hosts × 10 disks = 50 OSDs]
 ```
 
 ### Final (dc2 only)
 
 ```
 cluster
-├─ dc2-mon-01   [rack=m4]
-├─ dc2-mon-02   [rack=m5]
-├─ dc2-mon-03   [rack=m6]
-├─ dc2-osd-01   [rack=o4] → 10 OSDs
-├─ dc2-osd-02   [rack=o4] → 10 OSDs
-├─ ...
-└─ dc2-osd-12   [rack=o6] → 10 OSDs
+├─ MON Nodes (3 台)
+│  └─ dc2: mon-01~03  [racks m4, m5, m6]
+│
+└─ OSD Nodes (15 台，共 150 OSDs)
+   ├─ rack o4: dc2-osd-01 ~ 05  [5 hosts × 10 disks = 50 OSDs]
+   ├─ rack o5: dc2-osd-06 ~ 10  [5 hosts × 10 disks = 50 OSDs]
+   └─ rack o6: dc2-osd-11 ~ 15  [5 hosts × 10 disks = 50 OSDs]
 ```
 
 ---
 
-## 4. Migration Principles
+## 5. Migration Principles
 
 ### 核心準則
 
@@ -156,7 +233,7 @@ cluster
 
 2. **小批次加入 dc2 OSD 節點**
    - 建議每批 2-3 台 OSD host
-   - 不要一次加入全部 12 台
+   - 不要一次加入全部 15 台
 
 3. **等待 rebalance 完成後再進行下一步**
    - 監控 `ceph -s` 確認無 active recovery
@@ -182,7 +259,7 @@ cluster
 
 ---
 
-## 5. Detailed Runbook
+## 6. Detailed Runbook
 
 ### Phase A: Pre-Migration Validation
 
@@ -334,14 +411,16 @@ watch -n 5 'ceph osd df tree'
 
 ---
 
-### Phase E: Add dc2 OSD Nodes (Batch 2 & 3)
+### Phase E: Add dc2 OSD Nodes (Remaining Batches)
 
-**目標**：完成所有 dc2 OSD 節點加入
+**目標**：完成所有 dc2 OSD 節點加入（共 15 台）
 
-**重複 Phase D 流程**，分批加入：
+**重複 Phase D 流程**，分批加入剩餘 12 台：
 
-- **Batch 2**: dc2-osd-04 到 dc2-osd-08 (屬於 rack o5)
-- **Batch 3**: dc2-osd-09 到 dc2-osd-12 (屬於 rack o6)
+- **Batch 2**: dc2-osd-04 ~ 06 (rack o4 剩餘 2 台 + rack o5 開始)
+- **Batch 3**: dc2-osd-07 ~ 09 (rack o5 剩餘)
+- **Batch 4**: dc2-osd-10 ~ 12 (rack o6)
+- **Batch 5**: dc2-osd-13 ~ 15 (rack o6 剩餘)
 
 **每批次之間必須等待 recovery 完成**
 
@@ -358,9 +437,9 @@ kubectl get events -n <vm-namespace> | grep -i pv
 ```
 
 **Gate Criteria**：
-- ✅ 所有 24 台 OSD hosts 已加入 (dc1: 12, dc2: 12)
+- ✅ 所有 30 台 OSD hosts 已加入 (dc1: 15, dc2: 15)
 - ✅ Cluster 達到 `HEALTH_OK`
-- ✅ 資料已平均分布至 dc2 racks
+- ✅ 資料已平均分布至 dc2 racks (o4, o5, o6)
 
 ---
 
@@ -499,7 +578,7 @@ ceph osd df tree > osd-df-final.txt
 
 ---
 
-## 6. Cutover Gates
+## 7. Cutover Gates
 
 每個 Phase 都有明確的 Gate Criteria，必須滿足後才能進入下一 Phase：
 
@@ -509,7 +588,7 @@ ceph osd df tree > osd-df-final.txt
 | **B: Add MON** | 6 台 MON 全在 quorum、HEALTH_OK |
 | **C: Add Racks** | CRUSH tree 正確顯示新 racks |
 | **D: Add OSD Batch 1** | 新 OSD up+in、無 active recovery、新 OSD 有資料 |
-| **E: Add OSD Batch 2&3** | 所有 dc2 OSD 已加入、資料平均分布、HEALTH_OK |
+| **E: Add OSD Batch 2-5** | 所有 15 台 dc2 OSD 已加入、資料平均分布、HEALTH_OK |
 | **F: Remove dc1 OSD** | dc1 OSD 全部移除、HEALTH_OK |
 | **G: Remove dc1 MON** | 僅剩 dc2 MON、HEALTH_OK |
 | **H: Post-Migration** | 最終驗證通過、VMs 正常運行 |
@@ -523,7 +602,7 @@ ceph osd df tree > osd-df-final.txt
 
 ---
 
-## 7. Rollback Rules
+## 8. Rollback Rules
 
 ### Rollback Windows
 
@@ -591,7 +670,7 @@ ceph tell osd.* injectargs --osd-recovery-max-active 2
 
 ---
 
-## 8. Command Reference
+## 9. Command Reference
 
 ### Cluster Status
 
