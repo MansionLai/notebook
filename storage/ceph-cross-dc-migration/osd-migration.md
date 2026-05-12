@@ -223,7 +223,7 @@ ceph tell osd.* config set osd_recovery_sleep_hdd 0.1
 1. **Mark OSDs Out**
    ```bash
    # 取得 rack o1 的所有 OSD IDs
-   ceph osd tree | awk '/rack o1/{p=1; next} p && /^[[:space:]]*[0-9]+[[:space:]]+osd\./{print $1} p && /^[^[:space:]]/{p=0}' > /tmp/o1-osds.txt
+   ceph osd crush ls o1 | sed 's/osd\.//' > /tmp/o1-osds.txt
    
    # 逐一標記 out（觸發 data migration）
    for osd_id in $(cat /tmp/o1-osds.txt); do
@@ -239,9 +239,13 @@ ceph tell osd.* config set osd_recovery_sleep_hdd 0.1
    ```bash
    watch -n 5 'ceph -s'
    # 等待所有 PGs 再次恢復為 active+clean
-   
-   ceph pg dump | grep -v active+clean
-   # 確認無 degraded/misplaced PGs
+   # 使用更可靠的檢查：當 ceph -s 不包含 recovering/backfilling/degraded/misplaced 時視為完成
+   while ceph -s | grep -Eq 'recovering|backfilling|degraded|misplaced'; do
+     echo "Recovery in progress or PGs not clean:"
+     ceph -s
+     sleep 30
+   done
+   echo "PASS: All PGs active+clean and no recovery activity"
    ```
 
 3. **Stop OSD Daemons**
@@ -355,7 +359,7 @@ ceph osd df tree | awk '/osd\./ {print $7}' | \
 ```bash
 # 假設在 Phase 1，剛加入 rack o4
 # 取得 rack o4 的所有 OSD IDs
-ceph osd tree | awk '/rack o4/{p=1; next} p && /^[[:space:]]*[0-9]+[[:space:]]+osd\./{print $1} p && /^[^[:space:]]/{p=0}' > /tmp/o4-osds.txt
+ceph osd crush ls o4 | sed 's/osd\.//' > /tmp/o4-osds.txt
 
 # 標記 out
 for osd_id in $(cat /tmp/o4-osds.txt); do
