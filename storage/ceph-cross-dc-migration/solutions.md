@@ -114,14 +114,3 @@ permalink: /storage/ceph-cross-dc-migration/solutions/
 - **[→ 執行步驟詳細手冊](../detail_runbook/)**  
   前往 Detail Runbook，取得分階段執行步驟、前置驗證與 rollback 規則
 
----
-
-## 後續行動
-
-選定 Option 2 (Rack-by-Rack) 後，請參考 [Detail Runbook](../detail_runbook/) 取得：
-
-- 分階段執行步驟（Phase 0-7）
-- 每個階段的 gate criteria 與驗證檢查點
-- CRUSH map 更新範例指令
-- Cutover 前後的檢查清單
-- Rollback 策略與條件
