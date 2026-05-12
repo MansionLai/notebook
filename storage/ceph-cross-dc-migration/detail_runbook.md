@@ -1,74 +1,112 @@
 ---
-title: Cross-DC Migration Detail Runbook
+title: MON Migration Runbook
 parent: Ceph Cross-DC Migration
 permalink: /storage/ceph-cross-dc-migration/detail_runbook/
 ---
 
-# Cross-DC Migration Detail Runbook
+# MON Migration Runbook
 
-本文件提供跨資料中心 Ceph 遷移的**實際執行手冊**，包含分階段步驟、前置驗證、cutover 檢查點、rollback 規則與指令參考。
+本文件提供跨資料中心 Ceph 遷移的 **MON / control-plane 切換手冊**，聚焦於 quorum 驗證、Rook external mode client endpoint coordination、ceph-csi behavior，以及 KubeVirt / VM 在 MON endpoint 變更期間的驗證。
 
-關於遷移策略的分析與決策依據，請參考 [Solutions Overview](../solutions/)。關於場景與架構概述，請參考[主文件](../)。
+關於遷移策略的分析與決策依據，請參考 [Solutions Overview](../solutions/)。關於 OSD bulk data migration 的詳細步驟，請參考 [OSD Migration Runbook](../osd-migration/)。關於場景與架構概述，請參考 [主文件](../)。
 
 ---
 
-## 1. Migration Principles
+## 1. MON Migration Principles
 
 ### 核心原則
 
-1. **單一 Cluster 擴展模式**
-   - 將 dc2 節點加入現有 cluster（而非建立第二 cluster）
-   - 等待 CRUSH rebalance 完成資料搬遷
-   - 最後移除 dc1 節點
+1. **Add-Before-Remove Strategy**
+   - 先新增 dc2 MON 節點，擴大 quorum（暫時從 3 增至 4、5、6）
+   - 驗證新 MON 節點在 quorum 中且穩定
+   - 確認 client 端已使用新 endpoint 後，再移除 dc1 MON 節點
 
-2. **Rack-by-Rack 執行節奏**
-   - 以 rack 為操作單位（每個 rack 包含 5 台 OSD 節點、50 個 OSDs）
-   - 交替執行「加入 dc2 rack」→「等待 recovery」→「移除 dc1 rack」→「等待 recovery」
-   - 總共 6 次操作週期（3 次加入 + 3 次移除）
+2. **Quorum Safety**
+   - MON quorum 需多數決（3 個中至少 2 個，5 個中至少 3 個）
+   - 新增 MON 時，quorum 容錯能力提升（暫時可容忍更多節點失效）
+   - 移除 MON 前必須確認剩餘節點數仍能滿足 quorum 要求
 
-3. **CRUSH 設計考量**
-   - **不分離 datacenter bucket**：CRUSH 模型保持單一邏輯 dc
-   - **Failure domain 維持 rack 級別**
-   - Rack 命名不重複（dc1: o1/o2/o3, dc2: o4/o5/o6），避免混淆新舊節點
+3. **Client Endpoint Coordination**
+   - Rook-Ceph external mode 透過 `rook-ceph-mon-endpoints` ConfigMap 與 Secret 傳遞 MON 地址
+   - 更新策略：**先加後減**（同時包含 dc1 + dc2 MON endpoints）
+   - ceph-csi（`csi-rbdplugin`）預設會自動偵測 MON endpoint 變更
+   - 若自動更新失效，則採用**分批重啟** CSI pods 而非全面重啟
 
 4. **最小化業務影響**
-   - 每次 recovery 週期長度適中（數小時至一天），問題容易定位
-   - Cluster 規模最多增加 33%（從 15 台增至 20 台），硬體資源壓力溫和
-   - 每個階段都有明確的 gate criteria，確保可安全進入下一階段
+   - MON failover 通常在數秒內完成，對 RBD I/O 的影響極小
+   - KubeVirt VM 通常能透過 librbd 內建的 MON failover 機制自動恢復
+   - 重點驗證：VM 在 MON endpoint 切換期間是否持續正常 I/O
+   - Timeout 調整屬於環境特定的驗證項目，非預設強制要求
 
 ---
 
-## 2. KubeVirt / RBD Notes
+## 2. Rook-Ceph External Mode / KubeVirt Notes
 
-### 現有 RBD Pool 配置
+### Rook-Ceph External Mode 連線架構
 
-- **Pool 用途**：服務 KubeVirt 虛擬機的持久化儲存
-- **Replication**：假設為 `size=3, min_size=2`（標準高可用配置）
-- **PG 數量**：依據 pool 大小與 OSD 數量計算（應符合 Ceph best practice）
+在本場景中，KubeVirt VM 透過以下路徑連線至 Ceph cluster：
+
+```
+KubeVirt VM (guest OS)
+  ↓
+virt-launcher pod (KubeVirt operator)
+  ↓
+ceph-csi (csi-rbdplugin DaemonSet)
+  ↓
+Rook-Ceph external mode (ConfigMap & Secret)
+  ↓
+Ceph MON endpoints (external Ceph cluster)
+```
+
+### Rook-Ceph External Mode ConfigMap / Secret
+
+Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster 連線資訊：
+
+1. **`rook-ceph-mon-endpoints` ConfigMap**
+   - 包含 MON endpoint 地址清單
+   - 格式範例：`mon1=10.1.1.1:6789,mon2=10.1.1.2:6789,mon3=10.1.1.3:6789`
+   - **更新策略**：採用 **add-before-remove**（同時包含 dc1 + dc2 MON endpoints）
+
+2. **`rook-ceph-config` ConfigMap**
+   - 包含 `ceph.conf` 的 client-side 配置
+   - 其中 `mon_host` 欄位應與 `rook-ceph-mon-endpoints` 一致
+   - **驗證重點**：確認 `mon_host` 包含新 MON endpoint 集合
+
+### ceph-csi Behavior
+
+- **自動偵測**：`csi-rbdplugin` pods 會監控 ConfigMap 變更，通常能自動吸收新 MON endpoints
+- **驗證方式**：檢查 `csi-rbdplugin` pod logs，確認是否成功讀取更新後的 MON 地址
+- **失效處置**：若自動更新失效，則採用**分批重啟** CSI pods（避免同時重啟所有 pods 造成短暫服務中斷）
 
 ### KubeVirt VM 影響評估
 
-**遷移期間 VM 行為**：
+**MON endpoint 切換期間 VM 行為**：
 
-1. **I/O 延遲可能增加**
-   - Recovery 過程中，部分 PG 處於 `degraded` 或 `misplaced` 狀態
-   - VM 的 block device I/O 會經歷額外的網路跳轉與 backfill traffic
-   - **建議**：監控 VM 應用層面的延遲指標，必要時調整 recovery throttling
+1. **Short MON Failover Disturbance**
+   - librbd（Ceph RBD client library）內建 MON failover 機制
+   - 當 current MON 失效或地址變更時，librbd 會自動嘗試連線至其他 MON
+   - 典型 failover 時間：數秒內完成
 
-2. **資料可用性無虞**
-   - 只要 `min_size=2` 且 cluster 健康，VM 不會遭遇 I/O 中斷
-   - CRUSH 保證每個 PG 的 replica 分布於不同 racks（failure domain）
+2. **I/O Continuity**
+   - 只要至少一個 MON 可達，RBD I/O 能繼續正常運作
+   - MON 主要負責 cluster map 發布與 auth，不參與 data path
+   - **驗證重點**：VM 在 MON endpoint 切換期間是否持續正常 I/O
 
-3. **VM 遷移考量**
-   - **無需遷移 VM**：Ceph RBD 遷移對 VM 透明，VM 持續運行於原 KubeVirt 節點
-   - **可選操作**：若 VM 負載敏感，可於 cutover 前手動 live migrate 至低負載節點
+3. **Timeout Tuning (Optional)**
+   - 若環境對 MON failover 延遲敏感（如關鍵交易系統），可考慮調整 `rbd_default_timeout`
+   - **此為環境特定驗證項目，非預設強制要求**
+   - 建議先執行 pilot test，觀察實際 failover behavior 再決定是否調整
 
 ### 監控重點
 
 - **Ceph 層面**：
-  - `ceph -s`：確認 health 狀態、PG 狀態分布
-  - `ceph osd pool stats <pool>`：監控 recovery 進度與 I/O 統計
-  - `ceph osd df tree`：檢查 OSD 使用率是否平衡
+  - `ceph mon stat`：確認 MON quorum 狀態
+  - `ceph -s`：確認 cluster health 與 MON election 狀態
+
+- **Rook / ceph-csi 層面**：
+  - 檢查 `rook-ceph-mon-endpoints` ConfigMap 是否已更新
+  - 檢查 `rook-ceph-config` 的 `mon_host` 欄位
+  - 檢視 `csi-rbdplugin` pod logs，確認 MON connection 正常
 
 - **KubeVirt / VM 層面**：
   - VM guest OS 的 disk I/O latency（如透過 `iostat` 或應用監控）
@@ -77,605 +115,510 @@ permalink: /storage/ceph-cross-dc-migration/detail_runbook/
 
 ---
 
-## 3. Detailed Phase Runbook
+## 3. Detailed MON Migration Runbook
 
-本節詳述 Rack-by-Rack 遷移的完整執行步驟。
+本節詳述 MON migration 的完整執行步驟，包含 add-before-remove 序列與 client endpoint coordination checkpoints。
 
-### Phase 0: Pre-Migration Preparation
+### Step 0: Pre-Migration Backup and Validation
 
-**目標**：確保 cluster 健康、備份關鍵配置、建立監控基線
+**目標**：確保 MON quorum 健康、備份關鍵配置、記錄 baseline
 
 #### 前置檢查清單
 
-1. **Cluster Health Check**
-   ```bash
-   ceph -s
-   # 必須為 HEALTH_OK，無 degraded/misplaced PGs
-   
-   ceph osd tree
-   # 確認現有 dc1 的 rack 結構（o1, o2, o3）
-   
-   ceph osd df tree
-   # 記錄 OSD 使用率基線
-   ```
-
-2. **Backup CRUSH Map**
-   ```bash
-   ceph osd getcrushmap -o /backup/crushmap.$(date +%Y%m%d).bin
-   crushtool -d /backup/crushmap.$(date +%Y%m%d).bin -o /backup/crushmap.$(date +%Y%m%d).txt
-   ```
-
-3. **Verify MON Quorum**
+1. **Verify Current MON Quorum**
    ```bash
    ceph mon stat
-   # 確認 3 個 MON 都在 quorum 中
+   # 確認 3 個 dc1 MON 都在 quorum 中
+   
+   ceph quorum_status -f json-pretty
+   # 記錄當前 quorum 成員清單
    ```
 
-4. **Record Baseline Metrics**
-   - 記錄當前 cluster 的 IOPS、throughput、latency 基線
-   - 記錄 VM 應用層的效能基線（若有監控）
-
-5. **Network Connectivity Test**
+2. **Backup Rook-Ceph External Mode Configuration**
    ```bash
-   # 從 dc1 節點測試到 dc2 節點的連通性
-   ping -c 10 <dc2-node-ip>
-   iperf3 -c <dc2-node-ip> -t 30
-   # 確認 latency < 5ms，bandwidth 符合預期
+   # 備份 rook-ceph-mon-endpoints ConfigMap
+   kubectl -n rook-ceph get configmap rook-ceph-mon-endpoints -o yaml > /backup/rook-ceph-mon-endpoints.$(date +%Y%m%d).yaml
+   
+   # 備份 rook-ceph-config ConfigMap
+   kubectl -n rook-ceph get configmap rook-ceph-config -o yaml > /backup/rook-ceph-config.$(date +%Y%m%d).yaml
+   
+   # 備份 rook-ceph-mon Secret（包含 admin keyring）
+   kubectl -n rook-ceph get secret rook-ceph-mon -o yaml > /backup/rook-ceph-mon-secret.$(date +%Y%m%d).yaml
    ```
 
-#### Gate Criteria (進入 Phase 1 前)
+3. **Record Current MON Endpoints**
+   ```bash
+   # 檢視當前 MON endpoint 配置
+   kubectl -n rook-ceph get configmap rook-ceph-mon-endpoints -o jsonpath='{.data.data}'
+   # 範例輸出：mon1=10.1.1.1:6789,mon2=10.1.1.2:6789,mon3=10.1.1.3:6789
+   
+   # 檢視 ceph.conf 的 mon_host
+   kubectl -n rook-ceph get configmap rook-ceph-config -o jsonpath='{.data.ceph\.conf}' | grep mon_host
+   ```
 
-- ✅ Cluster health = `HEALTH_OK`
-- ✅ 所有 PGs 為 `active+clean`
-- ✅ CRUSH map 已備份
-- ✅ dc1 ↔ dc2 網路連通性驗證完成
-- ✅ 監控系統已就緒，可追蹤 recovery 進度
+4. **Identify Client Workloads**
+   ```bash
+   # 列出 csi-rbdplugin pods
+   kubectl -n rook-ceph get pods -l app=csi-rbdplugin
+   
+   # 列出使用 RBD PVC 的 KubeVirt VMs
+   kubectl get vmi -A -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,VOLUMES:.spec.volumes[*].persistentVolumeClaim.claimName
+   ```
+
+#### Gate Criteria (進入 Step 1 前)
+
+- ✅ MON quorum = 3/3 且 健康
+- ✅ Rook external mode 配置已備份
+- ✅ 當前 MON endpoint 清單已記錄
+- ✅ Client workload inventory 已完成
 
 ---
 
-### Phase 1: Add dc2 Rack o4 (First Batch)
+### Step 1: Add dc2 MONs to Cluster
 
-**目標**：加入 dc2 第一個 rack（o4）的 5 台 OSD 節點
+**目標**：逐一新增 dc2 MON 節點，擴大 quorum 至 4、5、6 個成員
 
 #### 執行步驟
 
-1. **Add OSD Nodes to Cluster**
+1. **Add First dc2 MON (mon-dc2-01)**
    ```bash
-   # 使用 cephadm 加入 dc2 rack o4 的 5 台節點
-   # dc2 節點位置資訊固定為 datacenter=dc2, room=r2
-   # 假設節點名稱為 osd-dc2-o4-{01..05}
-
-   for node in osd-dc2-o4-{01..05}; do
-     ceph orch host add $node --labels osd --location datacenter=dc2 room=r2 rack=o4
-   done
-
-   # 驗證節點已加入
-   ceph orch host ls | grep o4
-   ```
-
-    - dc2 範例使用 `datacenter=dc2 room=r2`（上方加入指令已示範）
-    - dc1 節點的對應位置可視為 `datacenter=dc1 room=r1`（作為拓樸對照參考）
-    - `datacenter` 與 `room` 用來補充拓樸資訊
-    - failure domain 仍然是 `rack`（CRUSH failure domain 保持在 rack，無需變更設計）
-
-2. **Deploy OSDs**
-   ```bash
-   # 使用 cephadm 自動部署 OSD（假設已有 OSD spec）
-   ceph orch apply -i /path/to/osd-spec-dc2-o4.yaml
-   
-   # 或手動指定每台節點的 disks
-   # 範例：對每個節點的 10 顆 disk 執行
-   ceph orch daemon add osd osd-dc2-o4-01:/dev/sdb
-   # ... 重複 10 顆 disk
-   ```
-
-3. **Verify OSD Creation**
-   ```bash
-   ceph osd tree | grep o4
-   # 確認 50 個新 OSDs 已 up 且 in
-   
-   ceph osd df tree | grep o4
-   # 檢查新 OSDs 的狀態與初始 weight
-   ```
-
-4. **Monitor Recovery Progress**
-   ```bash
-   watch -n 5 'ceph -s'
-   # 觀察 PGs 進入 remapped/backfilling 狀態
-   
-   ceph osd pool stats
-   # 檢查 recovery rate 與 backfill throughput
-   ```
-
-#### Recovery Throttling (Optional)
-
-若 recovery 對線上業務影響過大，可調整 throttling 參數：
-
-```bash
-# 降低 recovery 優先級
-ceph tell osd.* config set osd_recovery_max_active 1
-ceph tell osd.* config set osd_max_backfills 1
-
-# 限制 recovery bandwidth
-ceph tell osd.* config set osd_recovery_sleep_hdd 0.1
-```
-
-#### Gate Criteria (進入 Phase 2 前)
-
-- ✅ 50 個新 OSDs (rack o4) 已 `up` 且 `in`
-- ✅ Cluster health = `HEALTH_OK`，所有 PGs 恢復為 `active+clean`
-- ✅ Recovery 完成（`ceph -s` 顯示 0 個 degraded/misplaced PGs）
-- ✅ OSD 使用率已重新平衡（無單一 OSD 超載）
-- ✅ VM I/O latency 恢復正常（若先前有異常）
-
-**預估時間**：數小時至一天（視資料量與網路頻寬而定）
-
----
-
-### Phase 2: Remove dc1 Rack o1 (First Batch)
-
-**目標**：移除 dc1 第一個 rack（o1）的 5 台 OSD 節點
-
-#### 執行步驟
-
-1. **Mark OSDs Out**
-   ```bash
-   # 取得 rack o1 的所有 OSD IDs
-   ceph osd tree | grep 'rack o1' -A 50 | grep osd | awk '{print $1}' > /tmp/o1-osds.txt
-   
-   # 逐一標記 out（觸發 data migration）
-   for osd_id in $(cat /tmp/o1-osds.txt); do
-     ceph osd out osd.$osd_id
-   done
-   
-   # 驗證
-   ceph osd tree | grep o1
-   # 應看到對應 OSDs 顯示 out
-   ```
-
-2. **Wait for Data Migration**
-   ```bash
-   watch -n 5 'ceph -s'
-   # 等待所有 PGs 再次恢復為 active+clean
-   
-   ceph pg dump | grep -v active+clean
-   # 確認無 degraded/misplaced PGs
-   ```
-
-3. **Stop OSD Daemons**
-   ```bash
-   for osd_id in $(cat /tmp/o1-osds.txt); do
-     ceph orch daemon stop osd.$osd_id
-   done
-   ```
-
-4. **Purge OSDs from CRUSH**
-   ```bash
-   for osd_id in $(cat /tmp/o1-osds.txt); do
-     ceph osd purge osd.$osd_id --yes-i-really-mean-it
-   done
-   
-   # 驗證
-   ceph osd tree | grep o1
-   # 應不再顯示 rack o1 的 OSDs
-   ```
-
-5. **Remove Hosts from Cluster**
-   ```bash
-   for node in osd-dc1-o1-{01..05}; do
-     ceph orch host rm $node --force
-   done
-   ```
-
-#### Gate Criteria (進入 Phase 3 前)
-
-- ✅ Rack o1 的 50 個 OSDs 已從 CRUSH map 移除
-- ✅ Cluster health = `HEALTH_OK`，所有 PGs 恢復為 `active+clean`
-- ✅ OSD 使用率已重新平衡（剩餘 OSDs 無超載）
-- ✅ 物理節點已從 orchestrator 移除
-
-**預估時間**：數小時至一天
-
----
-
-### Phase 3: Add dc2 Rack o5 (Second Batch)
-
-**執行步驟**：同 Phase 1，但目標為 dc2 rack o5
-
-```bash
-# Add nodes
-for node in osd-dc2-o5-{01..05}; do
-  ceph orch host add $node --labels osd --location datacenter=dc2 room=r2 rack=o5
-done
-
-# Deploy OSDs
-ceph orch apply -i /path/to/osd-spec-dc2-o5.yaml
-
-# Monitor recovery
-watch -n 5 'ceph -s'
-```
-
-#### Gate Criteria (進入 Phase 4 前)
-
-- ✅ 50 個新 OSDs (rack o5) 已 `up` 且 `in`
-- ✅ Cluster health = `HEALTH_OK`，所有 PGs 恢復為 `active+clean`
-
----
-
-### Phase 4: Remove dc1 Rack o2 (Second Batch)
-
-**執行步驟**：同 Phase 2，但目標為 dc1 rack o2
-
-```bash
-# Mark out
-ceph osd tree | grep 'rack o2' -A 50 | grep osd | awk '{print $1}' | \
-  xargs -I {} ceph osd out osd.{}
-
-# Wait for recovery
-watch -n 5 'ceph -s'
-
-# Purge OSDs
-ceph osd tree | grep 'rack o2' -A 50 | grep osd | awk '{print $1}' | \
-  xargs -I {} ceph osd purge osd.{} --yes-i-really-mean-it
-
-# Remove hosts
-for node in osd-dc1-o2-{01..05}; do
-  ceph orch host rm $node --force
-done
-```
-
-#### Gate Criteria (進入 Phase 5 前)
-
-- ✅ Rack o2 的 50 個 OSDs 已從 CRUSH map 移除
-- ✅ Cluster health = `HEALTH_OK`
-
----
-
-### Phase 5: Add dc2 Rack o6 (Third Batch)
-
-**執行步驟**：同 Phase 1，但目標為 dc2 rack o6
-
-```bash
-# Add nodes
-for node in osd-dc2-o6-{01..05}; do
-  ceph orch host add $node --labels osd --location datacenter=dc2 room=r2 rack=o6
-done
-
-# Deploy OSDs
-ceph orch apply -i /path/to/osd-spec-dc2-o6.yaml
-
-# Monitor recovery
-watch -n 5 'ceph -s'
-```
-
-#### Gate Criteria (進入 Phase 6 前)
-
-- ✅ 50 個新 OSDs (rack o6) 已 `up` 且 `in`
-- ✅ Cluster health = `HEALTH_OK`
-
----
-
-### Phase 6: Remove dc1 Rack o3 (Third Batch)
-
-**執行步驟**：同 Phase 2，但目標為 dc1 rack o3（最後一個 dc1 rack）
-
-```bash
-# Mark out
-ceph osd tree | grep 'rack o3' -A 50 | grep osd | awk '{print $1}' | \
-  xargs -I {} ceph osd out osd.{}
-
-# Wait for recovery
-watch -n 5 'ceph -s'
-
-# Purge OSDs
-ceph osd tree | grep 'rack o3' -A 50 | grep osd | awk '{print $1}' | \
-  xargs -I {} ceph osd purge osd.{} --yes-i-really-mean-it
-
-# Remove hosts
-for node in osd-dc1-o3-{01..05}; do
-  ceph orch host rm $node --force
-done
-```
-
-#### Final Validation
-
-- ✅ 所有 dc1 racks (o1, o2, o3) 已完全移除
-- ✅ 僅剩 dc2 racks (o4, o5, o6) 的 150 個 OSDs
-- ✅ Cluster health = `HEALTH_OK`
-- ✅ OSD 使用率平衡（無單一 OSD 超過 80%）
-
----
-
-### Phase 7: MON Migration
-
-**目標**：將 3 個 MON 節點從 dc1 遷移至 dc2
-
-#### 執行步驟
-
-1. **Add dc2 MONs (one by one)**
-   ```bash
-   # 加入第一個 dc2 MON（暫時變為 4 個 MON）
-   # MON 節點不會參與 CRUSH 的 placement；位置 metadata 僅供拓樸識別。
+   # 使用 cephadm 加入第一個 dc2 MON
    ceph orch daemon add mon mon-dc2-01 --location datacenter=dc2 room=r2 rack=m4
    
-   # 等待 MON 加入 quorum
+   # 等待 MON daemon 啟動（約 30-60 秒）
+   sleep 60
+   
+   # 驗證 MON 已加入 quorum
    ceph mon stat
-   # 確認 4 個 MON 都在 quorum
+   # 預期：quorum: 0,1,2,3 (4 MONs)
    
-   # 加入第二個 dc2 MON（暫時變為 5 個 MON）
-   ceph orch daemon add mon mon-dc2-02 --location datacenter=dc2 room=r2 rack=m5
-   
-   ceph mon stat
-   # 確認 5 個 MON 都在 quorum
-   
-   # 加入第三個 dc2 MON（暫時變為 6 個 MON）
-   ceph orch daemon add mon mon-dc2-03 --location datacenter=dc2 room=r2 rack=m6
-   
-   ceph mon stat
-   # 確認 6 個 MON 都在 quorum
+   ceph quorum_status -f json-pretty | grep -A 1 mon-dc2-01
+   # 確認 mon-dc2-01 在 quorum 中
    ```
 
-2. **Remove dc1 MONs (one by one)**
+2. **Add Second dc2 MON (mon-dc2-02)**
+   ```bash
+   ceph orch daemon add mon mon-dc2-02 --location datacenter=dc2 room=r2 rack=m5
+   
+   sleep 60
+   
+   ceph mon stat
+   # 預期：quorum: 0,1,2,3,4 (5 MONs)
+   ```
+
+3. **Add Third dc2 MON (mon-dc2-03)**
+   ```bash
+   ceph orch daemon add mon mon-dc2-03 --location datacenter=dc2 room=r2 rack=m6
+   
+   sleep 60
+   
+   ceph mon stat
+   # 預期：quorum: 0,1,2,3,4,5 (6 MONs)
+   ```
+
+#### Gate Criteria (進入 Step 2 前)
+
+- ✅ 6 個 MON（3 個 dc1 + 3 個 dc2）都在 quorum 中
+- ✅ Cluster health = `HEALTH_OK`（或僅有已知的非關鍵 warning）
+- ✅ 無 MON election 或 quorum 不穩定的跡象
+
+---
+
+### Step 2: Update rook-ceph-mon-endpoints (Add-Before-Remove)
+
+**目標**：更新 Rook external mode ConfigMap，同時包含 dc1 + dc2 MON endpoints
+
+#### 執行步驟
+
+1. **Get New MON Endpoint Addresses**
+   ```bash
+   # 從 Ceph cluster 取得所有 MON 地址
+   ceph mon dump | grep mon
+   # 範例輸出：
+   # 0: [v2:10.1.1.1:3300/0,v1:10.1.1.1:6789/0] mon.mon-dc1-01
+   # 1: [v2:10.1.1.2:3300/0,v1:10.1.1.2:6789/0] mon.mon-dc1-02
+   # 2: [v2:10.1.1.3:3300/0,v1:10.1.1.3:6789/0] mon.mon-dc1-03
+   # 3: [v2:10.2.1.1:3300/0,v1:10.2.1.1:6789/0] mon.mon-dc2-01
+   # 4: [v2:10.2.1.2:3300/0,v1:10.2.1.2:6789/0] mon.mon-dc2-02
+   # 5: [v2:10.2.1.3:3300/0,v1:10.2.1.3:6789/0] mon.mon-dc2-03
+   ```
+
+2. **Update rook-ceph-mon-endpoints ConfigMap**
+   ```bash
+   # 編輯 ConfigMap，加入 dc2 MON endpoints（保留 dc1）
+   kubectl -n rook-ceph edit configmap rook-ceph-mon-endpoints
+   
+   # 更新 data 欄位為（範例）：
+   # data: mon1=10.1.1.1:6789,mon2=10.1.1.2:6789,mon3=10.1.1.3:6789,mon4=10.2.1.1:6789,mon5=10.2.1.2:6789,mon6=10.2.1.3:6789
+   ```
+
+3. **Verify ConfigMap Update**
+   ```bash
+   kubectl -n rook-ceph get configmap rook-ceph-mon-endpoints -o jsonpath='{.data.data}'
+   # 確認包含 6 個 MON endpoints
+   ```
+
+---
+
+### Step 3: Verify rook-ceph-config and mon_host
+
+**目標**：確認 `rook-ceph-config` 的 `mon_host` 欄位已更新
+
+#### 執行步驟
+
+1. **Check ceph.conf mon_host**
+   ```bash
+   kubectl -n rook-ceph get configmap rook-ceph-config -o jsonpath='{.data.ceph\.conf}' | grep mon_host
+   # 確認 mon_host 包含 dc1 + dc2 MON 地址
+   ```
+
+2. **Update mon_host if Necessary**
+   ```bash
+   # 若 mon_host 未自動更新，手動編輯
+   kubectl -n rook-ceph edit configmap rook-ceph-config
+   
+   # 更新 ceph.conf 中的 mon_host 為（範例）：
+   # mon_host = 10.1.1.1:6789,10.1.1.2:6789,10.1.1.3:6789,10.2.1.1:6789,10.2.1.2:6789,10.2.1.3:6789
+   ```
+
+---
+
+### Step 4: Check csi-rbdplugin and KubeVirt VM I/O
+
+**目標**：驗證 ceph-csi 是否成功吸收新 MON endpoints，以及 KubeVirt VM I/O 是否持續正常
+
+#### 執行步驟
+
+1. **Observe csi-rbdplugin Logs**
+   ```bash
+   # 檢視 csi-rbdplugin pod logs
+   kubectl -n rook-ceph logs -l app=csi-rbdplugin --tail=50 | grep -i mon
+   
+   # 尋找 MON connection 相關訊息，確認是否成功連線至新 MON endpoints
+   ```
+
+2. **Verify RBD Connection from csi-rbdplugin**
+   ```bash
+   # 進入其中一個 csi-rbdplugin pod
+   kubectl -n rook-ceph exec -it <csi-rbdplugin-pod-name> -- bash
+   
+   # 在 pod 內執行 ceph status（需 admin keyring）
+   ceph -s --conf=/etc/ceph/ceph.conf --keyring=/etc/ceph/keyring
+   # 確認能正常連線至 Ceph cluster
+   ```
+
+3. **Test KubeVirt VM I/O**
+   ```bash
+   # 登入 KubeVirt VM，執行 I/O 測試
+   virtctl console <vm-name> -n <namespace>
+   
+   # 在 VM guest OS 內執行（範例）
+   dd if=/dev/zero of=/tmp/test.dat bs=1M count=100
+   iostat -x 1 5
+   # 確認 I/O latency 正常，無明顯延遲
+   ```
+
+4. **Monitor VM Application Metrics (Optional)**
+   ```bash
+   # 若有應用層監控，確認 SLA 指標正常
+   # 例如：API response time, database query latency
+   ```
+
+#### Observation Results
+
+- **csi-rbdplugin 自動吸收成功**：logs 顯示已連線至新 MON endpoints → 無需手動重啟，進入 Step 6
+- **csi-rbdplugin 自動吸收失效**：logs 顯示仍使用舊 MON endpoints 或連線失敗 → 進入 Step 5（分批重啟）
+
+---
+
+### Step 5: Restart csi-rbdplugin in Batches (If Needed)
+
+**目標**：若 csi-rbdplugin 未能自動吸收新 MON endpoints，則分批重啟 pods
+
+#### 執行步驟
+
+1. **Identify csi-rbdplugin Pods**
+   ```bash
+   kubectl -n rook-ceph get pods -l app=csi-rbdplugin -o wide
+   # 記錄所有 csi-rbdplugin pod 名稱與所在 node
+   ```
+
+2. **Restart Pods in Batches**
+   ```bash
+   # 分批重啟，每次重啟 1/3 的 pods，間隔 30 秒觀察
+   # Batch 1
+   kubectl -n rook-ceph delete pod <csi-rbdplugin-pod-1>
+   kubectl -n rook-ceph delete pod <csi-rbdplugin-pod-2>
+   sleep 30
+   
+   # 驗證 Batch 1 重啟後的 pods 正常
+   kubectl -n rook-ceph get pods -l app=csi-rbdplugin
+   kubectl -n rook-ceph logs <csi-rbdplugin-pod-1> --tail=20 | grep -i mon
+   
+   # Batch 2
+   kubectl -n rook-ceph delete pod <csi-rbdplugin-pod-3>
+   kubectl -n rook-ceph delete pod <csi-rbdplugin-pod-4>
+   sleep 30
+   
+   # Batch 3
+   kubectl -n rook-ceph delete pod <csi-rbdplugin-pod-5>
+   kubectl -n rook-ceph delete pod <csi-rbdplugin-pod-6>
+   sleep 30
+   ```
+
+3. **Verify All Pods Use New MON Endpoints**
+   ```bash
+   kubectl -n rook-ceph logs -l app=csi-rbdplugin --tail=50 | grep -i mon
+   # 確認所有 pods 已連線至新 MON endpoints
+   ```
+
+#### Gate Criteria (進入 Step 6 前)
+
+- ✅ 所有 csi-rbdplugin pods 已使用新 MON endpoints
+- ✅ KubeVirt VM I/O 持續正常
+- ✅ 無應用層 SLA violation
+
+---
+
+### Step 6: Remove dc1 MONs from Cluster
+
+**目標**：確認新 endpoint 集合穩定後，逐一移除 dc1 MON 節點
+
+#### 執行步驟
+
+1. **Remove First dc1 MON (mon-dc1-01)**
    ```bash
    # 移除第一個 dc1 MON
    ceph orch daemon rm mon.mon-dc1-01 --force
    
+   # 等待 MON daemon 停止（約 30-60 秒）
+   sleep 60
+   
+   # 驗證 MON 已從 quorum 移除
    ceph mon stat
-   # 確認剩餘 5 個 MON 都在 quorum
+   # 預期：quorum: 1,2,3,4,5 (5 MONs)
    
-   # 移除第二個 dc1 MON
-   ceph orch daemon rm mon.mon-dc1-02 --force
-   
-   ceph mon stat
-   # 確認剩餘 4 個 MON 都在 quorum
-   
-   # 移除第三個 dc1 MON（最後一個）
-   ceph orch daemon rm mon.mon-dc1-03 --force
-   
-   ceph mon stat
-   # 確認僅剩 3 個 dc2 MON 都在 quorum
+   # 確認 cluster health 正常
+   ceph -s
    ```
 
-3. **Remove dc1 MON Hosts**
+2. **Remove Second dc1 MON (mon-dc1-02)**
+   ```bash
+   ceph orch daemon rm mon.mon-dc1-02 --force
+   
+   sleep 60
+   
+   ceph mon stat
+   # 預期：quorum: 2,3,4,5 (4 MONs)
+   ```
+
+3. **Remove Third dc1 MON (mon-dc1-03)**
+   ```bash
+   ceph orch daemon rm mon.mon-dc1-03 --force
+   
+   sleep 60
+   
+   ceph mon stat
+   # 預期：quorum: 3,4,5 (3 MONs, 全為 dc2)
+   ```
+
+4. **Remove dc1 MON Hosts from Cluster**
    ```bash
    for node in mon-dc1-{01..03}; do
      ceph orch host rm $node --force
    done
    ```
 
-#### Gate Criteria (MON Migration Complete)
+#### Final Validation
 
 - ✅ 僅剩 3 個 dc2 MON 在 quorum 中
 - ✅ Cluster health = `HEALTH_OK`
 - ✅ 所有 dc1 MON 節點已從 orchestrator 移除
+- ✅ ceph-csi 與 KubeVirt VM I/O 持續正常
 
 ---
 
-## 4. Cutover Gates
+### Step 7: Update rook-ceph-mon-endpoints (Remove dc1 Endpoints)
 
-每個 Phase 必須滿足以下條件才能進入下一階段：
+**目標**：清理 Rook external mode ConfigMap，移除 dc1 MON endpoints
 
-### Recovery Completion Gate
+#### 執行步驟
+
+1. **Update rook-ceph-mon-endpoints ConfigMap**
+   ```bash
+   # 編輯 ConfigMap，僅保留 dc2 MON endpoints
+   kubectl -n rook-ceph edit configmap rook-ceph-mon-endpoints
+   
+   # 更新 data 欄位為（範例）：
+   # data: mon4=10.2.1.1:6789,mon5=10.2.1.2:6789,mon6=10.2.1.3:6789
+   ```
+
+2. **Update rook-ceph-config mon_host**
+   ```bash
+   kubectl -n rook-ceph edit configmap rook-ceph-config
+   
+   # 更新 ceph.conf 中的 mon_host 為（範例）：
+   # mon_host = 10.2.1.1:6789,10.2.1.2:6789,10.2.1.3:6789
+   ```
+
+3. **Verify ConfigMap Updates**
+   ```bash
+   kubectl -n rook-ceph get configmap rook-ceph-mon-endpoints -o jsonpath='{.data.data}'
+   # 確認僅包含 3 個 dc2 MON endpoints
+   
+   kubectl -n rook-ceph get configmap rook-ceph-config -o jsonpath='{.data.ceph\.conf}' | grep mon_host
+   # 確認 mon_host 僅包含 dc2 MON 地址
+   ```
+
+4. **Optional: Restart csi-rbdplugin Again (If Needed)**
+   ```bash
+   # 若需確保 csi-rbdplugin 完全切換至 dc2 MON endpoints，可再次分批重啟
+   # 參照 Step 5 的流程
+   ```
+
+---
+
+## 4. Gate Criteria and Rollback
+
+### MON Migration Gate Criteria
+
+每個 Step 必須滿足以下條件才能進入下一階段：
+
+#### Quorum Health Gate
 
 ```bash
-# 檢查 PG 狀態
-ceph pg stat | grep -q 'active+clean' && echo "PASS: All PGs active+clean" || echo "FAIL"
+# 檢查 MON quorum 狀態
+ceph mon stat | grep -q 'quorum' && echo "PASS: Quorum OK" || echo "FAIL"
 
-# 檢查無 degraded PGs
-ceph -s | grep -q 'degraded\|misplaced' && echo "FAIL: Degraded PGs exist" || echo "PASS"
-
-# 檢查 recovery 完成
-ceph -s | grep -q 'recovering\|backfilling' && echo "FAIL: Recovery in progress" || echo "PASS"
+# 檢查 quorum 成員數
+ceph quorum_status -f json-pretty | jq '.quorum | length'
+# 確認與預期的 MON 數量一致
 ```
 
-### Cluster Health Gate
+#### Cluster Health Gate
 
 ```bash
 # 必須為 HEALTH_OK 或 HEALTH_WARN（僅接受已知的非關鍵 warning）
 ceph health detail
+
+# 檢查無 MON election 異常
+ceph -s | grep -i 'mon:' 
 ```
 
-### OSD Balance Gate
+#### Client Endpoint Gate
 
 ```bash
-# 檢查 OSD 使用率標準差（應 < 10%）
-ceph osd df tree | awk '/osd\./ {print $7}' | \
-  awk '{sum+=$1; sumsq+=$1*$1} END {print sqrt(sumsq/NR - (sum/NR)^2)}'
-# 若標準差 > 10，考慮手動 reweight 或等待進一步 rebalance
+# 檢查 rook-ceph-mon-endpoints 已更新
+kubectl -n rook-ceph get configmap rook-ceph-mon-endpoints -o jsonpath='{.data.data}'
+
+# 檢查 rook-ceph-config mon_host 已更新
+kubectl -n rook-ceph get configmap rook-ceph-config -o jsonpath='{.data.ceph\.conf}' | grep mon_host
 ```
 
-### VM Health Gate (Optional)
+#### ceph-csi Health Gate
 
 ```bash
-# 檢查 KubeVirt VM 的 I/O latency 是否恢復基線
+# 檢查 csi-rbdplugin pods 狀態
+kubectl -n rook-ceph get pods -l app=csi-rbdplugin | grep -q 'Running' && echo "PASS" || echo "FAIL"
+
+# 檢查 csi-rbdplugin logs 無連線錯誤
+kubectl -n rook-ceph logs -l app=csi-rbdplugin --tail=50 | grep -i error
+```
+
+#### KubeVirt VM Health Gate
+
+```bash
+# 檢查 KubeVirt VM I/O 是否正常
 # 依據實際監控系統執行（如 Prometheus query）
+
+# 簡易測試：進入 VM 執行 dd 測試
+virtctl console <vm-name> -n <namespace>
+dd if=/dev/zero of=/tmp/test.dat bs=1M count=100
+# 確認無 I/O 錯誤或明顯延遲
 ```
 
 ---
 
-## 5. Rollback Rules
+### Rollback Rules
 
-### 何時需要 Rollback
+#### 何時需要 Rollback
 
-1. **Recovery 失敗**：
-   - PG 持續處於 `degraded` 超過預期時間（如 > 24 小時）
-   - 出現大量 `incomplete` 或 `stale` PGs
+1. **Quorum 不穩定**：
+   - 新增 dc2 MON 後，quorum 持續出現 election 或成員變動
+   - MON daemon 無法正常啟動或持續 crash
 
-2. **硬體故障**：
-   - 新加入的 dc2 節點出現硬體問題（disk failure, network issue）
-   - 無法在短時間內修復
+2. **Client 連線失敗**：
+   - ceph-csi 無法連線至新 MON endpoints
+   - KubeVirt VM I/O 出現錯誤或明顯延遲（如 p99 > 100ms）
 
-3. **效能劣化**：
-   - VM I/O latency 超過 SLA（如 p99 > 100ms）
-   - 應用層報告不可接受的效能下降
-
-4. **網路問題**：
-   - dc1 ↔ dc2 網路中斷或延遲飆升
+3. **網路問題**：
+   - dc1 ↔ dc2 MON 網路中斷或延遲飆升
    - Cluster 出現 network partition 風險
+
+4. **配置錯誤**：
+   - Rook ConfigMap 更新失敗或格式錯誤
+   - ceph-csi 無法讀取更新後的配置
+
+---
 
 ### Rollback 步驟
 
-#### Case 1: 剛加入 dc2 rack，尚未移除 dc1 rack
+#### Case 1: 剛加入 dc2 MON，尚未移除 dc1 MON
 
-**操作**：將新加入的 dc2 rack OSDs 標記 out 並移除
+**操作**：將新加入的 dc2 MON 節點移除
 
 ```bash
-# 假設在 Phase 1，剛加入 rack o4
-# 取得 rack o4 的所有 OSD IDs
-ceph osd tree | grep 'rack o4' -A 50 | grep osd | awk '{print $1}' > /tmp/o4-osds.txt
+# 假設在 Step 1，剛加入 dc2 MON
+# 移除 dc2 MON 節點
+ceph orch daemon rm mon.mon-dc2-01 --force
+ceph orch daemon rm mon.mon-dc2-02 --force
+ceph orch daemon rm mon.mon-dc2-03 --force
 
-# 標記 out
-for osd_id in $(cat /tmp/o4-osds.txt); do
-  ceph osd out osd.$osd_id
-done
+# 驗證 quorum 恢復為原始的 3 個 dc1 MON
+ceph mon stat
+# 預期：quorum: 0,1,2 (3 MONs, 全為 dc1)
 
-# 等待資料搬回 dc1 racks
-watch -n 5 'ceph -s'
-
-# 移除 OSDs
-for osd_id in $(cat /tmp/o4-osds.txt); do
-  ceph osd purge osd.$osd_id --yes-i-really-mean-it
-done
-
-# 移除 hosts
-for node in osd-dc2-o4-{01..05}; do
-  ceph orch host rm $node --force
-done
+# 恢復 Rook ConfigMap（若已更新）
+kubectl -n rook-ceph apply -f /backup/rook-ceph-mon-endpoints.$(date +%Y%m%d).yaml
+kubectl -n rook-ceph apply -f /backup/rook-ceph-config.$(date +%Y%m%d).yaml
 ```
 
-**結果**：恢復為原始的 dc1-only cluster 狀態
+**結果**：恢復為原始的 dc1-only MON 配置
 
 ---
 
-#### Case 2: 已移除部分 dc1 rack，需 rollback
+#### Case 2: 已移除部分 dc1 MON，需 rollback
 
-**限制**：若已移除 dc1 rack o1，則無法完全 rollback（因資料已搬離且節點已移除）
+**限制**：若已移除 dc1 MON，則需重新加入 dc1 MON 節點（若硬體仍可用）
 
 **緩解措施**：
-- 若 dc1 rack o1 的節點與 disks 仍可存取，可嘗試重新加入：
+- 若 dc1 MON 節點仍可存取，可嘗試重新加入：
   ```bash
-  # 重新加入 dc1 rack o1 節點
-  for node in osd-dc1-o1-{01..05}; do
-    ceph orch host add $node --labels osd --location rack=o1
-  done
+  # 重新加入 dc1 MON 節點
+  ceph orch daemon add mon mon-dc1-01 --location datacenter=dc1 room=r1 rack=m1
+  ceph orch daemon add mon mon-dc1-02 --location datacenter=dc1 room=r1 rack=m2
+  ceph orch daemon add mon mon-dc1-03 --location datacenter=dc1 room=r1 rack=m3
   
-  # 重新部署 OSDs（需 disks 資料仍存在）
-  ceph orch apply -i /path/to/osd-spec-dc1-o1.yaml
+  # 驗證 quorum
+  ceph mon stat
   ```
 
-- 若節點已無法恢復，則：
-  - **保持當前狀態**（dc2 部分 racks + dc1 部分 racks 混合模式）
-  - 等待 cluster health 穩定後，評估繼續遷移或維持混合模式
+- 若 dc1 MON 節點已無法恢復，則：
+  - **保持當前狀態**（dc2 部分 MON + dc1 部分 MON 混合模式）
+  - 或**繼續前進**，完全切換至 dc2 MON
 
-**建議**：Rollback 的最佳時機是在**每個 Phase 的 gate criteria 檢查點之前**。一旦跨越 gate 進入下一 Phase，rollback 難度與風險顯著增加。
+**建議**：Rollback 的最佳時機是在**每個 Step 的 gate criteria 檢查點之前**。一旦跨越 gate 進入下一 Step，rollback 難度與風險顯著增加。
 
 ---
 
 ### Rollback Decision Matrix
 
-| Phase | Rollback 難度 | 建議行動 |
-|-------|-------------|---------|
-| Phase 1（加入 dc2 o4） | ⭐ 簡單 | 直接移除 dc2 o4，恢復原狀 |
-| Phase 2（移除 dc1 o1） | ⭐⭐⭐ 困難 | 若需 rollback，需重新加入 dc1 o1（若硬體仍可用） |
-| Phase 3-6 | ⭐⭐⭐⭐ 極困難 | 不建議 rollback，應專注於修復當前問題並繼續前進 |
-| Phase 7（MON 遷移） | ⭐⭐ 中等 | 可逐一移除 dc2 MON 並重新加入 dc1 MON |
-
----
-
-## 6. Command Reference
-
-### 常用監控指令
-
-```bash
-# Cluster 整體狀態
-ceph -s
-
-# PG 統計
-ceph pg stat
-ceph pg dump | head -n 20
-
-# OSD 狀態與使用率
-ceph osd tree
-ceph osd df tree
-ceph osd status
-
-# Recovery 進度
-ceph osd pool stats
-ceph -w  # 持續監控（按 Ctrl+C 退出）
-
-# CRUSH map 查看
-ceph osd crush tree
-ceph osd crush dump
-
-# MON 狀態
-ceph mon stat
-ceph quorum_status -f json-pretty
-
-# Health 詳情
-ceph health detail
-```
-
-### Recovery Throttling 調整
-
-```bash
-# 降低 recovery 優先級（減少對線上業務影響）
-ceph tell osd.* config set osd_recovery_max_active 1
-ceph tell osd.* config set osd_max_backfills 1
-ceph tell osd.* config set osd_recovery_sleep_hdd 0.1
-
-# 恢復預設值（加速 recovery）
-ceph tell osd.* config set osd_recovery_max_active 3
-ceph tell osd.* config set osd_max_backfills 1
-ceph tell osd.* config set osd_recovery_sleep_hdd 0
-```
-
-### CRUSH Map 操作
-
-```bash
-# 匯出 CRUSH map
-ceph osd getcrushmap -o crushmap.bin
-crushtool -d crushmap.bin -o crushmap.txt
-
-# 編輯 CRUSH map（若需手動調整）
-vim crushmap.txt
-
-# 編譯並匯入
-crushtool -c crushmap.txt -o crushmap-new.bin
-ceph osd setcrushmap -i crushmap-new.bin
-```
-
-### OSD 權重調整
-
-```bash
-# 查看 OSD 權重
-ceph osd tree | grep osd
-
-# 手動調整 OSD 權重（若 rebalance 需要）
-ceph osd crush reweight osd.<id> <weight>
-
-# 自動 reweight（based on utilization）
-ceph osd reweight-by-utilization 110  # 110 = 10% threshold
-```
-
-### 緊急操作
-
-```bash
-# 暫停 recovery（緊急情況）
-ceph osd set norecover
-ceph osd set nobackfill
-
-# 恢復 recovery
-ceph osd unset norecover
-ceph osd unset nobackfill
-
-# 暫停 scrubbing（減少 cluster 負載）
-ceph osd set noscrub
-ceph osd set nodeep-scrub
-
-# 恢復 scrubbing
-ceph osd unset noscrub
-ceph osd unset nodeep-scrub
-```
+| Step | Rollback 難度 | 建議行動 |
+|------|-------------|---------|
+| Step 1（加入 dc2 MON） | ⭐ 簡單 | 直接移除 dc2 MON，恢復原狀 |
+| Step 2-5（更新 client endpoint） | ⭐⭐ 中等 | 恢復 Rook ConfigMap，重啟 csi-rbdplugin |
+| Step 6（移除 dc1 MON） | ⭐⭐⭐ 困難 | 若需 rollback，需重新加入 dc1 MON（若硬體仍可用） |
+| Step 7（清理 dc1 endpoint） | ⭐⭐ 中等 | 重新加入 dc1 MON endpoints 至 Rook ConfigMap |
 
 ---
 
@@ -684,52 +627,10 @@ ceph osd unset nodeep-scrub
 - **[← 回到主文件](../)**  
   返回 Ceph Cross-DC Migration 主題入口，查看場景說明與架構圖
 
-- **[← 遷移策略分析](../solutions/)**  
-  查看 Rack-by-Rack 方案的選擇理由與其他方案的比較
+- **[→ OSD Migration Runbook](../osd-migration/)**  
+  前往 OSD runbook，執行 rack-by-rack 的資料搬遷、recovery 與移除流程
+
+- **[→ Migration Strategy Comparison](../solutions/)**  
+  回到策略比較頁，查看為何此場景建議先做 OSD migration，再處理 MON migration
 
 ---
-
-## 附錄：常見問題
-
-### Q1: Recovery 時間過長怎麼辦？
-
-**A**: 檢查以下因素：
-1. 網路頻寬是否飽和（使用 `iperf3` 測試）
-2. OSD disk I/O 是否瓶頸（使用 `iostat` 檢查）
-3. 考慮提高 recovery throttling 參數（見上方 Command Reference）
-4. 若非緊急，可維持保守設定，讓 recovery 慢速進行以減少業務影響
-
-### Q2: PG 出現 incomplete 怎麼處理？
-
-**A**: 
-```bash
-# 檢查 incomplete PG
-ceph pg dump | grep incomplete
-
-# 查看該 PG 的詳細資訊
-ceph pg <pgid> query
-
-# 若確認無法恢復，可嘗試強制 mark complete（慎用）
-ceph pg <pgid> mark_unfound_lost revert
-```
-
-### Q3: 如何驗證 CRUSH placement 正確？
-
-**A**:
-```bash
-# 查看某個 PG 的 OSD 分布
-ceph pg map <pgid>
-
-# 驗證 replica 是否分布於不同 racks
-ceph pg dump | awk '{print $1, $16}' | head -n 20
-# 檢查 acting OSD set 是否跨越不同 racks
-```
-
-### Q4: MON migration 是否必須在 OSD migration 之後？
-
-**A**: 建議順序為**先完成 OSD migration，再進行 MON migration**。理由：
-- OSD migration 是資料搬遷的主要工作，需大量時間與監控
-- MON migration 較快且風險較低（quorum 可容許短暫變化）
-- 分開執行可降低操作複雜度與 troubleshooting 難度
-
-若需同步進行，建議在 Phase 3-4 期間（OSD migration 中期）穿插進行 MON 遷移。
