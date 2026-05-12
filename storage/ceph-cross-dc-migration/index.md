@@ -14,131 +14,93 @@ permalink: /storage/ceph-cross-dc-migration/
 
 ### 現況
 
-- **dc1 現有 cluster**
-  - 3 台 MON 節點，15 台 OSD 節點
-  - 每台 OSD 節點有 10 顆 OSD disk
-  - 現有 RBD pool 服務 KubeVirt 虛擬機
-
-- **dc2 目標硬體**
-  - 硬體規格與 dc1 相同：3 MON + 15 OSD 節點
-  - 每台 OSD 節點有 10 顆 OSD disk
-
-- **網路拓樸**
-  - dc1 與 dc2 之間有 Layer 2 連通（stretched Layer 2）
-  - Server OS 與 Ceph private network 使用相同的 IP segment
-  - 所有 IP 位址在兩個 site 間都是唯一的（無衝突）
-
-### Rack 命名規範
-
-為確保操作時能清楚區分新舊節點，兩個 DC 採用不重複的 rack 命名：
-
-- **dc1 racks**
-  - OSD racks: `o1`, `o2`, `o3`
-  - MON racks: `m1`, `m2`, `m3`
-
-- **dc2 racks**
-  - OSD racks: `o4`, `o5`, `o6`
-  - MON racks: `m4`, `m5`, `m6`
-
-**📝 說明**：MON rack 命名僅作為操作員識別參考，MON 節點不參與 CRUSH placement。
+- **dc1 現有 cluster**：3 台 MON、15 台 OSD nodes（每台 10 顆 OSD disks），現有 RBD pool 服務 KubeVirt 虛擬機
+- **dc2 目標硬體**：3 台 MON、15 台 OSD nodes（每台 10 顆 OSD disks）
+- **網路拓樸**：dc1 與 dc2 之間有 Layer 2 連通（stretched Layer 2），Server OS 與 Ceph private network 使用相同的 IP segment
 
 ### Topology Metadata
 
-- **dc1 nodes**
-  - `datacenter=dc1`
-  - `room=r1`
-- **dc2 nodes**
-  - `datacenter=dc2`
-  - `room=r2`
+```text
+datacenter dc1
+└─ room r1
+   ├─ rack m1 / m2 / m3
+   └─ rack o1 / o2 / o3
 
-### 遷移策略：Option B
-
-本文件採用 **Option B 單一 cluster 擴展模式**，而非第二 cluster 遷移：
-
-1. 將 dc2 節點加入現有 cluster
-2. 等待 CRUSH rebalance / data sync
-3. 移除 dc1 節點
-
-### CRUSH 設計原則
-
-- Host location metadata 會記錄 `datacenter`、`room`、`rack`
-- **不分離 datacenter bucket**：CRUSH 模型保持單一邏輯 dc
-- **Failure domain 維持 rack 級別**
-- `datacenter` 與 `room` 僅作為拓樸描述資訊，不作為 replica placement 邊界
-- Rack 命名已採用不重複方式（見上方 Rack 命名規範），避免混淆新舊節點
+datacenter dc2
+└─ room r2
+   ├─ rack m4 / m5 / m6
+   └─ rack o4 / o5 / o6
+```
 
 ---
 
 ## 2. Architecture Diagram
 
-### Two-DC Server / Rack Topology
+### CRUSH Tree + Cabinet View
 
 ```mermaid
-graph TB
-    subgraph DC1["🏢 dc1"]
-        subgraph MON_DC1["MON Nodes (3)"]
-            M1["mon-01<br/>rack: m1"]
-            M2["mon-02<br/>rack: m2"]
-            M3["mon-03<br/>rack: m3"]
+graph LR
+    subgraph META["Topology Metadata"]
+        DC1["datacenter dc1"]
+        R1["room r1"]
+        M1["MON racks<br/>m1 / m2 / m3"]
+        O1["OSD racks<br/>o1 / o2 / o3"]
+
+        DC2["datacenter dc2"]
+        R2["room r2"]
+        M2["MON racks<br/>m4 / m5 / m6"]
+        O2["OSD racks<br/>o4 / o5 / o6"]
+
+        DC1 --> R1
+        R1 --> M1
+        R1 --> O1
+        DC2 --> R2
+        R2 --> M2
+        R2 --> O2
+    end
+
+    subgraph CAB["Cabinet View"]
+        subgraph C1["dc1 / room r1"]
+            C1M["MON racks × 3"]
+            C1O["OSD racks × 3<br/>15 nodes / 150 OSDs"]
         end
-        
-        subgraph OSD_DC1["OSD Nodes (15 hosts, 150 OSDs)"]
-            O1["rack o1<br/>5 hosts × 10 disks"]
-            O2["rack o2<br/>5 hosts × 10 disks"]
-            O3["rack o3<br/>5 hosts × 10 disks"]
+
+        subgraph C2["dc2 / room r2"]
+            C2M["MON racks × 3"]
+            C2O["OSD racks × 3<br/>15 nodes / 150 OSDs"]
         end
     end
-    
-    subgraph DC2["🏢 dc2"]
-        subgraph MON_DC2["MON Nodes (3)"]
-            M4["mon-01<br/>rack: m4"]
-            M5["mon-02<br/>rack: m5"]
-            M6["mon-03<br/>rack: m6"]
-        end
-        
-        subgraph OSD_DC2["OSD Nodes (15 hosts, 150 OSDs)"]
-            O4["rack o4<br/>5 hosts × 10 disks"]
-            O5["rack o5<br/>5 hosts × 10 disks"]
-            O6["rack o6<br/>5 hosts × 10 disks"]
-        end
-    end
-    
-    CLUSTER["⚙️ Single Ceph Cluster<br/>Failure Domain: rack"]
-    
-    CLUSTER -.-> MON_DC1
-    CLUSTER -.-> MON_DC2
-    CLUSTER -.-> OSD_DC1
-    CLUSTER -.-> OSD_DC2
-    
-    NET["🌐 Stretched Layer 2 Network<br/>Same IP Segment<br/>Unique IPs across DCs"]
-    
-    DC1 <-->|L2 Connectivity| DC2
-    
-    RBD["💾 Existing RBD Pool<br/>Serves KubeVirt VMs"]
-    CLUSTER --> RBD
-    
-    classDef dcStyle fill:#e1f5ff,stroke:#0366d6,stroke-width:2px
-    classDef monStyle fill:#fff3cd,stroke:#856404,stroke-width:1px
-    classDef osdStyle fill:#d4edda,stroke:#155724,stroke-width:1px
-    classDef clusterStyle fill:#f8d7da,stroke:#721c24,stroke-width:2px
-    classDef netStyle fill:#e2e3e5,stroke:#383d41,stroke-width:1px
-    classDef rbdStyle fill:#cfe2ff,stroke:#084298,stroke-width:1px
-    
-    class DC1,DC2 dcStyle
-    class MON_DC1,MON_DC2,M1,M2,M3,M4,M5,M6 monStyle
-    class OSD_DC1,OSD_DC2,O1,O2,O3,O4,O5,O6 osdStyle
-    class CLUSTER clusterStyle
+
+    NET["Stretched Layer 2<br/>Same IP Segment"]
+    RBD["RBD Pool<br/>for KubeVirt VMs"]
+
+    M1 -.-> C1M
+    O1 -.-> C1O
+    M2 -.-> C2M
+    O2 -.-> C2O
+
+    C1O --- NET --- C2O
+    C1O --> RBD
+    C2O --> RBD
+
+    classDef metaStyle fill:#e8f1ff,stroke:#3b82f6,stroke-width:1.5px
+    classDef monStyle fill:#fff7db,stroke:#b7791f,stroke-width:1.5px
+    classDef osdStyle fill:#e6ffed,stroke:#2f855a,stroke-width:1.5px
+    classDef netStyle fill:#f2f2f2,stroke:#666,stroke-width:1px
+    classDef rbdStyle fill:#e8edff,stroke:#4c51bf,stroke-width:1.5px
+
+    class DC1,DC2,R1,R2 metaStyle
+    class M1,M2,C1M,C2M monStyle
+    class O1,O2,C1O,C2O osdStyle
     class NET netStyle
     class RBD rbdStyle
 ```
 
 **圖說**：
-- 單一 Ceph cluster 橫跨兩個資料中心（dc1 與 dc2）
-- 每個 DC 各有 3 台 MON 節點與 15 台 OSD 節點
-- OSD 節點分布於 3 個 racks，每個 rack 有 5 台 host，每台 host 有 10 顆 OSD disk
-- 兩個 DC 透過 stretched Layer 2 網路連通，使用同一 IP segment，所有 IP 唯一
-- Failure domain 為 rack 級別（不是 datacenter 級別）
-- 現有 RBD pool 持續服務 KubeVirt VM
+- 左側以 `datacenter -> room -> rack` 呈現 topology metadata
+- 右側以機櫃群視角呈現 dc1 / dc2 的 MON 與 OSD 分布
+- 每個 DC 各有 3 個 MON racks 與 3 個 OSD racks，OSD 區合計 15 nodes / 150 OSDs
+- 兩個 DC 透過 stretched Layer 2 網路連通，並共同提供 RBD 給 KubeVirt VM 使用
 
 ---
 
