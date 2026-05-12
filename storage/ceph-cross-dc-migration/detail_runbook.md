@@ -156,7 +156,7 @@ permalink: /storage/ceph-cross-dc-migration/detail_runbook/
    補一句說明：
 
     - dc2 範例使用 `datacenter=dc2 room=r2`（上方加入指令已示範）
-    - dc1 既有節點對應 `datacenter=dc1 room=r1`
+    - dc1 節點的對應位置可視為 `datacenter=dc1 room=r1`（作為拓樸對照參考）
     - `datacenter` 與 `room` 用來補充拓樸資訊
     - failure domain 仍然是 `rack`（CRUSH failure domain 保持在 rack，無需變更設計）
 
