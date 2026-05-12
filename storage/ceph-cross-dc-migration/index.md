@@ -101,6 +101,7 @@ graph LR
 - 右側以機櫃群視角呈現 dc1 / dc2 的 MON 與 OSD 分布
 - 每個 DC 各有 3 個 MON racks 與 3 個 OSD racks，OSD 區合計 15 nodes / 150 OSDs
 - 兩個 DC 透過 stretched Layer 2 網路連通，並共同提供 RBD 給 KubeVirt VM 使用
+- 虛線箭頭表示拓樸 metadata 與機櫃視圖的對應關係，不代表資料流向
 
 ---
 
