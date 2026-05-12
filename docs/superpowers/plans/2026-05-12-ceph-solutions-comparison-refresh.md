@@ -1,11 +1,46 @@
----
-title: Migration Strategy Comparison
-parent: Ceph Cross-DC Migration
-permalink: /storage/ceph-cross-dc-migration/solutions/
+# Ceph Solutions Comparison Refresh Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Refresh `storage/ceph-cross-dc-migration/solutions.md` so it compares MON-vs-OSD migration sequencing first, then compares the three OSD migration rhythms using RBD performance impact and migration danger level as the primary criteria.
+
+**Architecture:** Keep the work scoped to `solutions.md` and preserve the page's role as the strategy layer between the landing page and the runbook. Reorganize the page into two major comparison sections plus a short final recommendation summary, while keeping the existing cross-links back to the landing page and `detail_runbook.md`.
+
+**Tech Stack:** Markdown, Jekyll/Just-the-Docs front matter, git, grep
+
 ---
 
-# Migration Strategy Comparison
+## File Structure
 
+- Modify: `storage/ceph-cross-dc-migration/solutions.md`
+  - replace the current OSD-only comparison framing
+  - add the MON-first vs OSD-first section
+  - reframe the OSD rhythm comparison around RBD performance impact and migration danger level
+  - preserve the related-links section and runbook cross-links
+- Verify: `docs/superpowers/specs/2026-05-12-ceph-solutions-comparison-refresh.md`
+
+### Task 1: Rewrite the strategy comparison page
+
+**Files:**
+- Modify: `storage/ceph-cross-dc-migration/solutions.md`
+- Verify: `docs/superpowers/specs/2026-05-12-ceph-solutions-comparison-refresh.md`
+
+- [ ] **Step 1: Verify the current page still uses the old OSD-only structure**
+
+Run:
+
+```bash
+cd /Users/mansionlai/Documents/code/notebook-sync/.worktrees/ceph-solutions-comparison-refresh
+grep -nE '^## 比較的三種執行節奏$|^## 推薦方案：Option 2 \\(Rack-by-Rack\\)$' storage/ceph-cross-dc-migration/solutions.md
+```
+
+Expected: both old section headings are present before rewriting.
+
+- [ ] **Step 2: Replace the intro and main body with the new two-layer comparison**
+
+Rewrite `storage/ceph-cross-dc-migration/solutions.md` so the page follows this structure:
+
+```md
 ## 前言
 
 本文件回答兩個決策問題：
@@ -103,25 +138,35 @@ permalink: /storage/ceph-cross-dc-migration/solutions/
 2. **OSD 採用櫃進櫃出**
 
 如果最優先考量是單次對 user I/O 的干擾最低，可選一進一出；如果最優先考量是命令數量最少，可選全進全出；但對大多數實際 migration 來說，櫃進櫃出通常是最穩妥的折衷。
+```
 
----
+Preserve:
 
-## 相關連結
+- front matter
+- page title
+- related links section
+- the final cross-link to `../detail_runbook/`
 
-- **[← 回到主文件](../)**  
-  返回 Ceph Cross-DC Migration 主題入口，查看架構概述與場景說明
+- [ ] **Step 3: Verify the new decision-oriented structure**
 
-- **[→ 執行步驟詳細手冊](../detail_runbook/)**  
-  前往 Detail Runbook，取得分階段執行步驟、前置驗證與 rollback 規則
+Run:
 
----
+```bash
+cd /Users/mansionlai/Documents/code/notebook-sync/.worktrees/ceph-solutions-comparison-refresh
+grep -nE '^## 1\\. 先轉移 MON node，還是先轉移 OSD node？$|^## 2\\. OSD 轉移節奏比較$|^## 3\\. 最終建議$' storage/ceph-cross-dc-migration/solutions.md
+grep -nE 'RBD pool performance impact|Migration danger level|先轉 OSD，再轉 MON|OSD 採用櫃進櫃出|Detail Runbook' storage/ceph-cross-dc-migration/solutions.md
+```
 
-## 後續行動
+Expected:
 
-選定 Option 2 (Rack-by-Rack) 後，請參考 [Detail Runbook](../detail_runbook/) 取得：
+- the three new top-level headings are present
+- the key comparison criteria and final recommendations are present
+- the runbook cross-link is still present
 
-- 分階段執行步驟（Phase 0-7）
-- 每個階段的 gate criteria 與驗證檢查點
-- CRUSH map 更新範例指令
-- Cutover 前後的檢查清單
-- Rollback 策略與條件
+- [ ] **Step 4: Commit the refresh**
+
+```bash
+cd /Users/mansionlai/Documents/code/notebook-sync/.worktrees/ceph-solutions-comparison-refresh
+git add storage/ceph-cross-dc-migration/solutions.md docs/superpowers/plans/2026-05-12-ceph-solutions-comparison-refresh.md
+git commit -m "docs: refresh ceph migration comparison page"
+```
