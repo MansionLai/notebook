@@ -395,7 +395,7 @@ done
 1. **Add dc2 MONs (one by one)**
    ```bash
    # 加入第一個 dc2 MON（暫時變為 4 個 MON）
-    # MON 節點不會參與 CRUSH 的 placement；位置 metadata 僅供拓樸識別。
+   # MON 節點不會參與 CRUSH 的 placement；位置 metadata 僅供拓樸識別。
    ceph orch daemon add mon mon-dc2-01 --location datacenter=dc2 room=r2 rack=m4
    
    # 等待 MON 加入 quorum
