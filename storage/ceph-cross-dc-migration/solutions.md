@@ -30,7 +30,7 @@ permalink: /storage/ceph-cross-dc-migration/solutions/
 
 | 比較面向 | 評估 | 說明 |
 |---------|------|------|
-| **RBD pool performance impact** | 低 | 此階段對資料面直接影響較小，但後續 OSD rebalance 壓力仍然存在 |
+| **RBD pool performance impact（第一階段）** | 低 | 在第一階段（MON relocation）對資料面直接影響較小；但後續仍會發生 OSD rebalance，整體仍會對資料面造成影響。 |
 | **Migration danger level** | 高 | MON 變動直接影響 quorum 與 cluster control plane，作業失誤風險較高 |
 
 ### Option B: 先轉移 OSD node
@@ -41,7 +41,7 @@ permalink: /storage/ceph-cross-dc-migration/solutions/
 
 | 比較面向 | 評估 | 說明 |
 |---------|------|------|
-| **RBD pool performance impact** | 中 | 主要效能影響集中在 OSD rebalance / recovery，但 control plane 保持穩定 |
+| **RBD pool performance impact（第一階段）** | 中 | 在第一階段（OSD rebalance 開始時）即為中等影響，因為 rebalance 立刻開始落地；MON quorum 在此階段保持穩定。 |
 | **Migration danger level** | 中低 | 在最吃重的資料搬遷階段避免同時變動 quorum，整體較安全 |
 
 ### 本段建議
@@ -89,7 +89,7 @@ permalink: /storage/ceph-cross-dc-migration/solutions/
 | **RBD pool performance impact** | 最高 | recovery 壓力最大，user 連線 RBD pool 的 latency 波動最明顯 |
 | **Migration danger level** | 最高 | 單次變動範圍最大，故障定位與中途調整都最困難 |
 | **Operator effort** | 最低 | 命令次數最少 |
-| **Overall migration duration** | 最短或中等 | 若過程順利可能較快，但單次 recovery 視窗很長 |
+| **Overall migration duration** | 理論上較短（依批次數） | 若以批次計算可能較少，但因每次 recovery 視窗很長，實際總耗時未必短於櫃進櫃出 |
 
 ### 本段建議
 
@@ -103,7 +103,7 @@ permalink: /storage/ceph-cross-dc-migration/solutions/
 1. **先轉 OSD，再轉 MON**
 2. **OSD 採用櫃進櫃出**
 
-如果最優先考量是單次對 user I/O 的干擾最低，可選一進一出；如果最優先考量是命令數量最少，可選全進全出；但對大多數實際 migration 來說，櫃進櫃出通常是最穩妥的折衷。
+如果最優先考量是單次對 user I/O 的干擾最低，可選一進一出；但對大多數實際 migration 來說，櫃進櫃出通常是最穩妥的折衷。
 
 ---
 
