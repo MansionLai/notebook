@@ -397,20 +397,21 @@ done
 1. **Add dc2 MONs (one by one)**
    ```bash
    # 加入第一個 dc2 MON（暫時變為 4 個 MON）
-   ceph orch daemon add mon mon-dc2-01 --location rack=m4
+    # MON nodes do not participate in CRUSH placement; location metadata is for topology identification only.
+   ceph orch daemon add mon mon-dc2-01 --location datacenter=dc2 room=r2 rack=m4
    
    # 等待 MON 加入 quorum
    ceph mon stat
    # 確認 4 個 MON 都在 quorum
    
    # 加入第二個 dc2 MON（暫時變為 5 個 MON）
-   ceph orch daemon add mon mon-dc2-02 --location rack=m5
+   ceph orch daemon add mon mon-dc2-02 --location datacenter=dc2 room=r2 rack=m5
    
    ceph mon stat
    # 確認 5 個 MON 都在 quorum
    
    # 加入第三個 dc2 MON（暫時變為 6 個 MON）
-   ceph orch daemon add mon mon-dc2-03 --location rack=m6
+   ceph orch daemon add mon mon-dc2-03 --location datacenter=dc2 room=r2 rack=m6
    
    ceph mon stat
    # 確認 6 個 MON 都在 quorum
