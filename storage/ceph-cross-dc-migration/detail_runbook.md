@@ -153,8 +153,6 @@ permalink: /storage/ceph-cross-dc-migration/detail_runbook/
    ceph orch host ls | grep o4
    ```
 
-   補一句說明：
-
     - dc2 範例使用 `datacenter=dc2 room=r2`（上方加入指令已示範）
     - dc1 節點的對應位置可視為 `datacenter=dc1 room=r1`（作為拓樸對照參考）
     - `datacenter` 與 `room` 用來補充拓樸資訊
@@ -397,7 +395,7 @@ done
 1. **Add dc2 MONs (one by one)**
    ```bash
    # 加入第一個 dc2 MON（暫時變為 4 個 MON）
-    # MON nodes do not participate in CRUSH placement; location metadata is for topology identification only.
+    # MON 節點不會參與 CRUSH 的 placement；位置 metadata 僅供拓樸識別。
    ceph orch daemon add mon mon-dc2-01 --location datacenter=dc2 room=r2 rack=m4
    
    # 等待 MON 加入 quorum
