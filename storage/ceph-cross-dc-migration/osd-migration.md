@@ -30,7 +30,7 @@ permalink: /storage/ceph-cross-dc-migration/osd-migration/
 
 3. **CRUSH 設計考量**
    - **不分離 datacenter bucket**：CRUSH 模型保持單一邏輯 dc
-   - **Failure domain 維持 rack 級別**n   
+   - **Failure domain 維持 rack 級別**   
    - Rack 命名不重複（dc1: o1/o2/o3, dc2: o4/o5/o6），避免混淆新舊節點
 
 4. **最小化業務影響**
@@ -113,7 +113,7 @@ permalink: /storage/ceph-cross-dc-migration/osd-migration/
    # 確認 3 個 MON 都在 quorum 中
    ```
 
-4. **Record Baseline Metrics**n
+4. **Record Baseline Metrics**
    - 記錄當前 cluster 的 IOPS、throughput、latency 基線
    - 記錄 VM 應用層的效能基線（若有監控）
 
@@ -220,10 +220,10 @@ ceph tell osd.* config set osd_recovery_sleep_hdd 0.1
 
 #### 執行步驟
 
-1. **Mark OSDs Out**n
+1. **Mark OSDs Out**
    ```bash
    # 取得 rack o1 的所有 OSD IDs
-   ceph osd tree | grep 'rack o1' -A 50 | grep osd | awk '{print $1}' > /tmp/o1-osds.txt
+   ceph osd tree | awk '/rack o1/{p=1; next} p && /^[[:space:]]*[0-9]+[[:space:]]+osd\./{print $1} p && /^[^[:space:]]/{p=0}' > /tmp/o1-osds.txt
    
    # 逐一標記 out（觸發 data migration）
    for osd_id in $(cat /tmp/o1-osds.txt); do
@@ -355,7 +355,7 @@ ceph osd df tree | awk '/osd\./ {print $7}' | \
 ```bash
 # 假設在 Phase 1，剛加入 rack o4
 # 取得 rack o4 的所有 OSD IDs
-ceph osd tree | grep 'rack o4' -A 50 | grep osd | awk '{print $1}' > /tmp/o4-osds.txt
+ceph osd tree | awk '/rack o4/{p=1; next} p && /^[[:space:]]*[0-9]+[[:space:]]+osd\./{print $1} p && /^[^[:space:]]/{p=0}' > /tmp/o4-osds.txt
 
 # 標記 out
 for osd_id in $(cat /tmp/o4-osds.txt); do
