@@ -148,13 +148,17 @@ permalink: /storage/ceph-cross-dc-migration/detail_runbook/
    for node in osd-dc2-o4-{01..05}; do
      ceph orch host add $node --labels osd --location datacenter=dc2 room=r2 rack=o4
    done
+
+# 驗證節點已加入
+ceph orch host ls | grep o4
    ```
 
    補一句說明：
 
-   - dc1 既有節點對應 `datacenter=dc1 room=r1`
-   - `datacenter` 與 `room` 用來補充拓樸資訊
-   - failure domain 仍然是 `rack`
+- dc2 範例使用 `datacenter=dc2 room=r2`（上方加入指令已示範）
+- dc1 既有節點對應 `datacenter=dc1 room=r1`
+- `datacenter` 與 `room` 用來補充拓樸資訊
+- failure domain 仍然是 `rack`（CRUSH failure domain 保持在 rack，無需變更設計）
 
 2. **Deploy OSDs**
    ```bash
@@ -283,7 +287,7 @@ ceph tell osd.* config set osd_recovery_sleep_hdd 0.1
 ```bash
 # Add nodes
 for node in osd-dc2-o5-{01..05}; do
-  ceph orch host add $node --labels osd --location rack=o5
+  ceph orch host add $node --labels osd --location datacenter=dc2 room=r2 rack=o5
 done
 
 # Deploy OSDs
@@ -336,7 +340,7 @@ done
 ```bash
 # Add nodes
 for node in osd-dc2-o6-{01..05}; do
-  ceph orch host add $node --labels osd --location rack=o6
+  ceph orch host add $node --labels osd --location datacenter=dc2 room=r2 rack=o6
 done
 
 # Deploy OSDs
