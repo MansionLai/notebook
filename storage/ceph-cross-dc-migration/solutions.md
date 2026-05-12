@@ -17,6 +17,7 @@ permalink: /storage/ceph-cross-dc-migration/solutions/
 
 - user 連線 `RBD pool` 的 performance 影響
 - 作業過程中的危險程度
+- **Operator effort** 與 **Overall migration duration** 為次要參考準則，用於比較 OSD 轉移節奏的可操作性與總時程
 
 ---
 
@@ -46,7 +47,7 @@ permalink: /storage/ceph-cross-dc-migration/solutions/
 ### 本段建議
 
 - **建議先轉移 OSD，再轉移 MON**
-- 原因是 user 看到的主要效能波動本來就來自 OSD rebalance，因此更應避免在同一時間引入 MON quorum 風險
+- 原因：先執行 OSD 資料搬遷，並在整體資料移動完成且 cluster state 經驗證穩定後，再調整 MON placement 或 quorum。此序列可在搬遷期間維持已驗證的 MON quorum，降低同時變動 control plane 與資料平面的風險。
 
 ---
 
@@ -93,7 +94,7 @@ permalink: /storage/ceph-cross-dc-migration/solutions/
 ### 本段建議
 
 - **建議採用櫃進櫃出（rack-by-rack）**
-- 它比全進全出安全，也比一進一出更實際，是 service impact 與操作可行性的最佳平衡
+- 理由：全進全出主要被排除，因其 **Migration danger level = 最高**（單次變動範圍大，故障定位與中途調整最困難）。一進一出雖然對 user I/O 影響最低，但因為 **Operator effort 高且 Overall migration duration 最長**，在實務上管理成本與總時程代價過高，因此不是首選；櫃進櫃出在安全性與可行性之間提供最佳折衷。
 
 ---
 
