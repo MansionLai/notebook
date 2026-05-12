@@ -28,7 +28,9 @@ permalink: /storage/ceph-cross-dc-migration/detail_runbook/
 
 3. **Client Endpoint Coordination**
    - Rook-Ceph external mode 透過 `rook-ceph-mon-endpoints` ConfigMap 與 Secret 傳遞 MON 地址
+   - `rook-ceph-config` / `mon_host` 必須反映新 MON endpoint 集合
    - 更新策略：**先加後減**（同時包含 dc1 + dc2 MON endpoints）
+   - 兩者（`rook-ceph-mon-endpoints` 與 `rook-ceph-config` / `mon_host`）都遵循 add-before-remove 原則
    - ceph-csi（`csi-rbdplugin`）預設會自動偵測 MON endpoint 變更
    - 若自動更新失效，則採用**分批重啟** CSI pods 而非全面重啟
 
@@ -69,7 +71,8 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 
 2. **`rook-ceph-config` ConfigMap**
    - 包含 `ceph.conf` 的 client-side 配置
-   - 其中 `mon_host` 欄位應與 `rook-ceph-mon-endpoints` 一致
+   - 其中 `mon_host` 欄位必須反映新 MON endpoint 集合
+   - **更新策略**：採用 **add-before-remove**（同時包含 dc1 + dc2 MON endpoints）
    - **驗證重點**：確認 `mon_host` 包含新 MON endpoint 集合
 
 ### ceph-csi Behavior
@@ -382,7 +385,7 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 
 ### Step 6: Remove dc1 MONs from Cluster
 
-**目標**：確認新 endpoint 集合穩定後，逐一移除 dc1 MON 節點
+**目標**：確認新 endpoint 集合穩定後，逐一移除 dc1 MON 節點，並清理 Rook external mode ConfigMap
 
 #### 執行步驟
 
@@ -429,22 +432,7 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
    done
    ```
 
-#### Final Validation
-
-- ✅ 僅剩 3 個 dc2 MON 在 quorum 中
-- ✅ Cluster health = `HEALTH_OK`
-- ✅ 所有 dc1 MON 節點已從 orchestrator 移除
-- ✅ ceph-csi 與 KubeVirt VM I/O 持續正常
-
----
-
-### Step 7: Update rook-ceph-mon-endpoints (Remove dc1 Endpoints)
-
-**目標**：清理 Rook external mode ConfigMap，移除 dc1 MON endpoints
-
-#### 執行步驟
-
-1. **Update rook-ceph-mon-endpoints ConfigMap**
+5. **Update rook-ceph-mon-endpoints ConfigMap (Remove dc1 Endpoints)**
    ```bash
    # 編輯 ConfigMap，僅保留 dc2 MON endpoints
    kubectl -n rook-ceph edit configmap rook-ceph-mon-endpoints
@@ -453,7 +441,7 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
    # data: mon4=10.2.1.1:6789,mon5=10.2.1.2:6789,mon6=10.2.1.3:6789
    ```
 
-2. **Update rook-ceph-config mon_host**
+6. **Update rook-ceph-config mon_host**
    ```bash
    kubectl -n rook-ceph edit configmap rook-ceph-config
    
@@ -461,7 +449,7 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
    # mon_host = 10.2.1.1:6789,10.2.1.2:6789,10.2.1.3:6789
    ```
 
-3. **Verify ConfigMap Updates**
+7. **Verify ConfigMap Updates**
    ```bash
    kubectl -n rook-ceph get configmap rook-ceph-mon-endpoints -o jsonpath='{.data.data}'
    # 確認僅包含 3 個 dc2 MON endpoints
@@ -470,11 +458,15 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
    # 確認 mon_host 僅包含 dc2 MON 地址
    ```
 
-4. **Optional: Restart csi-rbdplugin Again (If Needed)**
-   ```bash
-   # 若需確保 csi-rbdplugin 完全切換至 dc2 MON endpoints，可再次分批重啟
-   # 參照 Step 5 的流程
-   ```
+#### Final Validation
+
+- ✅ 僅剩 3 個 dc2 MON 在 quorum 中
+- ✅ Cluster health = `HEALTH_OK`
+- ✅ 所有 dc1 MON 節點已從 orchestrator 移除
+- ✅ `rook-ceph-mon-endpoints` 與 `rook-ceph-config` / `mon_host` 已清理 dc1 endpoints
+- ✅ ceph-csi 與 KubeVirt VM I/O 持續正常
+
+> **Note**: 若需確保 csi-rbdplugin 完全切換至 dc2 MON endpoints，可再次分批重啟（參照 Step 5 的流程）
 
 ---
 
@@ -617,8 +609,7 @@ kubectl -n rook-ceph apply -f /backup/rook-ceph-config.$(date +%Y%m%d).yaml
 |------|-------------|---------|
 | Step 1（加入 dc2 MON） | ⭐ 簡單 | 直接移除 dc2 MON，恢復原狀 |
 | Step 2-5（更新 client endpoint） | ⭐⭐ 中等 | 恢復 Rook ConfigMap，重啟 csi-rbdplugin |
-| Step 6（移除 dc1 MON） | ⭐⭐⭐ 困難 | 若需 rollback，需重新加入 dc1 MON（若硬體仍可用） |
-| Step 7（清理 dc1 endpoint） | ⭐⭐ 中等 | 重新加入 dc1 MON endpoints 至 Rook ConfigMap |
+| Step 6（移除 dc1 MON + 清理 endpoint） | ⭐⭐⭐ 困難 | 若需 rollback，需重新加入 dc1 MON（若硬體仍可用）與 endpoint 配置 |
 
 ---
 
