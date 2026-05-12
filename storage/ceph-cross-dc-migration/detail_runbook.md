@@ -149,8 +149,8 @@ permalink: /storage/ceph-cross-dc-migration/detail_runbook/
      ceph orch host add $node --labels osd --location datacenter=dc2 room=r2 rack=o4
    done
 
-    # 驗證節點已加入
-    ceph orch host ls | grep o4
+   # 驗證節點已加入
+   ceph orch host ls | grep o4
    ```
 
    補一句說明：
