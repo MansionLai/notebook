@@ -64,7 +64,7 @@ permalink: /storage/3node-ceph/phase-0/
 
 ### 步驟 2：準備 Ceph Phase 0 Bicep 檔案
 
-> **請注意：本文件假設你已經在本地專案目錄（例如 `storage/3node-ceph/iac/` 或你自訂的 IaC 目錄）準備好 Ceph Phase 0 所需的 Bicep 檔案（如 `main.bicep`、`main.bicepparam`）。請依照你的需求維護這些檔案，確保資源定義完整。**
+> 本 repo 已提供 Ceph Phase 0 所需的 IaC 檔案，請直接使用 `storage/3node-ceph/iac/` 內的 `README.md`、`main.bicep` 與 `main.bicepparam`。部署前請依實際環境覆寫 `allowedSourceCidr`、`adminPublicKey` 與必要的 region / naming 參數。
 
 ### 步驟 3：預覽部署變更（what-if）
 
@@ -74,8 +74,8 @@ permalink: /storage/3node-ceph/phase-0/
 az deployment group what-if \
   --resource-group mansion_ceph_resource \
   --name mansion-ceph-phase0-preview \
-  --template-file main.bicep \
-  --parameters main.bicepparam
+  --template-file storage/3node-ceph/iac/main.bicep \
+  --parameters storage/3node-ceph/iac/main.bicepparam
 ```
 
 ### 步驟 4：正式部署（create）
@@ -84,8 +84,8 @@ az deployment group what-if \
 az deployment group create \
   --resource-group mansion_ceph_resource \
   --name mansion-ceph-phase0 \
-  --template-file main.bicep \
-  --parameters main.bicepparam
+  --template-file storage/3node-ceph/iac/main.bicep \
+  --parameters storage/3node-ceph/iac/main.bicepparam
 ```
 
 ### 步驟 5：查詢輸出與資源狀態
