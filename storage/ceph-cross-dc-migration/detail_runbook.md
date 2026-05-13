@@ -184,9 +184,9 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 #### 執行步驟
 
 1. **Add First dc2 MON (mon-dc2-01)**
-   ```bash
-   # 使用 cephadm 加入第一個 dc2 MON
-   ceph orch daemon add mon mon-dc2-01 --location datacenter=dc2 room=r2 rack=m4
+    ```bash
+    # 前提：mon-dc2-01 已在 host 上具備正確 location metadata
+    ceph orch daemon add mon mon-dc2-01
    
    # 等待 MON daemon 啟動（約 30-60 秒）
    sleep 60
@@ -200,8 +200,9 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
    ```
 
 2. **Add Second dc2 MON (mon-dc2-02)**
-   ```bash
-   ceph orch daemon add mon mon-dc2-02 --location datacenter=dc2 room=r2 rack=m5
+    ```bash
+    # 前提：mon-dc2-02 已在 host 上具備正確 location metadata
+    ceph orch daemon add mon mon-dc2-02
    
    sleep 60
    
@@ -210,8 +211,9 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
    ```
 
 3. **Add Third dc2 MON (mon-dc2-03)**
-   ```bash
-   ceph orch daemon add mon mon-dc2-03 --location datacenter=dc2 room=r2 rack=m6
+    ```bash
+    # 前提：mon-dc2-03 已在 host 上具備正確 location metadata
+    ceph orch daemon add mon mon-dc2-03
    
    sleep 60
    
@@ -230,6 +232,8 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 ### Step 2: Update rook-ceph-mon-endpoints (Add-Before-Remove)
 
 **目標**：更新 Rook external mode ConfigMap，同時包含 dc1 + dc2 MON endpoints
+
+> **Reconciliation risk note**: 在 Rook external mode 中，`rook-ceph-mon-endpoints` 與後續的 `rook-ceph-config` 可能會被 external-cluster import 的上游狀態重新調諧。若 `kubectl edit` 後變更很快被覆寫，請先確認 edits 是否能持久保留；若無法保留，應先更新 upstream 的 external-cluster import 來源，再繼續後續步驟。
 
 #### 執行步驟
 
@@ -406,24 +410,30 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
    ```
 
 2. **Remove Second dc1 MON (mon-dc1-02)**
-   ```bash
-   ceph orch daemon rm mon.mon-dc1-02 --force
+    ```bash
+    ceph orch daemon rm mon.mon-dc1-02 --force
    
-   sleep 60
-   
-   ceph mon stat
-   # 預期：quorum: 2,3,4,5 (4 MONs)
-   ```
+    sleep 60
+    
+    ceph mon stat
+    # 預期：quorum: 2,3,4,5 (4 MONs)
+
+    # 確認 cluster health 正常
+    ceph -s
+    ```
 
 3. **Remove Third dc1 MON (mon-dc1-03)**
-   ```bash
-   ceph orch daemon rm mon.mon-dc1-03 --force
+    ```bash
+    ceph orch daemon rm mon.mon-dc1-03 --force
    
-   sleep 60
-   
-   ceph mon stat
-   # 預期：quorum: 3,4,5 (3 MONs, 全為 dc2)
-   ```
+    sleep 60
+    
+    ceph mon stat
+    # 預期：quorum: 3,4,5 (3 MONs, 全為 dc2)
+
+    # 確認 cluster health 正常
+    ceph -s
+    ```
 
 4. **Remove dc1 MON Hosts from Cluster**
    ```bash
@@ -587,9 +597,10 @@ kubectl -n rook-ceph apply -f /backup/rook-ceph-config.$(date +%Y%m%d).yaml
 - 若 dc1 MON 節點仍可存取，可嘗試重新加入：
   ```bash
   # 重新加入 dc1 MON 節點
-  ceph orch daemon add mon mon-dc1-01 --location datacenter=dc1 room=r1 rack=m1
-  ceph orch daemon add mon mon-dc1-02 --location datacenter=dc1 room=r1 rack=m2
-  ceph orch daemon add mon mon-dc1-03 --location datacenter=dc1 room=r1 rack=m3
+  # 前提：對應 host 已先具備正確 location metadata
+  ceph orch daemon add mon mon-dc1-01
+  ceph orch daemon add mon mon-dc1-02
+  ceph orch daemon add mon mon-dc1-03
   
   # 驗證 quorum
   ceph mon stat
