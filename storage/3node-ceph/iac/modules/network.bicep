@@ -22,6 +22,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-11-01' = {
     addressSpace: {
       addressPrefixes: [
         virtualNetworkAddressPrefix
+        clusterSubnetPrefix
       ]
     }
     subnets: [

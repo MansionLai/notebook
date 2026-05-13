@@ -6,8 +6,10 @@ param location string
 param networkSecurityGroupName string
 @description('External source CIDR allowed in.')
 param allowedSourceCidr string
-@description('Internal source CIDR allowed in.')
-param internalSourceCidr string
+@description('Public subnet prefix for internal traffic rules.')
+param publicSubnetPrefix string
+@description('Cluster subnet prefix for internal traffic rules.')
+param clusterSubnetPrefix string
 
 resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
   name: networkSecurityGroupName
@@ -28,7 +30,7 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2023-11-0
         }
       }
       {
-        name: 'AllowInternalTraffic'
+        name: 'AllowPublicSubnetTraffic'
         properties: {
           priority: 1000
           access: 'Allow'
@@ -36,8 +38,21 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2023-11-0
           protocol: '*'
           sourcePortRange: '*'
           destinationPortRange: '*'
-          sourceAddressPrefix: internalSourceCidr
-          destinationAddressPrefix: internalSourceCidr
+          sourceAddressPrefix: publicSubnetPrefix
+          destinationAddressPrefix: publicSubnetPrefix
+        }
+      }
+      {
+        name: 'AllowClusterSubnetTraffic'
+        properties: {
+          priority: 1001
+          access: 'Allow'
+          direction: 'Inbound'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: clusterSubnetPrefix
+          destinationAddressPrefix: clusterSubnetPrefix
         }
       }
     ]
