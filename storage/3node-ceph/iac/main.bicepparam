@@ -16,6 +16,8 @@ param cephNode01VmSize = 'Standard_D4s_v4'
 param cephNode02VmSize = 'Standard_D4s_v4'
 param cephNode03VmSize = 'Standard_D4s_v4'
 param adminUsername = 'ubuntu'
+// REQUIRED: Operators MUST replace this empty string with a valid SSH public key before deployment.
+// Password authentication is disabled; SSH key authentication is mandatory.
 param adminPublicKey = ''
 param imagePublisher = 'Canonical'
 param imageOffer = '0001-com-ubuntu-server-jammy'

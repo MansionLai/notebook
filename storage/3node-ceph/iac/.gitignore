@@ -1,0 +1,2 @@
+# Ignore generated Bicep JSON artifacts
+*.json
