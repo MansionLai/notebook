@@ -10,13 +10,12 @@ This folder stores the Phase 0 Azure MCP + Bicep definitions for a 3-node Ceph d
 
 Planned file map
 
-- main.bicep — top-level orchestration Bicep that composes the modules and wires outputs/parameters.
-- main.bicepparam — parameter file for `main.bicep` (operator overrides and environment-specific values).
-- modules/
-  - resource-group.bicep — module that creates or configures resource groups and tagging.
-  - network.bicep — module that defines VNet, subnets, and network security (NSGs) required by Ceph.
-  - cluster.bicep — module that provisions the compute/storage resources (VMs, disks) and Ceph-specific resources.
-  - monitoring.bicep — module to configure monitoring/diagnostics required for Phase 0.
+- main.bicep
+- main.bicepparam
+- modules/network.bicep
+- modules/nsg.bicep
+- modules/nic.bicep
+- modules/vm.bicep
 
 Operator-overridden values
 
