@@ -28,7 +28,6 @@ resource publicIp 'Microsoft.Network/publicIPAddresses@2023-11-01' = {
   properties: {
     publicIPAllocationMethod: 'Static'
     publicIPAddressVersion: 'IPv4'
-    deleteOption: 'Delete'
   }
 }
 

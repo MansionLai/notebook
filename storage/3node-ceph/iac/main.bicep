@@ -21,6 +21,8 @@ param allowedSourceCidr string
 @description('Administrator username for the Linux VMs.')
 param adminUsername string = 'ubuntu'
 @description('SSH public key content for the Linux VM admin user.')
+@secure()
+@minLength(1)
 param adminPublicKey string
 @description('Ubuntu image publisher.')
 param imagePublisher string = 'Canonical'
