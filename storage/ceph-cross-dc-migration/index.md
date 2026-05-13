@@ -118,15 +118,17 @@ graph LR
   - 設計取捨分析
   - 風險評估與緩解措施
 
-### 📋 Detail Runbook
+### 📋 Runbooks
 
-遷移執行的詳細步驟指南：
+- **[MON Migration Runbook](detail_runbook/)**
+  - quorum 重新定位 / monitor 拓樸變動
+  - Rook external 模式協調
+  - ceph-csi / KubeVirt 驗證步驟
 
-- **[Detail Runbook](detail_runbook/)**
-  - 完整分階段執行步驟
-  - 前置驗證與 gate criteria
-  - Cutover 檢查點與 rollback 規則
-  - 指令參考手冊
+- **[OSD Migration Runbook](osd-migration/)**
+  - 以機櫃 (rack-by-rack) 為單位遷移
+  - 觀察 recovery/backfill 進度並設定觀察門檻
+  - RBD workload 影響評估與 gate criteria
 
 ---
 
