@@ -432,4 +432,4 @@ ceph tell osd.* config set osd_recovery_sleep_hdd 0
 
 ---
 
-<!-- NOTE: Content copied from storage/ceph-cross-dc-migration/detail_runbook.md. For now duplication remains in detail_runbook.md; future task will remove or refactor duplicated sections. -->
+

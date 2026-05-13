@@ -120,15 +120,17 @@ graph LR
 
 ### 📋 Runbooks
 
-- **[MON Migration Runbook](detail_runbook/)**
-  - quorum 重新定位 / monitor 拓樸變動
-  - Rook external 模式協調
-  - ceph-csi / KubeVirt 驗證步驟
+(建議順序：先 OSD，後 MON)
 
 - **[OSD Migration Runbook](osd-migration/)**
   - 以機櫃 (rack-by-rack) 為單位遷移
   - 觀察 recovery/backfill 進度並設定觀察門檻
   - RBD workload 影響評估與 gate criteria
+
+- **[MON Migration Runbook](detail_runbook/)**
+  - quorum 重新定位 / monitor 拓樸變動
+  - Rook external 模式協調
+  - ceph-csi / KubeVirt 驗證步驟
 
 ---
 
