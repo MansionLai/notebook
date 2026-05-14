@@ -1,3 +1,7 @@
+---
+published: false
+---
+
 # Ceph 3-Node Ansible Automation
 
 This directory contains the Ansible-first workflow for `storage/3node-ceph/phase-1.md` through `phase-4.md`.
