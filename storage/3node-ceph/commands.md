@@ -18,12 +18,17 @@ permalink: /storage/3node-ceph/commands/
 
 ### Bicep 檔案與參數準備
 
-請先準備好 main.bicep 及 main.bicepparam，內容依照 lab 架構設計，資源名稱建議如下：
-- Resource Group: `mansion_ceph_resource`
-- VNet: `mansion_ceph_vnet`
-- NSG: `mansion_ceph_nsg`
-- VM: `mansion_ceph_node_01`、`mansion_ceph_node_02`、`mansion_ceph_node_03`
-- NIC: `mansion_ceph_node_01_nic_pub`、`mansion_ceph_node_01_nic_cls` ...
+請直接使用 `storage/3node-ceph/iac/` 內的：
+
+- `main.bicep`
+- `main.bicepparam`
+- `README.md`
+
+部署前請至少覆寫：
+
+- `allowedSourceCidr`
+- `adminPublicKey`
+- `location`（若不是預設 region）
 
 ### What-If 預覽
 
@@ -37,8 +42,8 @@ az group create --name mansion_ceph_resource --location <your-location>
 az deployment group what-if \
   --resource-group mansion_ceph_resource \
   --name mansion-ceph-phase0-preview \
-  --template-file main.bicep \
-  --parameters main.bicepparam
+  --template-file storage/3node-ceph/iac/main.bicep \
+  --parameters storage/3node-ceph/iac/main.bicepparam
 ```
 
 ### 套用 Deployment
@@ -47,8 +52,8 @@ az deployment group what-if \
 az deployment group create \
   --resource-group mansion_ceph_resource \
   --name mansion-ceph-phase0 \
-  --template-file main.bicep \
-  --parameters main.bicepparam
+  --template-file storage/3node-ceph/iac/main.bicep \
+  --parameters storage/3node-ceph/iac/main.bicepparam
 ```
 
 ### 查詢 Deployment Outputs
