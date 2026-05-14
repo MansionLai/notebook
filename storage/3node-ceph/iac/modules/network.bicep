@@ -6,6 +6,8 @@ param location string
 param virtualNetworkName string
 @description('Virtual network address range.')
 param virtualNetworkAddressPrefix string
+@description('Cluster address space range for the virtual network.')
+param clusterAddressPrefix string
 @description('Public subnet name.')
 param publicSubnetName string
 @description('Public subnet range.')
@@ -22,7 +24,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-11-01' = {
     addressSpace: {
       addressPrefixes: [
         virtualNetworkAddressPrefix
-        clusterSubnetPrefix
+        clusterAddressPrefix
       ]
     }
     subnets: [

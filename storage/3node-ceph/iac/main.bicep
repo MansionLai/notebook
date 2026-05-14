@@ -6,6 +6,8 @@ param location string = 'japaneast'
 param virtualNetworkName string
 @description('CIDR for the virtual network.')
 param virtualNetworkAddressPrefix string
+@description('CIDR for the cluster address space inside the virtual network.')
+param clusterAddressPrefix string = '172.10.0.0/16'
 @description('Name of the public subnet.')
 param publicSubnetName string
 @description('CIDR for the public subnet.')
@@ -22,7 +24,6 @@ param allowedSourceCidr string
 param adminUsername string = 'ubuntu'
 @description('SSH public key content for the Linux VM admin user.')
 @secure()
-@minLength(1)
 param adminPublicKey string
 @description('Ubuntu image publisher.')
 param imagePublisher string = 'Canonical'
@@ -86,6 +87,7 @@ module network './modules/network.bicep' = {
     location: location
     virtualNetworkName: virtualNetworkName
     virtualNetworkAddressPrefix: virtualNetworkAddressPrefix
+    clusterAddressPrefix: clusterAddressPrefix
     publicSubnetName: publicSubnetName
     publicSubnetPrefix: publicSubnetPrefix
     clusterSubnetName: clusterSubnetName
