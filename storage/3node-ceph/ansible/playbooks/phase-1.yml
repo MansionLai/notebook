@@ -1,0 +1,6 @@
+- name: Phase 1 | OS preparation
+  hosts: ceph_nodes
+  gather_facts: true
+  become: true
+  roles:
+    - phase1_os_prep

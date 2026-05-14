@@ -1,0 +1,55 @@
+- name: Read existing pool list
+  ansible.builtin.command: ceph osd pool ls
+  register: ceph_pool_ls
+  changed_when: false
+
+- name: Create RBD pool when missing
+  ansible.builtin.command: >
+    ceph osd pool create
+    {{ ceph_rbd_pool_name }}
+    {{ ceph_rbd_pool_pg_num }}
+    {{ ceph_rbd_pool_pgp_num }}
+  when: ceph_rbd_pool_name not in ceph_pool_ls.stdout_lines
+
+- name: Set pool size
+  ansible.builtin.command: ceph osd pool set {{ ceph_rbd_pool_name }} size {{ ceph_rbd_pool_size }}
+
+- name: Set pool min_size
+  ansible.builtin.command: ceph osd pool set {{ ceph_rbd_pool_name }} min_size {{ ceph_rbd_pool_min_size }}
+
+- name: Enable RBD application
+  ansible.builtin.command: ceph osd pool application enable {{ ceph_rbd_pool_name }} rbd
+  register: ceph_pool_app_enable
+  failed_when:
+    - ceph_pool_app_enable.rc != 0
+    - "'already enabled' not in ceph_pool_app_enable.stderr"
+  changed_when: "'already enabled' not in ceph_pool_app_enable.stderr"
+
+- name: Initialize RBD pool
+  ansible.builtin.command: rbd pool init {{ ceph_rbd_pool_name }}
+  register: ceph_rbd_pool_init
+  failed_when:
+    - ceph_rbd_pool_init.rc != 0
+    - "'already initialized' not in ceph_rbd_pool_init.stderr"
+  changed_when: "'already initialized' not in ceph_rbd_pool_init.stderr"
+
+- name: Read existing RBD images
+  ansible.builtin.command: rbd ls {{ ceph_rbd_pool_name }}
+  register: ceph_rbd_ls
+  changed_when: false
+
+- name: Create test RBD image when missing
+  ansible.builtin.command: rbd create --size {{ ceph_test_image_size }} {{ ceph_rbd_pool_name }}/{{ ceph_test_image_name }}
+  when: ceph_test_image_name not in ceph_rbd_ls.stdout_lines
+
+- name: Verify RBD image info
+  ansible.builtin.command: rbd info {{ ceph_rbd_pool_name }}/{{ ceph_test_image_name }}
+  changed_when: false
+
+- name: Verify pool detail
+  ansible.builtin.command: ceph osd pool ls detail
+  changed_when: false
+
+- name: Verify PG health
+  ansible.builtin.command: ceph pg stat
+  changed_when: false

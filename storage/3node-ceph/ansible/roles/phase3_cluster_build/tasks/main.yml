@@ -1,0 +1,106 @@
+- name: Check whether the cluster is already bootstrapped
+  ansible.builtin.stat:
+    path: /etc/ceph/ceph.conf
+  register: ceph_cluster_bootstrapped
+
+- name: Bootstrap Ceph cluster on admin node
+  ansible.builtin.command: >
+    cephadm bootstrap
+    --mon-ip {{ ceph_public_ip }}
+    --cluster-network {{ ceph_cluster_network_cidr }}
+    --initial-dashboard-user {{ ceph_dashboard_user }}
+    --initial-dashboard-password {{ ceph_dashboard_password }}
+    --allow-fqdn-hostname
+    --skip-monitoring-stack
+    --ssh-user {{ ansible_user }}
+    --ssh-private-key /home/{{ ansible_user }}/.ssh/id_rsa
+    --ssh-public-key /home/{{ ansible_user }}/.ssh/id_rsa.pub
+  when: not ceph_cluster_bootstrapped.stat.exists
+
+- name: Read existing orchestrator hosts
+  ansible.builtin.command: ceph orch host ls --format json
+  register: ceph_orch_host_ls
+  changed_when: false
+
+- name: Parse orchestrator host list
+  ansible.builtin.set_fact:
+    ceph_existing_hosts: "{{ (ceph_orch_host_ls.stdout | from_json) | map(attribute='hostname') | list }}"
+
+- name: Build desired OSD target list from inventory
+  ansible.builtin.set_fact:
+    ceph_desired_osd_targets: >-
+      {%- set ns = namespace(targets=[]) -%}
+      {%- for host in groups['ceph_nodes'] -%}
+      {%-   for device in hostvars[host].ceph_osd_devices -%}
+      {%-     set _ = ns.targets.append({'hostname': host, 'path': device}) -%}
+      {%-   endfor -%}
+      {%- endfor -%}
+      {{ ns.targets }}
+
+- name: Ensure Ceph public network is configured
+  ansible.builtin.command: ceph config set mon public_network {{ ceph_public_network_cidr }}
+
+- name: Ensure Ceph cluster network is configured
+  ansible.builtin.command: ceph config set global cluster_network {{ ceph_cluster_network_cidr }}
+
+- name: Add missing Ceph hosts to the orchestrator
+  ansible.builtin.command: ceph orch host add {{ item }} {{ hostvars[item].ceph_public_ip }}
+  loop: "{{ groups['ceph_nodes'] }}"
+  when: item not in ceph_existing_hosts
+
+- name: Apply MON placement
+  ansible.builtin.command: ceph orch apply mon --placement="3 ceph-node-01 ceph-node-02 ceph-node-03"
+
+- name: Apply MGR placement
+  ansible.builtin.command: ceph orch apply mgr --placement="3 ceph-node-01 ceph-node-02 ceph-node-03"
+
+- name: Read available Ceph devices
+  ansible.builtin.command: ceph orch device ls --format json
+  register: ceph_device_ls
+  changed_when: false
+
+- name: Build available OSD keys from ceph orch device ls
+  ansible.builtin.set_fact:
+    ceph_available_osd_keys: >-
+      {%- set ns = namespace(keys=[]) -%}
+      {%- for device in (ceph_device_ls.stdout | from_json) -%}
+      {%-   if device.available | default(false) in [True, 'Yes', 'yes'] -%}
+      {%-     set _ = ns.keys.append(device.hostname ~ ':' ~ device.path) -%}
+      {%-   endif -%}
+      {%- endfor -%}
+      {{ ns.keys }}
+
+- name: Parse candidate OSD devices
+  ansible.builtin.set_fact:
+    ceph_candidate_osd_targets: >-
+      {%- set ns = namespace(targets=[]) -%}
+      {%- for target in ceph_desired_osd_targets -%}
+      {%-   if (target.hostname ~ ':' ~ target.path) in ceph_available_osd_keys -%}
+      {%-     set _ = ns.targets.append(target) -%}
+      {%-   endif -%}
+      {%- endfor -%}
+      {{ ns.targets }}
+
+- name: Add available OSD devices
+  ansible.builtin.command: ceph orch daemon add osd {{ item.hostname }}:{{ item.path }}
+  loop: "{{ ceph_candidate_osd_targets }}"
+  when: ceph_candidate_osd_targets | length > 0
+
+- name: Wait for Ceph cluster to reach 3 MONs and 6 OSDs
+  ansible.builtin.command: ceph -s --format json
+  register: ceph_status_json
+  changed_when: false
+  retries: 30
+  delay: 20
+  until:
+    - (ceph_status_json.stdout | from_json).services.mon.count | int == 3
+    - (ceph_status_json.stdout | from_json).services.osd.num_up_osds | int == 6
+    - (ceph_status_json.stdout | from_json).services.osd.num_in_osds | int == 6
+
+- name: Verify MON quorum
+  ansible.builtin.command: ceph mon stat
+  changed_when: false
+
+- name: Verify OSD tree
+  ansible.builtin.command: ceph osd tree
+  changed_when: false

@@ -1,0 +1,72 @@
+- name: Install baseline OS packages
+  ansible.builtin.apt:
+    name: "{{ ceph_phase1_packages }}"
+    state: present
+    update_cache: true
+
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Render /etc/hosts
+  ansible.builtin.template:
+    src: hosts.j2
+    dest: /etc/hosts
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Ensure chrony is enabled and running
+  ansible.builtin.systemd:
+    name: chrony
+    enabled: true
+    state: started
+
+- name: Check ufw binary
+  ansible.builtin.stat:
+    path: /usr/sbin/ufw
+  register: ufw_binary
+
+- name: Read ufw status
+  ansible.builtin.command: ufw status
+  register: ufw_status
+  changed_when: false
+  failed_when: false
+  when: ufw_binary.stat.exists
+
+- name: Disable ufw for lab workflow
+  ansible.builtin.command: ufw disable
+  when:
+    - ufw_binary.stat.exists
+    - "'Status: active' in ufw_status.stdout"
+
+- name: Assert public network IP is present
+  ansible.builtin.assert:
+    that:
+      - ceph_public_ip in ansible_facts['all_ipv4_addresses']
+    fail_msg: "Expected public IP {{ ceph_public_ip }} was not found on {{ inventory_hostname }}"
+
+- name: Assert cluster network IP is present
+  ansible.builtin.assert:
+    that:
+      - ceph_cluster_ip in ansible_facts['all_ipv4_addresses']
+    fail_msg: "Expected cluster IP {{ ceph_cluster_ip }} was not found on {{ inventory_hostname }}"
+
+- name: Check OSD block devices exist
+  ansible.builtin.command: test -b {{ item }}
+  loop: "{{ ceph_osd_devices }}"
+  changed_when: false
+
+- name: Probe OSD device signatures
+  ansible.builtin.command: blkid {{ item }}
+  loop: "{{ ceph_osd_devices }}"
+  register: ceph_osd_blkid
+  changed_when: false
+  failed_when: false
+
+- name: Assert OSD devices are still empty
+  ansible.builtin.assert:
+    that:
+      - item.stdout == ""
+    fail_msg: "Expected {{ item.item }} to be empty before Ceph OSD provisioning"
+  loop: "{{ ceph_osd_blkid.results }}"

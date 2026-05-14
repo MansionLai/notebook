@@ -15,10 +15,25 @@ permalink: /storage/3node-ceph/buildup/
 | Phase | 連結 | 說明 |
 |------|------|------|
 | Phase 0 | [Azure 資源建立](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-0/) | Azure MCP + Bicep 建立 RG、VNet、NSG、雙 NIC、三磁碟 |
-| Phase 1 | [OS 準備](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-1/) | SSH、hostname、/etc/hosts、NIC 與磁碟驗證 |
-| Phase 2 | [Ceph 安裝](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-2/) | 安裝 Ceph v19.2.2 並驗證版本 |
-| Phase 3 | [Cluster 建立](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-3/) | bootstrap、加入節點、MON/MGR/OSD 部署 |
-| Phase 4 | [RBD Pool 建立](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-4/) | 建立 rbdpool、設定參數與驗證 |
+| Phase 1 | [OS 準備](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-1/) | 從 Mac mini 執行 Ansible 進行 OS baseline、hostname、hosts、NIC 與磁碟驗證 |
+| Phase 2 | [Ceph 安裝](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-2/) | 從 Mac mini 執行 Ansible 安裝 Docker、cephadm、ceph-common、SSH 與 sysctl |
+| Phase 3 | [Cluster 建立](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-3/) | 從 Mac mini 執行 Ansible 完成 bootstrap、host add、MON/MGR/OSD 建立 |
+| Phase 4 | [RBD Pool 建立](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-4/) | 從 Mac mini 執行 Ansible 建立 rbdpool 與 test image |
+
+## Ansible Entry Point
+
+所有 Phase 1-4 的主執行路徑都改由：
+
+```text
+storage/3node-ceph/ansible/
+```
+
+在 Mac mini 上執行，例如：
+
+```bash
+cd storage/3node-ceph/ansible
+ansible-playbook playbooks/site.yml
+```
 
 ## Reference Docs
 

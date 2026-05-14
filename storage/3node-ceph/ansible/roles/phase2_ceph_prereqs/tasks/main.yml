@@ -1,0 +1,105 @@
+- name: Install Ceph prerequisite packages
+  ansible.builtin.apt:
+    name: "{{ ceph_phase2_packages }}"
+    state: present
+    update_cache: true
+
+- name: Ensure docker is enabled and running
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+  when: ceph_container_runtime == 'docker'
+
+- name: Download cephadm
+  ansible.builtin.get_url:
+    url: "{{ ceph_cephadm_url }}"
+    dest: /usr/local/bin/cephadm
+    mode: "0755"
+
+- name: Check ceph CLI presence
+  ansible.builtin.stat:
+    path: /usr/bin/ceph
+  register: ceph_cli_binary
+  when: inventory_hostname == groups['ceph_admin'][0]
+
+- name: Add Ceph repository on admin node
+  ansible.builtin.command: /usr/local/bin/cephadm add-repo --release {{ ceph_release }}
+  when:
+    - inventory_hostname == groups['ceph_admin'][0]
+    - not ceph_cli_binary.stat.exists
+
+- name: Install ceph-common on admin node
+  ansible.builtin.command: /usr/local/bin/cephadm install ceph-common
+  when:
+    - inventory_hostname == groups['ceph_admin'][0]
+    - not ceph_cli_binary.stat.exists
+
+- name: Disable swap immediately
+  ansible.builtin.command: swapoff -a
+  when: ansible_facts['swaptotal_mb'] | int > 0
+
+- name: Comment swap entries in /etc/fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^([^#].*\sswap\s.*)$'
+    line: '# \1'
+    backrefs: true
+
+- name: Write Ceph sysctl tuning
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-ceph-lab.conf
+    mode: "0644"
+    content: |
+      {% for key, value in ceph_sysctl_settings.items() %}
+      {{ key }} = {{ value }}
+      {% endfor %}
+  register: ceph_sysctl_file
+
+- name: Reload sysctl settings
+  ansible.builtin.command: sysctl --system
+  when: ceph_sysctl_file.changed
+
+- name: Ensure ubuntu SSH directory exists on admin node
+  ansible.builtin.file:
+    path: /home/{{ ansible_user }}/.ssh
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0700"
+  when: inventory_hostname == groups['ceph_admin'][0]
+
+- name: Generate cephadm SSH keypair on admin node
+  ansible.builtin.command: ssh-keygen -t rsa -b 4096 -N "" -f /home/{{ ansible_user }}/.ssh/id_rsa
+  args:
+    creates: /home/{{ ansible_user }}/.ssh/id_rsa
+  become_user: "{{ ansible_user }}"
+  when: inventory_hostname == groups['ceph_admin'][0]
+
+- name: Read admin public key
+  ansible.builtin.slurp:
+    src: /home/{{ ansible_user }}/.ssh/id_rsa.pub
+  register: ceph_admin_pubkey
+  run_once: true
+  delegate_to: "{{ groups['ceph_admin'][0] }}"
+
+- name: Authorize admin key on all Ceph nodes
+  ansible.posix.authorized_key:
+    user: "{{ ansible_user }}"
+    state: present
+    key: "{{ ceph_admin_pubkey.content | b64decode }}"
+
+- name: Write cephadm SSH client config on admin node
+  ansible.builtin.template:
+    src: cephadm-ssh-config.j2
+    dest: /home/{{ ansible_user }}/.ssh/config
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0600"
+  when: inventory_hostname == groups['ceph_admin'][0]
+
+- name: Verify passwordless SSH from admin node
+  ansible.builtin.command: ssh -i /home/{{ ansible_user }}/.ssh/id_rsa -l {{ ansible_user }} -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {{ item }} hostname
+  loop: "{{ groups['ceph_nodes'] }}"
+  changed_when: false
+  when: inventory_hostname == groups['ceph_admin'][0]

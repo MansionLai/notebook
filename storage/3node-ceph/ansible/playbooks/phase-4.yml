@@ -1,0 +1,6 @@
+- name: Phase 4 | RBD pool setup
+  hosts: ceph_admin
+  gather_facts: true
+  become: true
+  roles:
+    - phase4_rbd_pool
