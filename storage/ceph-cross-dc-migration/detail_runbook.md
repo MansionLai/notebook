@@ -10,6 +10,18 @@ permalink: /storage/ceph-cross-dc-migration/detail_runbook/
 
 關於遷移策略的分析與決策依據，請參考 [Solutions Overview](../solutions/)。關於 OSD bulk data migration 的詳細步驟，請參考 [OSD Migration Runbook](../osd-migration/)。關於場景與架構概述，請參考 [主文件](../)。
 
+## High-Level Flow
+
+```mermaid
+flowchart TD
+    A([開始 MON 遷移]) --> B[備份設定與健康檢查]
+    B --> C[新增 dc2 MON 節點]
+    C --> D[更新 client MON endpoints]
+    D --> E[驗證 quorum 與 client I/O]
+    E --> F[移除 dc1 MON 節點]
+    F --> G([最終健康確認])
+```
+
 ---
 
 ## 1. MON Migration Principles

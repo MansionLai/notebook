@@ -12,6 +12,18 @@ permalink: /storage/ceph-cross-dc-migration/osd-migration/
 - 遷移策略與分析： [Solutions Overview](../solutions/)
 - 主文件（場景與架構概述）： [主文件](../)
 
+## High-Level Flow
+
+```mermaid
+flowchart TD
+    A([開始 OSD 遷移]) --> B[健康檢查與 baseline 確認]
+    B --> C[加入 1 個 dc2 rack]
+    C --> D[等待 recovery / rebalance]
+    D --> E[移除 1 個 dc1 rack]
+    E --> F[再次等待 recovery，直到各 rack 完成]
+    F --> G([最終平衡與健康確認])
+```
+
 ---
 
 ## Migration Principles
@@ -431,5 +443,3 @@ ceph tell osd.* config set osd_recovery_sleep_hdd 0
 - **[← MON runbook（控制面）](../detail_runbook/)**
 
 ---
-
-
