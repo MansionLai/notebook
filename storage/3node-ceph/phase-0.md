@@ -41,7 +41,7 @@ permalink: /storage/3node-ceph/phase-0/
 | 項目 | 值 |
 |------|----|
 | Resource Group | `mansion_ceph_resource` |
-| Region | 例如 `East Asia` |
+| Region | 預設 `japaneast`（Japan East） |
 | VNet | `mansion_ceph_vnet` |
 | Address space | `10.10.0.0/16` + `172.10.0.0/16` |
 | Public subnet | `mansion_ceph_public_subnet` / `10.10.10.0/24` |
@@ -66,7 +66,17 @@ permalink: /storage/3node-ceph/phase-0/
 
 > 本 repo 已提供 Ceph Phase 0 所需的 IaC 檔案，請直接使用 `storage/3node-ceph/iac/` 內的 `README.md`、`main.bicep` 與 `main.bicepparam`。部署前請依實際環境覆寫 `allowedSourceCidr`、`adminPublicKey` 與必要的 region / naming 參數。
 
-### 步驟 3：預覽部署變更（what-if）
+### 步驟 3：建立目標 Resource Group
+
+```bash
+az group create \
+  --name mansion_ceph_resource \
+  --location japaneast
+```
+
+> 若 `main.bicepparam` 內覆寫了 `location`，請同步調整這裡的 `--location`
+
+### 步驟 4：預覽部署變更（what-if）
 
 > **建議操作：請以 Copilot CLI 協調 Azure MCP 進行 Bicep 部署全流程。下方 az deployment group 指令僅供底層等效指令參考或本地驗證，非推薦主流程。**
 
@@ -78,7 +88,7 @@ az deployment group what-if \
   --parameters storage/3node-ceph/iac/main.bicepparam
 ```
 
-### 步驟 4：正式部署（create）
+### 步驟 5：正式部署（create）
 
 ```bash
 az deployment group create \
@@ -88,7 +98,7 @@ az deployment group create \
   --parameters storage/3node-ceph/iac/main.bicepparam
 ```
 
-### 步驟 5：查詢輸出與資源狀態
+### 步驟 6：查詢輸出與資源狀態
 
 - 查詢 Bicep 輸出參數、Azure 資源狀態
 - 可用 az CLI、Portal、MCP 查驗
