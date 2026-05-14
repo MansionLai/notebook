@@ -13,13 +13,27 @@ permalink: /storage/ceph-cross-dc-migration/detail_runbook/
 ## High-Level Flow
 
 ```mermaid
-flowchart TD
-    A([開始 MON 遷移]) --> B[備份設定與健康檢查]
-    B --> C[新增 dc2 MON 節點]
-    C --> D[更新 client MON endpoints]
-    D --> E[驗證 quorum 與 client I/O]
-    E --> F[移除 dc1 MON 節點]
-    F --> G([最終健康確認])
+flowchart LR
+    subgraph CEPH["Ceph cluster"]
+        direction LR
+        A[備份設定與健康檢查] --> B[新增 dc2 MON 節點]
+        E[移除 dc1 MON 節點]
+        F[最終健康確認]
+    end
+
+    subgraph K8S["K8s cluster"]
+        direction LR
+        C[更新 Rook MON endpoints] --> D[驗證 client I/O]
+        G[清理 dc1 endpoints]
+    end
+
+    B --> C
+    D --> E
+    E --> G
+    G --> F
+
+    style CEPH fill:#e6ffed,stroke:#2f855a,stroke-width:1.5px
+    style K8S fill:#e8f1ff,stroke:#3b82f6,stroke-width:1.5px
 ```
 
 ---

@@ -15,13 +15,25 @@ permalink: /storage/ceph-cross-dc-migration/osd-migration/
 ## High-Level Flow
 
 ```mermaid
-flowchart TD
-    A([開始 OSD 遷移]) --> B[健康檢查與 baseline 確認]
-    B --> C[加入 1 個 dc2 rack]
-    C --> D[等待 recovery / rebalance]
-    D --> E[移除 1 個 dc1 rack]
-    E --> F[再次等待 recovery，直到各 rack 完成]
-    F --> G([最終平衡與健康確認])
+flowchart LR
+    subgraph CEPH["Ceph cluster"]
+        direction LR
+        A[健康檢查與 baseline 確認] --> B[加入 1 個 dc2 rack]
+        B --> C[等待 recovery / rebalance]
+        D[移除 1 個 dc1 rack] --> E[再次等待 recovery<br>重複 rack-by-rack 週期]
+        E --> F[最終平衡與健康確認]
+    end
+
+    subgraph K8S["K8s cluster"]
+        direction LR
+        K[觀察 VM / RBD 影響]
+    end
+
+    C --> K
+    K --> D
+
+    style CEPH fill:#e6ffed,stroke:#2f855a,stroke-width:1.5px
+    style K8S fill:#e8f1ff,stroke:#3b82f6,stroke-width:1.5px
 ```
 
 ---
