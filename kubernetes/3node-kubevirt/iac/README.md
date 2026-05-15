@@ -12,6 +12,17 @@ permalink: /kubernetes/3node-kubevirt/iac/
 
 > 目前狀態：Bicep 已開始實作，目錄中已有第一版 `main.bicep`、`main.bicepparam` 與 `modules/` 結構。若後續 Bicep 有明顯更新，這裡的狀態也要一起同步更新。
 
+## 共用 VNet 設計
+
+此 Bicep 模板部署的 VNet（`mansion-shared-vnet`，`10.10.0.0/16`）是由 **KubeVirt lab 建立並擁有**的共用網路基礎設施：
+
+| 子網 | CIDR | 用途 |
+|------|------|------|
+| `shared-node-subnet` | `10.10.10.0/24` | KubeVirt K8s 節點（`.10-.12`）；Ceph 節點未來使用（`.20-.22`） |
+| `kubevirt-subnet` | `10.10.100.0/24` | KubeVirt VM overlay（Worker eth1 專用） |
+
+Ceph lab 部署時將直接使用既有的 `mansion-shared-vnet` 與 `shared-node-subnet`，不需另建 VNet。
+
 ## FAQ
 
 ### 沒有 IaC / Bicep，也可以直接透過 Azure MCP 建立 Azure resource 嗎？如果可以，為什麼還需要 Bicep？

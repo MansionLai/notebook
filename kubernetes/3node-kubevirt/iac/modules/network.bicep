@@ -2,17 +2,17 @@ targetScope = 'resourceGroup'
 
 @description('Azure region for the virtual network.')
 param location string
-@description('Virtual network name.')
+@description('Shared virtual network name. This VNet is created by the KubeVirt lab and shared with the Ceph lab.')
 param virtualNetworkName string
 @description('Virtual network address range.')
 param virtualNetworkAddressPrefix string
-@description('Kubernetes subnet name.')
+@description('Shared node subnet name. KubeVirt K8s nodes use 10.10.10.10-12; Ceph nodes will later use 10.10.10.20-22.')
 param k8sSubnetName string
-@description('Kubernetes subnet range.')
+@description('Shared node subnet range (10.10.10.0/24).')
 param k8sSubnetPrefix string
-@description('KubeVirt subnet name.')
+@description('KubeVirt-exclusive secondary subnet name for VM overlay traffic (Worker eth1).')
 param kubevirtSubnetName string
-@description('KubeVirt subnet range.')
+@description('KubeVirt secondary subnet range (10.10.100.0/24).')
 param kubevirtSubnetPrefix string
 
 resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-11-01' = {

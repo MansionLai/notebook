@@ -191,6 +191,29 @@ graph TB
 
 ---
 
+## Azure 網路架構（共用 VNet）
+
+KubeVirt lab 負責建立並擁有 `mansion-shared-vnet`，這個 VNet 是兩個 lab 的共同基礎設施。
+
+| 資源 | 名稱 | CIDR | 說明 |
+|------|------|------|------|
+| VNet（共用） | `mansion-shared-vnet` | `10.10.0.0/16` | 由 KubeVirt lab 建立；Ceph lab 共用 |
+| 節點子網（共用） | `shared-node-subnet` | `10.10.10.0/24` | KubeVirt K8s 節點 `.10-.12`；Ceph 節點未來使用 `.20-.22` |
+| KubeVirt VM overlay 子網 | `kubevirt-subnet` | `10.10.100.0/24` | Worker eth1 專用，KubeVirt 內部 VM 流量 |
+
+### 節點 IP 分配
+
+| 節點 | eth0（shared-node-subnet） | eth1（kubevirt-subnet） |
+|------|---------------------------|------------------------|
+| mansion-k8s-master | `10.10.10.10` | — |
+| mansion-k8s-infra | `10.10.10.11` | — |
+| mansion-k8s-worker | `10.10.10.12` | `10.10.100.12` |
+| *(Ceph — 未來)* | `10.10.10.20-22` | — |
+
+> **NSG 東西向規則**：`Allow-Internal`（Priority 1000）允許來源 `10.10.0.0/16` 的所有流量，涵蓋 KubeVirt 節點、KubeVirt VM overlay 以及未來 Ceph 節點之間的東西向通訊。
+
+---
+
 ## Azure VM 規格建議（Option A）
 
 ### Lab / Dev 環境

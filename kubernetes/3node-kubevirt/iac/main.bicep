@@ -2,17 +2,17 @@ targetScope = 'resourceGroup'
 
 @description('Azure region for deployment.')
 param location string = 'japaneast'
-@description('Name of the virtual network.')
+@description('Name of the shared virtual network (owned by KubeVirt lab; also consumed by Ceph lab).')
 param virtualNetworkName string
-@description('CIDR for the virtual network.')
+@description('CIDR for the shared virtual network.')
 param virtualNetworkAddressPrefix string
-@description('Name of the Kubernetes subnet.')
+@description('Name of the shared node subnet (10.10.10.0/24). KubeVirt K8s nodes use .10-.12; Ceph nodes will later use .20-.22.')
 param k8sSubnetName string
-@description('CIDR for the Kubernetes subnet.')
+@description('CIDR for the shared node subnet.')
 param k8sSubnetPrefix string
-@description('Name of the KubeVirt subnet.')
+@description('Name of the KubeVirt-exclusive secondary subnet for VM overlay traffic (Worker eth1).')
 param kubevirtSubnetName string
-@description('CIDR for the KubeVirt subnet.')
+@description('CIDR for the KubeVirt secondary subnet.')
 param kubevirtSubnetPrefix string
 @description('Name of the network security group.')
 param networkSecurityGroupName string
