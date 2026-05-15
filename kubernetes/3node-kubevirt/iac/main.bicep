@@ -16,6 +16,10 @@ param k8sSubnetPrefix string
 param kubevirtSubnetName string
 @description('CIDR for the KubeVirt secondary subnet.')
 param kubevirtSubnetPrefix string
+@description('Name of the Ceph-dedicated cluster subnet inside the shared VNet. Declared in the KubeVirt-owned VNet so that ARM PUT semantics on VNet redeployment never delete it. Must match the value in storage/3node-ceph/iac/main.bicepparam.')
+param cephClusterSubnetName string
+@description('CIDR for the Ceph cluster subnet (e.g. 172.10.10.0/24). Must be within clusterAddressPrefix.')
+param cephClusterSubnetPrefix string
 @description('Name of the network security group.')
 param networkSecurityGroupName string
 @description('Trusted source CIDR for inbound rules.')
@@ -78,6 +82,8 @@ module network './modules/network.bicep' = {
     k8sSubnetPrefix: k8sSubnetPrefix
     kubevirtSubnetName: kubevirtSubnetName
     kubevirtSubnetPrefix: kubevirtSubnetPrefix
+    cephClusterSubnetName: cephClusterSubnetName
+    cephClusterSubnetPrefix: cephClusterSubnetPrefix
   }
 }
 
@@ -190,6 +196,7 @@ output targetResourceGroupName string = resourceGroup().name
 output virtualNetworkId string = network.outputs.virtualNetworkId
 output k8sSubnetId string = network.outputs.k8sSubnetId
 output kubevirtSubnetId string = network.outputs.kubevirtSubnetId
+output cephClusterSubnetId string = network.outputs.cephClusterSubnetId
 output networkSecurityGroupId string = nsg.outputs.networkSecurityGroupId
 output masterNicId string = masterNic.outputs.nicId
 output infraNicId string = infraNic.outputs.nicId

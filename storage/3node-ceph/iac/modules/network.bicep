@@ -22,8 +22,10 @@ resource sharedNodeSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-11-01'
 }
 
 // Create the Ceph-dedicated cluster subnet inside the shared VNet.
-// The 172.10.0.0/16 address space was pre-declared by the KubeVirt VNet deployment
-// so this subnet can be added without any destructive VNet address-space update.
+// NOTE: ceph-cluster-subnet is also declared in the KubeVirt VNet inline subnets array
+// (kubernetes/3node-kubevirt/iac/modules/network.bicep). This ensures ARM PUT semantics on
+// the KubeVirt VNet resource never delete this subnet on KubeVirt redeployment.
+// This child-resource PUT is idempotent when KubeVirt has already created the subnet.
 resource clusterSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-11-01' = {
   parent: existingVNet
   name: clusterSubnetName

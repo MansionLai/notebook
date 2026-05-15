@@ -16,6 +16,10 @@ param k8sSubnetPrefix string
 param kubevirtSubnetName string
 @description('KubeVirt secondary subnet range (10.10.100.0/24).')
 param kubevirtSubnetPrefix string
+@description('Ceph-dedicated cluster subnet name inside this VNet (e.g. ceph-cluster-subnet, 172.10.10.0/24). Declared here — and kept in every KubeVirt redeploy — so that ARM PUT semantics on the VNet resource never delete it.')
+param cephClusterSubnetName string
+@description('CIDR for the Ceph cluster subnet (must be within clusterAddressPrefix, e.g. 172.10.10.0/24).')
+param cephClusterSubnetPrefix string
 
 resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-11-01' = {
   name: virtualNetworkName
@@ -40,6 +44,15 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-11-01' = {
           addressPrefix: kubevirtSubnetPrefix
         }
       }
+      // ceph-cluster-subnet is owned by KubeVirt (the VNet owner) to prevent ARM PUT semantics
+      // from deleting it on every KubeVirt redeploy. The Ceph side references this subnet as
+      // existing rather than re-creating it.
+      {
+        name: cephClusterSubnetName
+        properties: {
+          addressPrefix: cephClusterSubnetPrefix
+        }
+      }
     ]
   }
 }
@@ -47,3 +60,4 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-11-01' = {
 output virtualNetworkId string = virtualNetwork.id
 output k8sSubnetId string = resourceId('Microsoft.Network/virtualNetworks/subnets', virtualNetworkName, k8sSubnetName)
 output kubevirtSubnetId string = resourceId('Microsoft.Network/virtualNetworks/subnets', virtualNetworkName, kubevirtSubnetName)
+output cephClusterSubnetId string = resourceId('Microsoft.Network/virtualNetworks/subnets', virtualNetworkName, cephClusterSubnetName)

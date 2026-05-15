@@ -200,6 +200,7 @@ KubeVirt lab 負責建立並擁有 `mansion-shared-vnet`，這個 VNet 是兩個
 | VNet（共用） | `mansion-shared-vnet` | `10.10.0.0/16`、`172.10.0.0/16` | 由 KubeVirt lab 建立；Ceph lab 共用。兩個 address prefix 從建立時即同時宣告，確保 Ceph cluster subnet（`172.10.10.0/24`）可直接使用，無需事後修改 VNet |
 | 節點子網（共用） | `shared-node-subnet` | `10.10.10.0/24` | KubeVirt K8s 節點 `.10-.12`；Ceph 節點未來使用 `.20-.22` |
 | KubeVirt VM overlay 子網 | `kubevirt-subnet` | `10.10.100.0/24` | Worker eth1 專用，KubeVirt 內部 VM 流量 |
+| Ceph cluster 子網 | `ceph-cluster-subnet` | `172.10.10.0/24` | Ceph 專屬 cluster 子網。**由 KubeVirt 在 VNet inline subnets 宣告**（`cephClusterSubnetName` 參數），確保 KubeVirt 重部署時 ARM PUT 語義不會刪除此子網。Ceph lab 以 `existing` 方式引用。 |
 
 ### 節點 IP 分配
 

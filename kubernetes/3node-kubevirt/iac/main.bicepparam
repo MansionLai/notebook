@@ -14,6 +14,11 @@ param k8sSubnetPrefix = '10.10.10.0/24'
 // KubeVirt-exclusive secondary subnet for VM overlay traffic (Worker eth1).
 param kubevirtSubnetName = 'kubevirt-subnet'
 param kubevirtSubnetPrefix = '10.10.100.0/24'
+// Ceph-dedicated cluster subnet — declared in the KubeVirt-owned VNet so that ARM PUT
+// semantics on VNet redeployment never delete it.
+// These values MUST match storage/3node-ceph/iac/main.bicepparam (clusterSubnetName / clusterSubnetPrefix).
+param cephClusterSubnetName = 'ceph-cluster-subnet'
+param cephClusterSubnetPrefix = '172.10.10.0/24'
 param networkSecurityGroupName = 'k8s-nsg'
 // Documentation placeholder; replace before deployment.
 param allowedSourceCidr = '203.0.113.10/32'

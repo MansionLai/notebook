@@ -34,10 +34,14 @@ permalink: /kubernetes/3node-kubevirt/iac/
 |------|------|------|
 | `shared-node-subnet` | `10.10.10.0/24` | KubeVirt K8s 節點（`.10-.12`）；Ceph 節點未來使用（`.20-.22`） |
 | `kubevirt-subnet` | `10.10.100.0/24` | KubeVirt VM overlay（Worker eth1 專用） |
+| `ceph-cluster-subnet` | `172.10.10.0/24` | Ceph 專屬 cluster 子網（Ceph NICs 使用 `.20-.22`）。**由 KubeVirt 在 VNet inline subnets 中宣告**，確保 KubeVirt 重部署時 ARM PUT 不會刪除此子網。Ceph lab 部署時以 `existing` 方式引用此子網。 |
 
 VNet 宣告兩個 address prefix（`10.10.0.0/16` 與 `172.10.0.0/16`），確保 Ceph lab 稍後新增 `172.10.10.0/24`（Ceph 專屬 cluster subnet）時，不需要對既有 VNet 進行破壞性的 address space 變更。
 
 Ceph lab 部署時將直接使用既有的 `mansion-shared-vnet` 與 `shared-node-subnet`，不需另建 VNet。
+
+> **⚠️ shared-VNet 子網擁有者模型**  
+> ARM 對 VNet 的 PUT 語義會**取代整個 subnets 集合**。為避免 KubeVirt 重部署時刪除 Ceph 的 `ceph-cluster-subnet`，該子網也必須宣告在 KubeVirt 的 `modules/network.bicep` inline subnets 中（見 `cephClusterSubnetName` / `cephClusterSubnetPrefix` 參數）。Ceph lab 的 `modules/network.bicep` 以 `existing` 方式引用此子網，不再重複建立。
 
 ## FAQ
 

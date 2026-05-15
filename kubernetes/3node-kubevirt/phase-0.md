@@ -82,6 +82,7 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
    |-------------|---------------|------|
    | `shared-node-subnet` | `10.10.10.0/24` | KubeVirt K8s 節點（.10-.12）；Ceph 節點未來將共用此子網（.20-.22） |
    | `kubevirt-subnet` | `10.10.100.0/24` | KubeVirt VM overlay（Worker eth1 專用） |
+   | `ceph-cluster-subnet` | `172.10.10.0/24` | Ceph 專屬 cluster 子網（預建，避免 KubeVirt 重部署時被 ARM PUT 刪除） |
 
 4. → **Review + create** → **Create**
 
@@ -270,6 +271,7 @@ flowchart TD
 - `mansion-shared-vnet`（共用 VNet，由 KubeVirt lab 建立）
 - `shared-node-subnet`（10.10.10.0/24，KubeVirt K8s 節點；Ceph 節點未來共用）
 - `kubevirt-subnet`（10.10.100.0/24，KubeVirt 專屬 VM overlay）
+- `ceph-cluster-subnet`（172.10.10.0/24，Ceph 專屬 cluster 子網，由 KubeVirt VNet 宣告以防止重部署時被刪除）
 - `k8s-nsg`
 - `mansion-k8s-master`
 - `mansion-k8s-infra`
