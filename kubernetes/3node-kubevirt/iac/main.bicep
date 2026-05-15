@@ -53,11 +53,11 @@ param adminUsername string = 'ubuntu'
 @description('SSH public key content for the Linux VM admin user.')
 param adminPublicKey string
 @description('Master VM size.')
-param masterVmSize string = 'Standard_D2s_v5'
+param masterVmSize string = 'Standard_D2s_v4'
 @description('Infra VM size.')
-param infraVmSize string = 'Standard_D4s_v5'
+param infraVmSize string = 'Standard_D4s_v4'
 @description('Worker VM size.')
-param workerVmSize string = 'Standard_D4s_v5'
+param workerVmSize string = 'Standard_D4s_v4'
 @description('Ubuntu image publisher.')
 param imagePublisher string = 'Canonical'
 @description('Ubuntu image offer.')
