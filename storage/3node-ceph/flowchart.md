@@ -74,7 +74,7 @@ flowchart TD
 
 - ✅ hostname 設定正確
 - ✅ `/etc/hosts` 包含全部節點
-- ✅ 雙網路互通（ping 10.10.10.x 與 172.10.10.x）
+- ✅ 雙網路互通（ping 10.10.10.2x 與 172.10.10.2x）
 - ✅ 2 顆 data disk 存在且未格式化
 
 ### Phase 2 產出
@@ -111,8 +111,8 @@ flowchart TD
 
 ```bash
 # 從 ceph-node-01 測試雙網路
-ping -c 3 10.10.10.11    # public network
-ping -c 3 172.10.10.11   # cluster network
+ping -c 3 10.10.10.21    # shared-node-subnet (public network)
+ping -c 3 172.10.10.21   # ceph-cluster-subnet (cluster network)
 ```
 
 ### 驗證磁碟

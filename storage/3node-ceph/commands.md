@@ -32,15 +32,15 @@ permalink: /storage/3node-ceph/commands/
 
 ### What-If 預覽
 
-> **前置步驟：請先建立目標 Resource Group**
+> **前置步驟：確認 KubeVirt lab 的 `mansion-shared-vnet` 與 `shared-node-subnet` 已存在**
 
 ```bash
-az group create --name mansion_ceph_resource --location <your-location>
+az group create --name mansion_resource --location <your-location>
 ```
 
 ```bash
 az deployment group what-if \
-  --resource-group mansion_ceph_resource \
+  --resource-group mansion_resource \
   --name mansion-ceph-phase0-preview \
   --template-file storage/3node-ceph/iac/main.bicep \
   --parameters storage/3node-ceph/iac/main.bicepparam
@@ -50,7 +50,7 @@ az deployment group what-if \
 
 ```bash
 az deployment group create \
-  --resource-group mansion_ceph_resource \
+  --resource-group mansion_resource \
   --name mansion-ceph-phase0 \
   --template-file storage/3node-ceph/iac/main.bicep \
   --parameters storage/3node-ceph/iac/main.bicepparam
@@ -60,7 +60,7 @@ az deployment group create \
 
 ```bash
 az deployment group show \
-  --resource-group mansion_ceph_resource \
+  --resource-group mansion_resource \
   --name mansion-ceph-phase0 \
   --query properties.outputs
 ```

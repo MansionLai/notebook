@@ -2,19 +2,15 @@ targetScope = 'resourceGroup'
 
 @description('Azure region for deployment.')
 param location string = 'japaneast'
-@description('Name of the virtual network.')
+@description('Name of the shared virtual network (owned by KubeVirt lab; consumed here as an existing resource).')
 param virtualNetworkName string
-@description('CIDR for the virtual network.')
-param virtualNetworkAddressPrefix string
-@description('CIDR for the cluster address space inside the virtual network.')
-param clusterAddressPrefix string = '172.10.0.0/16'
-@description('Name of the public subnet.')
-param publicSubnetName string
-@description('CIDR for the public subnet.')
-param publicSubnetPrefix string
-@description('Name of the cluster subnet.')
+@description('Name of the shared node subnet that already exists in the shared VNet. Ceph public NICs attach here using IPs 10.10.10.20-22.')
+param sharedNodeSubnetName string = 'shared-node-subnet'
+@description('CIDR of the shared node subnet. Used by the NSG internal-traffic rule.')
+param sharedNodeSubnetPrefix string = '10.10.10.0/24'
+@description('Name of the Ceph-dedicated cluster subnet to create inside the shared VNet.')
 param clusterSubnetName string
-@description('CIDR for the cluster subnet.')
+@description('CIDR for the Ceph cluster subnet.')
 param clusterSubnetPrefix string
 @description('Name of the network security group.')
 param networkSecurityGroupName string
@@ -65,17 +61,17 @@ param cephNode02ClusterNicName string = '${cephNode02VmName}-nic-cluster'
 @description('Ceph node 03 cluster NIC name.')
 param cephNode03ClusterNicName string = '${cephNode03VmName}-nic-cluster'
 @description('Ceph node 01 public network private IP.')
-param cephNode01PublicIp string = '10.10.10.10'
+param cephNode01PublicIp string = '10.10.10.20'
 @description('Ceph node 02 public network private IP.')
-param cephNode02PublicIp string = '10.10.10.11'
+param cephNode02PublicIp string = '10.10.10.21'
 @description('Ceph node 03 public network private IP.')
-param cephNode03PublicIp string = '10.10.10.12'
+param cephNode03PublicIp string = '10.10.10.22'
 @description('Ceph node 01 cluster network private IP.')
-param cephNode01ClusterIp string = '172.10.10.10'
+param cephNode01ClusterIp string = '172.10.10.20'
 @description('Ceph node 02 cluster network private IP.')
-param cephNode02ClusterIp string = '172.10.10.11'
+param cephNode02ClusterIp string = '172.10.10.21'
 @description('Ceph node 03 cluster network private IP.')
-param cephNode03ClusterIp string = '172.10.10.12'
+param cephNode03ClusterIp string = '172.10.10.22'
 @description('Data disk SKU for OSD disks.')
 param dataDiskSku string = 'StandardSSD_LRS'
 @description('Data disk size in GB for OSD disks.')
@@ -84,12 +80,8 @@ param dataDiskSizeGb int = 64
 module network './modules/network.bicep' = {
   name: 'network'
   params: {
-    location: location
     virtualNetworkName: virtualNetworkName
-    virtualNetworkAddressPrefix: virtualNetworkAddressPrefix
-    clusterAddressPrefix: clusterAddressPrefix
-    publicSubnetName: publicSubnetName
-    publicSubnetPrefix: publicSubnetPrefix
+    sharedNodeSubnetName: sharedNodeSubnetName
     clusterSubnetName: clusterSubnetName
     clusterSubnetPrefix: clusterSubnetPrefix
   }
@@ -101,7 +93,7 @@ module nsg './modules/nsg.bicep' = {
     location: location
     networkSecurityGroupName: networkSecurityGroupName
     allowedSourceCidr: allowedSourceCidr
-    publicSubnetPrefix: publicSubnetPrefix
+    publicSubnetPrefix: sharedNodeSubnetPrefix
     clusterSubnetPrefix: clusterSubnetPrefix
   }
 }
