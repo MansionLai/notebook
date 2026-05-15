@@ -197,7 +197,7 @@ KubeVirt lab 負責建立並擁有 `mansion-shared-vnet`，這個 VNet 是兩個
 
 | 資源 | 名稱 | CIDR | 說明 |
 |------|------|------|------|
-| VNet（共用） | `mansion-shared-vnet` | `10.10.0.0/16` | 由 KubeVirt lab 建立；Ceph lab 共用 |
+| VNet（共用） | `mansion-shared-vnet` | `10.10.0.0/16`、`172.10.0.0/16` | 由 KubeVirt lab 建立；Ceph lab 共用。兩個 address prefix 從建立時即同時宣告，確保 Ceph cluster subnet（`172.10.10.0/24`）可直接使用，無需事後修改 VNet |
 | 節點子網（共用） | `shared-node-subnet` | `10.10.10.0/24` | KubeVirt K8s 節點 `.10-.12`；Ceph 節點未來使用 `.20-.22` |
 | KubeVirt VM overlay 子網 | `kubevirt-subnet` | `10.10.100.0/24` | Worker eth1 專用，KubeVirt 內部 VM 流量 |
 
@@ -210,7 +210,7 @@ KubeVirt lab 負責建立並擁有 `mansion-shared-vnet`，這個 VNet 是兩個
 | mansion-k8s-worker | `10.10.10.12` | `10.10.100.12` |
 | *(Ceph — 未來)* | `10.10.10.20-22` | — |
 
-> **NSG 東西向規則**：`Allow-Internal`（Priority 1000）允許來源 `10.10.0.0/16` 的所有流量，涵蓋 KubeVirt 節點、KubeVirt VM overlay 以及未來 Ceph 節點之間的東西向通訊。
+> **NSG 東西向規則**：`Allow-Internal`（Priority 1000）允許來源 `10.10.0.0/16` 的所有流量，涵蓋 KubeVirt 節點、KubeVirt VM overlay 以及未來 Ceph 節點（10.10.10.20-22）之間的東西向通訊。當 Ceph lab 部署時，需另行新增 `Allow-Internal-Ceph`（Source: `172.10.0.0/16`）以覆蓋 Ceph cluster subnet（`172.10.10.0/24`）的內部流量。
 
 ---
 

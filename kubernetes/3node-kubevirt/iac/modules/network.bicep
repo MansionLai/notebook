@@ -4,8 +4,10 @@ targetScope = 'resourceGroup'
 param location string
 @description('Shared virtual network name. This VNet is created by the KubeVirt lab and shared with the Ceph lab.')
 param virtualNetworkName string
-@description('Virtual network address range.')
+@description('Virtual network primary address range (KubeVirt nodes/overlay, e.g. 10.10.0.0/16).')
 param virtualNetworkAddressPrefix string
+@description('Virtual network secondary address range for the Ceph cluster subnet (e.g. 172.10.0.0/16). Must be declared from day one so the Ceph cluster subnet 172.10.10.0/24 can exist within the same shared VNet.')
+param clusterAddressPrefix string
 @description('Shared node subnet name. KubeVirt K8s nodes use 10.10.10.10-12; Ceph nodes will later use 10.10.10.20-22.')
 param k8sSubnetName string
 @description('Shared node subnet range (10.10.10.0/24).')
@@ -22,6 +24,7 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-11-01' = {
     addressSpace: {
       addressPrefixes: [
         virtualNetworkAddressPrefix
+        clusterAddressPrefix
       ]
     }
     subnets: [

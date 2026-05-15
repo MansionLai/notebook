@@ -3,7 +3,11 @@ using './main.bicep'
 param location = 'japaneast'
 // Shared VNet — owned by KubeVirt lab, consumed by Ceph lab when it is provisioned.
 param virtualNetworkName = 'mansion-shared-vnet'
+// KubeVirt primary range: K8s nodes (10.10.10.x) and VM overlay (10.10.100.x).
 param virtualNetworkAddressPrefix = '10.10.0.0/16'
+// Ceph cluster subnet (172.10.10.0/24) lives in this range; declared from day one so the
+// shared VNet already covers it when the Ceph lab is provisioned later.
+param clusterAddressPrefix = '172.10.0.0/16'
 // Shared node subnet: KubeVirt K8s nodes 10.10.10.10-12; Ceph nodes will use 10.10.10.20-22.
 param k8sSubnetName = 'shared-node-subnet'
 param k8sSubnetPrefix = '10.10.10.0/24'

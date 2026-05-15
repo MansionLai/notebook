@@ -4,8 +4,10 @@ targetScope = 'resourceGroup'
 param location string = 'japaneast'
 @description('Name of the shared virtual network (owned by KubeVirt lab; also consumed by Ceph lab).')
 param virtualNetworkName string
-@description('CIDR for the shared virtual network.')
+@description('CIDR for the shared virtual network (KubeVirt side, e.g. 10.10.0.0/16).')
 param virtualNetworkAddressPrefix string
+@description('Second CIDR for the shared virtual network address space (e.g. 172.10.0.0/16). Required from day one so the Ceph cluster subnet (172.10.10.0/24) can later exist within the same shared VNet without a destructive VNet update.')
+param clusterAddressPrefix string
 @description('Name of the shared node subnet (10.10.10.0/24). KubeVirt K8s nodes use .10-.12; Ceph nodes will later use .20-.22.')
 param k8sSubnetName string
 @description('CIDR for the shared node subnet.')
@@ -71,6 +73,7 @@ module network './modules/network.bicep' = {
     location: location
     virtualNetworkName: virtualNetworkName
     virtualNetworkAddressPrefix: virtualNetworkAddressPrefix
+    clusterAddressPrefix: clusterAddressPrefix
     k8sSubnetName: k8sSubnetName
     k8sSubnetPrefix: k8sSubnetPrefix
     kubevirtSubnetName: kubevirtSubnetName
