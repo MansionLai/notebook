@@ -3,4 +3,4 @@
   gather_facts: true
   become: true
   roles:
-    - phase3_cluster_build
+      - cluster_build

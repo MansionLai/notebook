@@ -52,7 +52,7 @@ ansible-playbook playbooks/phase-2.yml
 
 ```text
 storage/3node-ceph/ansible/playbooks/phase-2.yml
-storage/3node-ceph/ansible/roles/phase2_ceph_prereqs/
+storage/3node-ceph/ansible/roles/ceph_prereqs/
 ```
 
 ---
@@ -85,4 +85,4 @@ ssh ubuntu@<ceph-node-01-public-ip> "ssh -o BatchMode=yes ceph-node-03 hostname"
 
 - `docker: command not found`：先確認 apt repo 可用且 `docker.io` 套件安裝成功
 - `cephadm install ceph-common` 失敗：檢查 Ceph repo 是否已加到 admin node
-- `Permission denied (publickey)`：檢查 `phase2_ceph_prereqs` 是否成功將 id_rsa.pub 發佈到全部節點
+- `Permission denied (publickey)`：檢查 `ceph_prereqs` 是否成功將 id_rsa.pub 發佈到全部節點

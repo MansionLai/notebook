@@ -51,7 +51,7 @@ ansible-playbook playbooks/phase-4.yml
 
 ```text
 storage/3node-ceph/ansible/playbooks/phase-4.yml
-storage/3node-ceph/ansible/roles/phase4_rbd_pool/
+storage/3node-ceph/ansible/roles/rbd_pool/
 ```
 
 ---

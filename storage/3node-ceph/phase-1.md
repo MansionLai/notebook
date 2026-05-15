@@ -52,7 +52,7 @@ ansible-playbook playbooks/phase-1.yml
 
 ```text
 storage/3node-ceph/ansible/playbooks/phase-1.yml
-storage/3node-ceph/ansible/roles/phase1_os_prep/
+storage/3node-ceph/ansible/roles/os_prep/
 ```
 
 ---

@@ -3,4 +3,4 @@
   gather_facts: true
   become: true
   roles:
-    - phase1_os_prep
+      - os_prep

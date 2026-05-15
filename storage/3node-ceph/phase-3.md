@@ -50,7 +50,7 @@ ansible-playbook playbooks/phase-3.yml
 
 ```text
 storage/3node-ceph/ansible/playbooks/phase-3.yml
-storage/3node-ceph/ansible/roles/phase3_cluster_build/
+storage/3node-ceph/ansible/roles/cluster_build/
 ```
 
 ---
