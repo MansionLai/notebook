@@ -4,6 +4,8 @@ targetScope = 'resourceGroup'
 param location string = 'japaneast'
 @description('Name of the shared virtual network (owned by KubeVirt lab; consumed here as an existing resource).')
 param virtualNetworkName string
+@description('Resource group name where the shared VNet exists.')
+param virtualNetworkResourceGroupName string = resourceGroup().name
 @description('Name of the shared node subnet that already exists in the shared VNet. Ceph public NICs attach here using IPs 10.10.10.21-23.')
 param sharedNodeSubnetName string = 'shared-node-subnet'
 @description('CIDR of the shared node subnet. Used by the NSG internal-traffic rule.')
@@ -83,6 +85,7 @@ module network './modules/network.bicep' = {
   name: 'network'
   params: {
     virtualNetworkName: virtualNetworkName
+    virtualNetworkResourceGroupName: virtualNetworkResourceGroupName
     sharedNodeSubnetName: sharedNodeSubnetName
     clusterSubnetName: clusterSubnetName
     clusterSubnetPrefix: clusterSubnetPrefix
