@@ -12,6 +12,8 @@ permalink: /kubernetes/3node-kubevirt/iac/
 
 > 目前狀態：Bicep 已開始實作，目錄中已有第一版 `main.bicep`、`main.bicepparam` 與 `modules/` 結構。若後續 Bicep 有明顯更新，這裡的狀態也要一起同步更新。
 
+> 預設映像已改為 Canonical Ubuntu Jammy 22.04；`main.bicep` / `main.bicepparam` 現在直接使用 `japaneast` 可部署的 image reference，因此可不覆寫映像參數直接執行部署或 what-if。
+
 ## 資源更名遷移說明（重要）
 
 > ⚠️ **此次變更將 KubeVirt 預設資源名稱從舊版（`mansion-k8s-vnet` / `k8s-subnet`）更改為共用命名（`mansion-shared-vnet` / `shared-node-subnet`）。**

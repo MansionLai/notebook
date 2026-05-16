@@ -65,9 +65,9 @@ param workerVmSize string = 'Standard_D4s_v4'
 @description('Ubuntu image publisher.')
 param imagePublisher string = 'Canonical'
 @description('Ubuntu image offer.')
-param imageOffer string = '0001-com-ubuntu-server-noble'
+param imageOffer string = '0001-com-ubuntu-server-jammy'
 @description('Ubuntu image SKU.')
-param imageSku string = '24_04-lts-gen2'
+param imageSku string = '22_04-lts-gen2'
 @description('Ubuntu image version.')
 param imageVersion string = 'latest'
 
