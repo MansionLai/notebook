@@ -46,7 +46,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
       }
     }
     osProfile: {
-      computerName: vmName
+      computerName: replace(vmName, '_', '-')
       adminUsername: adminUsername
       linuxConfiguration: {
         disablePasswordAuthentication: true
