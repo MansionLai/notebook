@@ -1,4 +1,4 @@
-using './main-shared-vnet.bicep'
+using './main.bicep'
 
 // Deploy to resource group: mansion_kubevirt_resource
 param location = 'japaneast'
