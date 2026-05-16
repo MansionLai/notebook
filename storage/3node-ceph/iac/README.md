@@ -39,5 +39,6 @@ The operator is expected to supply or override critical values in the parameter 
 
 - Ensure the KubeVirt lab (`mansion-shared-vnet` and `shared-node-subnet`) is deployed first before running this Ceph deployment.
 - Always run `az deployment group what-if --resource-group mansion_resource --template-file main.bicep --parameters main.bicepparam` before performing a `create`/`deploy` to validate changes.
+- The default Jammy 22.04 image in `main.bicepparam` was confirmed available in `japaneast`.
 
 Concise, focused, and intentionally minimal: this README explains intent, file layout, and operator expectations for Phase 0 Ceph IaC.
