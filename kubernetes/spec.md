@@ -1,4 +1,5 @@
 AI agent 運行在我的mac mini上, 並且協助我一起維護 notebook-sync repo, agent主要focus on kubernetes這個folder.
+AI agent使用 ai/k8s branch進行修正, 確認沒問題後再merge回main branch
 
 1. 3node-kubevirt
    - 透過azure cloud建立vm
