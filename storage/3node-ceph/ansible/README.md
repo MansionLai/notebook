@@ -15,8 +15,8 @@ This directory contains the Ansible-first workflow for `storage/3node-ceph/phase
 ## Layout
 
 - `inventory/hosts.yml` — host groups
-- `inventory/group_vars/all.yml` — shared non-secret variables
-- `inventory/group_vars/encrypted.yml` — secret variables (ansible-vault)
+- `inventory/group_vars/all/main.yml` — shared non-secret variables
+- `inventory/group_vars/all/encrypted.yml` — secret variables (ansible-vault, auto-loaded)
 - `playbooks/phase-1.yml` ~ `phase-5.yml` — one playbook per phase
 - `playbooks/site.yml` — full Phase 1-5 chain
 - `roles/` — one primary role per phase
@@ -45,7 +45,7 @@ ansible-playbook playbooks/site.yml
 Before running Phase 3 in a non-lab environment, review:
 
 - `inventory/hosts.yml`
-- `inventory/group_vars/encrypted.yml`
+- `inventory/group_vars/all/encrypted.yml`
 - `ceph_dashboard_password`
 - `ceph_rbd_pool_name`
 - `ceph_rbd_pool_min_size`
