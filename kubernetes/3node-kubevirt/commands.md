@@ -15,17 +15,27 @@ permalink: /kubernetes/3node-kubevirt/commands/
 ### 安裝基礎套件（全部節點）
 
 ```bash
-# 安裝 containerd
-sudo apt-get update && sudo apt-get install -y containerd
-sudo mkdir -p /etc/containerd
-containerd config default | sudo tee /etc/containerd/config.toml
-sudo systemctl restart containerd
+# 安裝 CRI-O（版本對應 K8s v1.31）
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+
+KUBERNETES_VERSION=v1.31
+curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/stable:/${KUBERNETES_VERSION}/deb/Release.key | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] \
+  https://pkgs.k8s.io/addons:/cri-o:/stable:/${KUBERNETES_VERSION}/deb/ /" | \
+  sudo tee /etc/apt/sources.list.d/cri-o.list
+sudo apt-get update
+sudo apt-get install -y cri-o
+sudo systemctl start crio
+sudo systemctl enable crio
 
 # 安裝 kubeadm / kubelet / kubectl
 sudo apt-get install -y apt-transport-https ca-certificates curl
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key \
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key \
   | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /' \
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
 sudo apt-get update
 sudo apt-get install -y kubelet kubeadm kubectl
@@ -35,7 +45,7 @@ sudo apt-mark hold kubelet kubeadm kubectl
 ### Master: 初始化 Control Plane
 
 ```bash
-# 初始化（替換 <MASTER_IP>，即 shared-node-subnet 上的 10.10.10.10）
+# 初始化（替換 <MASTER_IP>，即 mansion_kubevirt_node_subnet 上的 10.10.10.11）
 sudo kubeadm init \
   --pod-network-cidr=10.244.0.0/16 \
   --apiserver-advertise-address=<MASTER_IP>
@@ -45,8 +55,14 @@ mkdir -p $HOME/.kube
 sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
-# 安裝 Flannel CNI
-kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+# 安裝 Cilium CNI
+CILIUM_VER=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
+curl -L --remote-name \
+  https://github.com/cilium/cilium-cli/releases/download/${CILIUM_VER}/cilium-linux-amd64.tar.gz
+sudo tar xzf cilium-linux-amd64.tar.gz -C /usr/local/bin
+rm cilium-linux-amd64.tar.gz
+cilium install --set ipam.mode=kubernetes
+cilium status --wait
 ```
 
 ### Infra & Worker: 加入 Cluster

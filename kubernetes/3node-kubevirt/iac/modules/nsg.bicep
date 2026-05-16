@@ -54,9 +54,7 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2023-11-0
         }
       }
       {
-        // East-west rule: permits traffic between all nodes inside the shared VNet address space
-        // (covers KubeVirt K8s nodes 10.10.10.10-12 and will also allow Ceph nodes 10.10.10.20-22
-        //  once the Ceph lab is deployed into the same shared VNet).
+        // East-west rule: permits traffic between all mansion_kubevirt nodes inside the VNet address space.
         name: 'AllowInternalTraffic'
         properties: {
           priority: 1000

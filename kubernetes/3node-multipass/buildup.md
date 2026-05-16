@@ -9,7 +9,9 @@ nav_order: 2
 
 > 建立日期：2026-04-11  
 > 環境：Mac Mini M4 / Multipass / Ubuntu 24.04  
-> 方式：kubeadm（官方標準安裝）
+> 方式：kubeadm（官方標準安裝）  
+> 網路：Multipass 橋接 **en0**（192.168.50.x/24）  
+> 範圍：純 K8s 三節點 Lab，**不含 KubeVirt**（Apple Silicon 不支援 nested virtualization）
 
 ## 節點資訊
 
