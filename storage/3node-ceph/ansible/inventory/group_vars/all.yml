@@ -4,11 +4,11 @@ ceph_public_network_cidr: 10.10.10.0/24
 ceph_cluster_network_cidr: 172.10.10.0/24
 
 ceph_dashboard_user: admin
-ceph_dashboard_password: ChangeMe123!
+ceph_dashboard_password: "{{ vault_ceph_dashboard_password }}"
 ceph_version: 19.2.2
-ceph_release: reef
 ceph_container_runtime: docker
 ceph_cephadm_url: https://download.ceph.com/rpm-19.2.2/el9/noarch/cephadm
+ceph_container_image: quay.io/ceph/ceph:v19.2.2
 
 ceph_phase1_packages:
   - curl
@@ -45,16 +45,16 @@ ceph_exporter_port: 9128
 ceph_exporter_image: quay.io/digitalocean/ceph_exporter:latest
 
 prometheus_agent_image: prom/prometheus:v2.53.0
-prometheus_agent_remote_write_url: REPLACE_WITH_PROMETHEUS_REMOTE_WRITE_URL
-prometheus_agent_remote_write_username: ""
-prometheus_agent_remote_write_password: ""
+prometheus_agent_remote_write_url: "{{ vault_prometheus_agent_remote_write_url }}"
+prometheus_agent_remote_write_username: "{{ vault_prometheus_agent_remote_write_username }}"
+prometheus_agent_remote_write_password: "{{ vault_prometheus_agent_remote_write_password }}"
 
 fluent_bit_service: fluent-bit
 fluent_bit_image: cr.fluentbit.io/fluent/fluent-bit:3.0.7
-fluent_bit_opensearch_host: REPLACE_WITH_OPENSEARCH_HOST
+fluent_bit_opensearch_host: "{{ vault_fluent_bit_opensearch_host }}"
 fluent_bit_opensearch_port: 9200
-fluent_bit_opensearch_username: REPLACE_WITH_OPENSEARCH_USERNAME
-fluent_bit_opensearch_password: REPLACE_WITH_OPENSEARCH_PASSWORD
+fluent_bit_opensearch_username: "{{ vault_fluent_bit_opensearch_username }}"
+fluent_bit_opensearch_password: "{{ vault_fluent_bit_opensearch_password }}"
 fluent_bit_opensearch_index: ceph-lab
 
 ceph_hosts_entries:

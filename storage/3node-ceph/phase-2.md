@@ -18,10 +18,11 @@ permalink: /storage/3node-ceph/phase-2/
 
 - 已完成 [Phase 1](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-1/)
 - 三台節點可從 Mac mini 用 Ansible 連線
-- `storage/3node-ceph/ansible/group_vars/all.yml` 已確認：
+- `storage/3node-ceph/ansible/inventory/group_vars/all.yml` 已確認：
   - `ceph_version`
   - `ceph_cephadm_url`
-  - `ceph_dashboard_password`
+- `storage/3node-ceph/ansible/inventory/group_vars/encrypted.yml` 已確認：
+  - `vault_ceph_dashboard_password`
 
 ---
 

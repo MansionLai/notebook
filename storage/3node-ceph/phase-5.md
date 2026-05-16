@@ -23,11 +23,13 @@ permalink: /storage/3node-ceph/phase-5/
 ## 前置條件
 
 - 已完成 [Phase 4](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-4/)
-- `storage/3node-ceph/ansible/group_vars/all.yml` 已填入：
-  - `prometheus_agent_remote_write_url`
-  - `fluent_bit_opensearch_host`
-  - `fluent_bit_opensearch_username`
-  - `fluent_bit_opensearch_password`
+- `storage/3node-ceph/ansible/inventory/group_vars/all.yml` 已填入：
+  - 觀測與 log shipping 的非敏感設定
+- `storage/3node-ceph/ansible/inventory/group_vars/encrypted.yml` 已填入：
+  - `vault_prometheus_agent_remote_write_url`
+  - `vault_fluent_bit_opensearch_host`
+  - `vault_fluent_bit_opensearch_username`
+  - `vault_fluent_bit_opensearch_password`
 
 ---
 
@@ -49,7 +51,7 @@ ansible-playbook playbooks/phase-5.yml
 - 在三台節點安裝並設定 `fluent-bit`
 - 在 `ceph-node-01` 部署 Prometheus agent（remote_write 模式）
   - 抓取 node-exporter + ceph-exporter metrics
-  - 轉送到 `prometheus_agent_remote_write_url`
+  - 轉送到 `vault_prometheus_agent_remote_write_url`
 - fluent-bit 將 `/var/log/syslog`、`/var/log/kern.log`、`/var/log/ceph/*.log` 送到 OpenSearch
 
 對應檔案：
@@ -82,7 +84,7 @@ curl -u "<user>:<password>" "https://<opensearch-host>:9200/_cat/indices?v" | gr
 
 ## Troubleshooting
 
-- `Please set prometheus/opensearch endpoint variables`：先補齊 `group_vars/all.yml` 內的 endpoint 參數
+- `Please set prometheus/opensearch endpoint variables`：先補齊 `inventory/group_vars` 內的 endpoint 參數
 - `ceph-exporter` 無法啟動：確認 `ceph-node-01` 上已有 `ceph` CLI 與 `/etc/ceph` 設定
 - `prometheus-agent` 無資料：確認 remote_write URL 與認證是否正確
 - OpenSearch 無資料：確認 fluent-bit 可連線到 OpenSearch 端點與帳密權限

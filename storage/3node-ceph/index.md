@@ -55,14 +55,14 @@ ansible-playbook playbooks/site.yml
 Ansible 目錄內的重要結構：
 
 - `inventory/hosts.yml` — host groups
-- `group_vars/all.yml` — shared Ceph and lab settings
-- `host_vars/*.yml` — per-node public/cluster IP mapping
+- `inventory/group_vars/all.yml` — shared Ceph and lab settings
+- `inventory/hosts.yml` — per-node public/cluster IP mapping
 - `playbooks/phase-1.yml` ~ `phase-5.yml` — one playbook per phase
 - `roles/` — one primary role per phase
 
 每次重新建立 Azure VM 之後，記得先更新：
 
-- `host_vars/*.yml` 內的 `ansible_host`
+- `inventory/hosts.yml` 內的 `ansible_host`
 - 每台節點的 `ceph_osd_devices`
 
 ## Reference Docs

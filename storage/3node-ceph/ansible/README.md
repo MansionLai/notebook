@@ -15,8 +15,8 @@ This directory contains the Ansible-first workflow for `storage/3node-ceph/phase
 ## Layout
 
 - `inventory/hosts.yml` — host groups
-- `group_vars/all.yml` — shared Ceph and lab settings
-- `host_vars/*.yml` — per-node public/cluster IP mapping
+- `inventory/group_vars/all.yml` — shared non-secret variables
+- `inventory/group_vars/encrypted.yml` — secret variables (ansible-vault)
 - `playbooks/phase-1.yml` ~ `phase-5.yml` — one playbook per phase
 - `playbooks/site.yml` — full Phase 1-5 chain
 - `roles/` — one primary role per phase
@@ -45,7 +45,7 @@ ansible-playbook playbooks/site.yml
 Before running Phase 3 in a non-lab environment, review:
 
 - `inventory/hosts.yml`
-- `host_vars/*.yml`
+- `inventory/group_vars/encrypted.yml`
 - `ceph_dashboard_password`
 - `ceph_rbd_pool_name`
 - `ceph_rbd_pool_min_size`
@@ -53,7 +53,7 @@ Before running Phase 3 in a non-lab environment, review:
 - `fluent_bit_opensearch_*`
 - `ceph_osd_devices` for each node
 
-The per-host files are the source of truth for:
+The inventory file is the source of truth for:
 
 - `ansible_host`
 - `ceph_public_ip`

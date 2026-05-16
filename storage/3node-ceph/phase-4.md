@@ -18,7 +18,7 @@ permalink: /storage/3node-ceph/phase-4/
 
 - 已完成 [Phase 3](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-3/)
 - Cluster 已有 3 MON / 3 MGR / 6 OSD
-- `group_vars/all.yml` 已確認：
+- `inventory/group_vars/all.yml` 已確認：
   - `ceph_rbd_pool_name`
   - `ceph_rbd_pool_pg_num`
   - `ceph_rbd_pool_pgp_num`
