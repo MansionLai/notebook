@@ -37,11 +37,11 @@ param workerNicName string = '${workerVmName}-nic'
 @description('Worker secondary NIC name.')
 param workerSecondaryNicName string = '${workerVmName}-nic2'
 @description('Master private IP.')
-param masterPrivateIp string = '10.10.10.24'
+param masterPrivateIp string = '10.10.10.11'
 @description('Infra private IP.')
-param infraPrivateIp string = '10.10.10.25'
+param infraPrivateIp string = '10.10.10.12'
 @description('Worker private IP.')
-param workerPrivateIp string = '10.10.10.26'
+param workerPrivateIp string = '10.10.10.13'
 @description('Worker secondary private IP.')
 param workerSecondaryPrivateIp string = '10.10.100.13'
 @description('Administrator username for the Linux VMs.')
