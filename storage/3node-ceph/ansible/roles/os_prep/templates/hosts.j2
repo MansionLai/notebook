@@ -2,13 +2,13 @@
 127.0.1.1 {{ inventory_hostname }}
 
 # Ceph Public Network
-{% for entry in ceph_hosts_entries[:3] -%}
-{{ entry.ip }} {{ entry.name }}
+{% for host in groups['ceph_nodes'] | default([]) -%}
+{{ hostvars[host].ceph_public_ip }} {{ host }}
 {% endfor %}
 
 # Ceph Cluster Network
-{% for entry in ceph_hosts_entries[3:] -%}
-{{ entry.ip }} {{ entry.name }}
+{% for host in groups['ceph_nodes'] | default([]) -%}
+{{ hostvars[host].ceph_cluster_ip }} {{ host }}-cls
 {% endfor %}
 
 # IPv6 defaults
