@@ -1,41 +1,39 @@
 using './main.bicep'
 
+// Deploy to resource group: mansion_kubevirt_resource
 param location = 'japaneast'
-// Shared VNet — owned by KubeVirt lab, consumed by Ceph lab when it is provisioned.
-param virtualNetworkName = 'mansion-shared-vnet'
-// KubeVirt primary range: K8s nodes (10.10.10.x) and VM overlay (10.10.100.x).
+// mansion_kubevirt VNet — K8s nodes (10.10.10.x) and VM overlay (10.10.100.x).
+param virtualNetworkName = 'mansion_kubevirt_vnet'
+// Primary address range: K8s nodes and VM overlay traffic.
 param virtualNetworkAddressPrefix = '10.10.0.0/16'
-// Ceph cluster subnet (172.10.10.0/24) lives in this range; declared from day one so the
-// shared VNet already covers it when the Ceph lab is provisioned later.
+// Secondary address range reserved for the ceph subnet declared below (ARM PUT safety).
 param clusterAddressPrefix = '172.10.0.0/16'
-// Shared node subnet: KubeVirt K8s nodes 10.10.10.10-12; Ceph nodes will use 10.10.10.20-22.
-param k8sSubnetName = 'shared-node-subnet'
+// mansion_kubevirt node subnet: K8s nodes 10.10.10.11 (master), .12 (infra), .13 (worker).
+param k8sSubnetName = 'mansion_kubevirt_node_subnet'
 param k8sSubnetPrefix = '10.10.10.0/24'
-// KubeVirt-exclusive secondary subnet for VM overlay traffic (Worker eth1).
-param kubevirtSubnetName = 'kubevirt-subnet'
+// Secondary subnet for VM overlay traffic (Worker eth1 / KubeVirt VMs).
+param kubevirtSubnetName = 'mansion_kubevirt_vm_subnet'
 param kubevirtSubnetPrefix = '10.10.100.0/24'
-// Ceph-dedicated cluster subnet — declared in the KubeVirt-owned VNet so that ARM PUT
-// semantics on VNet redeployment never delete it.
-// These values MUST match storage/3node-ceph/iac/main.bicepparam (clusterSubnetName / clusterSubnetPrefix).
-param cephClusterSubnetName = 'ceph-cluster-subnet'
+// Retained in VNet declaration so ARM PUT on VNet redeployment never deletes it.
+param cephClusterSubnetName = 'mansion_kubevirt_ceph_subnet'
 param cephClusterSubnetPrefix = '172.10.10.0/24'
-param networkSecurityGroupName = 'k8s-nsg'
+param networkSecurityGroupName = 'mansion_kubevirt_nsg'
 // Documentation placeholder; replace before deployment.
 param allowedSourceCidr = '203.0.113.10/32'
-param masterVmName = 'mansion-k8s-master'
-param infraVmName = 'mansion-k8s-infra'
-param workerVmName = 'mansion-k8s-worker'
-param masterPublicIpName = 'mansion-k8s-master-pip'
-param infraPublicIpName = 'mansion-k8s-infra-pip'
-param workerPublicIpName = 'mansion-k8s-worker-pip'
-param masterNicName = 'mansion-k8s-master-nic'
-param infraNicName = 'mansion-k8s-infra-nic'
-param workerNicName = 'mansion-k8s-worker-nic'
-param workerSecondaryNicName = 'mansion-k8s-worker-nic2'
-param masterPrivateIp = '10.10.10.10'
-param infraPrivateIp = '10.10.10.11'
-param workerPrivateIp = '10.10.10.12'
-param workerSecondaryPrivateIp = '10.10.100.12'
+param masterVmName = 'mansion_kubevirt_master'
+param infraVmName = 'mansion_kubevirt_infra'
+param workerVmName = 'mansion_kubevirt_worker'
+param masterPublicIpName = 'mansion_kubevirt_master_pip'
+param infraPublicIpName = 'mansion_kubevirt_infra_pip'
+param workerPublicIpName = 'mansion_kubevirt_worker_pip'
+param masterNicName = 'mansion_kubevirt_master_nic'
+param infraNicName = 'mansion_kubevirt_infra_nic'
+param workerNicName = 'mansion_kubevirt_worker_nic'
+param workerSecondaryNicName = 'mansion_kubevirt_worker_nic2'
+param masterPrivateIp = '10.10.10.11'
+param infraPrivateIp = '10.10.10.12'
+param workerPrivateIp = '10.10.10.13'
+param workerSecondaryPrivateIp = '10.10.100.13'
 param adminUsername = 'ubuntu'
 param adminPublicKey = ''
 param masterVmSize = 'Standard_D2s_v4'

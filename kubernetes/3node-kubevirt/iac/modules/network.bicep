@@ -2,23 +2,23 @@ targetScope = 'resourceGroup'
 
 @description('Azure region for the virtual network.')
 param location string
-@description('Shared virtual network name. This VNet is created by the KubeVirt lab and shared with the Ceph lab.')
+@description('mansion_kubevirt virtual network name.')
 param virtualNetworkName string
-@description('Virtual network primary address range (KubeVirt nodes/overlay, e.g. 10.10.0.0/16).')
+@description('Virtual network primary address range (e.g. 10.10.0.0/16).')
 param virtualNetworkAddressPrefix string
-@description('Virtual network secondary address range for the Ceph cluster subnet (e.g. 172.10.0.0/16). Must be declared from day one so the Ceph cluster subnet 172.10.10.0/24 can exist within the same shared VNet.')
+@description('Virtual network secondary address range (e.g. 172.10.0.0/16). Required to cover the ceph subnet declared below.')
 param clusterAddressPrefix string
-@description('Shared node subnet name. KubeVirt K8s nodes use 10.10.10.10-12; Ceph nodes will later use 10.10.10.20-22.')
+@description('mansion_kubevirt node subnet name (10.10.10.0/24).')
 param k8sSubnetName string
-@description('Shared node subnet range (10.10.10.0/24).')
+@description('Node subnet range (10.10.10.0/24).')
 param k8sSubnetPrefix string
-@description('KubeVirt-exclusive secondary subnet name for VM overlay traffic (Worker eth1).')
+@description('Secondary subnet name for VM overlay traffic (Worker eth1).')
 param kubevirtSubnetName string
-@description('KubeVirt secondary subnet range (10.10.100.0/24).')
+@description('VM overlay subnet range (10.10.100.0/24).')
 param kubevirtSubnetPrefix string
-@description('Ceph-dedicated cluster subnet name inside this VNet (e.g. ceph-cluster-subnet, 172.10.10.0/24). Declared here — and kept in every KubeVirt redeploy — so that ARM PUT semantics on the VNet resource never delete it.')
+@description('Ceph subnet name retained in this VNet so ARM PUT semantics never delete it on redeployment.')
 param cephClusterSubnetName string
-@description('CIDR for the Ceph cluster subnet (must be within clusterAddressPrefix, e.g. 172.10.10.0/24).')
+@description('CIDR for the ceph subnet (must be within clusterAddressPrefix, e.g. 172.10.10.0/24).')
 param cephClusterSubnetPrefix string
 
 resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-11-01' = {
@@ -44,9 +44,8 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-11-01' = {
           addressPrefix: kubevirtSubnetPrefix
         }
       }
-      // ceph-cluster-subnet is owned by KubeVirt (the VNet owner) to prevent ARM PUT semantics
-      // from deleting it on every KubeVirt redeploy. The Ceph side references this subnet as
-      // existing rather than re-creating it.
+      // mansion_kubevirt_ceph_subnet is retained in this VNet declaration so that ARM PUT semantics
+      // on every redeployment never delete it.
       {
         name: cephClusterSubnetName
         properties: {
