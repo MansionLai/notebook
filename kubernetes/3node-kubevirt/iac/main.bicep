@@ -2,26 +2,20 @@ targetScope = 'resourceGroup'
 
 @description('Azure region for deployment.')
 param location string = 'japaneast'
-@description('Name of the mansion_kubevirt virtual network.')
-param virtualNetworkName string
-@description('CIDR for the mansion_kubevirt virtual network primary address space (e.g. 10.10.0.0/16).')
-param virtualNetworkAddressPrefix string
-@description('Secondary CIDR for the virtual network address space (e.g. 172.10.0.0/16). Covers the ceph subnet so ARM PUT on the VNet never needs a destructive address-space update.')
-param clusterAddressPrefix string
-@description('Name of the mansion_kubevirt node subnet (10.10.10.0/24).')
-param k8sSubnetName string
-@description('CIDR for the node subnet.')
-param k8sSubnetPrefix string
-@description('Name of the secondary subnet for VM overlay traffic (Worker eth1).')
-param kubevirtSubnetName string
+@description('Name of the shared virtual network (in mansion-shared-resource).')
+param sharedVnetName string = 'mansion-shared-vnet'
+@description('Resource group containing the shared VNet.')
+param sharedVnetResourceGroup string = 'mansion-shared-resource'
+@description('Name of the new K8s node subnet.')
+param k8sSubnetName string = 'mansion_kubevirt_node_subnet'
+@description('CIDR for the K8s node subnet.')
+param k8sSubnetPrefix string = '10.10.11.0/24'
+@description('Name of the subnet for VM overlay traffic (Worker eth1).')
+param kubevirtSubnetName string = 'mansion_kubevirt_vm_subnet'
 @description('CIDR for the VM overlay subnet.')
-param kubevirtSubnetPrefix string
-@description('Name of the ceph subnet retained inside the mansion_kubevirt VNet so ARM PUT semantics never delete it on redeployment.')
-param cephClusterSubnetName string
-@description('CIDR for the ceph subnet (e.g. 172.10.10.0/24). Must be within clusterAddressPrefix.')
-param cephClusterSubnetPrefix string
+param kubevirtSubnetPrefix string = '10.10.100.0/24'
 @description('Name of the network security group.')
-param networkSecurityGroupName string
+param networkSecurityGroupName string = 'mansion_kubevirt_nsg'
 @description('Trusted source CIDR for inbound rules.')
 param allowedSourceCidr string
 @description('Master VM name.')
@@ -45,11 +39,11 @@ param workerNicName string = '${workerVmName}-nic'
 @description('Worker secondary NIC name.')
 param workerSecondaryNicName string = '${workerVmName}-nic2'
 @description('Master private IP.')
-param masterPrivateIp string = '10.10.10.11'
+param masterPrivateIp string = '10.10.11.11'
 @description('Infra private IP.')
-param infraPrivateIp string = '10.10.10.12'
+param infraPrivateIp string = '10.10.11.12'
 @description('Worker private IP.')
-param workerPrivateIp string = '10.10.10.13'
+param workerPrivateIp string = '10.10.11.13'
 @description('Worker secondary private IP.')
 param workerSecondaryPrivateIp string = '10.10.100.13'
 @description('Administrator username for the Linux VMs.')
@@ -71,19 +65,27 @@ param imageSku string = '22_04-lts-gen2'
 @description('Ubuntu image version.')
 param imageVersion string = 'latest'
 
-module network './modules/network.bicep' = {
-  name: 'network'
+// Create K8s subnet in shared VNet using module (deployed to shared RG scope)
+module k8sSubnetModule './modules/subnet.bicep' = {
+  scope: resourceGroup(sharedVnetResourceGroup)
+  name: 'k8sSubnet'
   params: {
-    location: location
-    virtualNetworkName: virtualNetworkName
-    virtualNetworkAddressPrefix: virtualNetworkAddressPrefix
-    clusterAddressPrefix: clusterAddressPrefix
-    k8sSubnetName: k8sSubnetName
-    k8sSubnetPrefix: k8sSubnetPrefix
-    kubevirtSubnetName: kubevirtSubnetName
-    kubevirtSubnetPrefix: kubevirtSubnetPrefix
-    cephClusterSubnetName: cephClusterSubnetName
-    cephClusterSubnetPrefix: cephClusterSubnetPrefix
+    vnetName: sharedVnetName
+    subnetName: k8sSubnetName
+    subnetPrefix: k8sSubnetPrefix
+    nsgId: nsg.outputs.networkSecurityGroupId
+  }
+}
+
+// Create KubeVirt subnet in shared VNet using module
+module kubevirtSubnetModule './modules/subnet.bicep' = {
+  scope: resourceGroup(sharedVnetResourceGroup)
+  name: 'kubevirtSubnet'
+  params: {
+    vnetName: sharedVnetName
+    subnetName: kubevirtSubnetName
+    subnetPrefix: kubevirtSubnetPrefix
+    nsgId: '' // KubeVirt subnet doesn't need NSG (only primary subnet does)
   }
 }
 
@@ -93,7 +95,7 @@ module nsg './modules/nsg.bicep' = {
     location: location
     networkSecurityGroupName: networkSecurityGroupName
     allowedSourceCidr: allowedSourceCidr
-    internalSourceCidr: virtualNetworkAddressPrefix
+    internalSourceCidr: '10.10.0.0/16'
   }
 }
 
@@ -102,7 +104,7 @@ module masterNic './modules/nic.bicep' = {
   params: {
     location: location
     networkSecurityGroupId: nsg.outputs.networkSecurityGroupId
-    subnetId: network.outputs.k8sSubnetId
+    subnetId: k8sSubnetModule.outputs.subnetId
     nicName: masterNicName
     publicIpName: masterPublicIpName
     privateIp: masterPrivateIp
@@ -114,7 +116,7 @@ module infraNic './modules/nic.bicep' = {
   params: {
     location: location
     networkSecurityGroupId: nsg.outputs.networkSecurityGroupId
-    subnetId: network.outputs.k8sSubnetId
+    subnetId: k8sSubnetModule.outputs.subnetId
     nicName: infraNicName
     publicIpName: infraPublicIpName
     privateIp: infraPrivateIp
@@ -126,13 +128,13 @@ module workerNic './modules/nic.bicep' = {
   params: {
     location: location
     networkSecurityGroupId: nsg.outputs.networkSecurityGroupId
-    subnetId: network.outputs.k8sSubnetId
+    subnetId: k8sSubnetModule.outputs.subnetId
     nicName: workerNicName
     publicIpName: workerPublicIpName
     privateIp: workerPrivateIp
     createSecondaryNic: true
     secondaryNicName: workerSecondaryNicName
-    secondarySubnetId: network.outputs.kubevirtSubnetId
+    secondarySubnetId: kubevirtSubnetModule.outputs.subnetId
     secondaryPrivateIp: workerSecondaryPrivateIp
   }
 }
@@ -193,37 +195,6 @@ module workerVm './modules/vm.bicep' = {
 }
 
 output targetResourceGroupName string = resourceGroup().name
-output virtualNetworkId string = network.outputs.virtualNetworkId
-output k8sSubnetId string = network.outputs.k8sSubnetId
-output kubevirtSubnetId string = network.outputs.kubevirtSubnetId
-output cephClusterSubnetId string = network.outputs.cephClusterSubnetId
+output k8sSubnetId string = k8sSubnetModule.outputs.subnetId
+output kubevirtSubnetId string = kubevirtSubnetModule.outputs.subnetId
 output networkSecurityGroupId string = nsg.outputs.networkSecurityGroupId
-output masterNicId string = masterNic.outputs.nicId
-output infraNicId string = infraNic.outputs.nicId
-output workerNicId string = workerNic.outputs.nicId
-output workerSecondaryNicId string = workerNic.outputs.secondaryNicId
-output masterPrivateIpAddress string = masterPrivateIp
-output infraPrivateIpAddress string = infraPrivateIp
-output workerPrivateIpAddress string = workerPrivateIp
-output workerSecondaryPrivateIpAddress string = workerSecondaryPrivateIp
-output masterPublicIpAddress string = masterNic.outputs.publicIpAddress
-output infraPublicIpAddress string = infraNic.outputs.publicIpAddress
-output workerPublicIpAddress string = workerNic.outputs.publicIpAddress
-output masterVmId string = masterVm.outputs.vmId
-output infraVmId string = infraVm.outputs.vmId
-output workerVmId string = workerVm.outputs.vmId
-output vmNames array = [
-  masterVmName
-  infraVmName
-  workerVmName
-]
-output vmPrivateIps array = [
-  masterPrivateIp
-  infraPrivateIp
-  workerPrivateIp
-]
-output publicIpAddresses array = [
-  masterNic.outputs.publicIpAddress
-  infraNic.outputs.publicIpAddress
-  workerNic.outputs.publicIpAddress
-]
