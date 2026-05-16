@@ -1,6 +1,0 @@
-ansible_host: REPLACE_WITH_CEPH_NODE_03_PUBLIC_IP
-ceph_public_ip: 10.10.10.23
-ceph_cluster_ip: 172.10.10.23
-ceph_osd_devices:
-  - /dev/sdc
-  - /dev/sdd

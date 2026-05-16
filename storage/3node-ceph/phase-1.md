@@ -20,8 +20,8 @@ permalink: /storage/3node-ceph/phase-1/
 - Mac mini 可用 SSH key 連到三台 VM
 - 已準備好：
   - `storage/3node-ceph/ansible/inventory/hosts.yml`
-  - `storage/3node-ceph/ansible/group_vars/all.yml`
-  - `storage/3node-ceph/ansible/host_vars/ceph-node-0{1,2,3}.yml`
+  - `storage/3node-ceph/ansible/inventory/group_vars/all.yml`
+  - `storage/3node-ceph/ansible/inventory/group_vars/encrypted.yml`
   - 每台節點的 `ceph_osd_devices` 已依實際 `lsblk` 結果填好
 
 ---
@@ -85,6 +85,6 @@ ansible ceph_nodes -m command -a "ufw status"
 
 ## Troubleshooting
 
-- `Expected public IP ... was not found`：先回頭檢查 Phase 0 的 NIC / IP 以及 `host_vars/*.yml`
+- `Expected public IP ... was not found`：先回頭檢查 Phase 0 的 NIC / IP 以及 `inventory/hosts.yml`
 - `Expected <device> to be empty`：表示這台機器可能不是全新狀態，或 `ceph_osd_devices` 與實際 Azure disk mapping 不一致
 - `Permission denied (publickey)`：先在 Mac mini 測試 `ssh ubuntu@<public-ip>`

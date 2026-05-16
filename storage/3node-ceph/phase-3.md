@@ -17,7 +17,7 @@ permalink: /storage/3node-ceph/phase-3/
 ## 前置條件
 
 - 已完成 [Phase 2](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-2/)
-- `group_vars/all.yml` 內的 dashboard 帳密已調整成你可接受的 lab 值
+- `inventory/group_vars/encrypted.yml` 內的 dashboard 帳密已調整成你可接受的 lab 值
 - `ceph-node-01` 能無密碼 SSH 到三台節點
 
 ---
@@ -81,4 +81,4 @@ ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph osd tree"
 
 - bootstrap 失敗：先確認 `ceph-node-01` 的 `cephadm version`、`ceph --version`、以及 SSH key / config 是否完整
 - host add 失敗：通常是 hostname 解析或 cephadm SSH 失敗
-- OSD 沒起來：先檢查 `ceph orch device ls` 與 `host_vars/*.yml` 的 `ceph_osd_devices` 是否一致
+- OSD 沒起來：先檢查 `ceph orch device ls` 與 `inventory/hosts.yml` 的 `ceph_osd_devices` 是否一致

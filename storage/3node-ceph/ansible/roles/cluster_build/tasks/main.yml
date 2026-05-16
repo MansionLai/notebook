@@ -11,6 +11,7 @@
     --initial-dashboard-user {{ ceph_dashboard_user }}
     --initial-dashboard-password {{ ceph_dashboard_password }}
     --allow-fqdn-hostname
+    --image {{ ceph_container_image }}
     --ssh-user {{ ansible_user }}
     --ssh-private-key /home/{{ ansible_user }}/.ssh/id_rsa
     --ssh-public-key /home/{{ ansible_user }}/.ssh/id_rsa.pub
@@ -103,3 +104,14 @@
 - name: Verify OSD tree
   ansible.builtin.command: ceph osd tree
   changed_when: false
+
+- name: Read Ceph daemon versions
+  ansible.builtin.command: ceph versions --format json
+  register: ceph_versions_json
+  changed_when: false
+
+- name: Enforce Ceph daemon version
+  ansible.builtin.assert:
+    that:
+      - "'ceph version {{ ceph_version }}' in ceph_versions_json.stdout"
+    fail_msg: "Ceph daemon versions do not match required {{ ceph_version }}."

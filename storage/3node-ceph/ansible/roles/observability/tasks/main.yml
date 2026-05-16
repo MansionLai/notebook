@@ -6,7 +6,7 @@
       - "'REPLACE_WITH_' not in fluent_bit_opensearch_username"
       - "'REPLACE_WITH_' not in fluent_bit_opensearch_password"
     fail_msg: >-
-      Please set prometheus/opensearch endpoint variables in group_vars/all.yml
+      Please set prometheus/opensearch endpoint variables in inventory/group_vars
       before running Phase 5.
 
 - name: Ensure docker is present for observability containers
