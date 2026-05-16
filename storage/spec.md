@@ -5,8 +5,8 @@ AI agent 請盡可能使用azure mcp來操作azure, 非必要不要使用az comm
 1. 3node-ceph
    - 透過azure cloud建立vm
      - resource group name = mansion_ceph_resource
-     - 所有相關的resource name都幫我加上mansion_ceph prefix作為識別
-     - 如果是需要跟其他resource共用的物件, 請放在mansion_shared_resource下
+     - 所有相關的resource name都幫我加上mansion-ceph- prefix作為識別
+     - 如果是需要跟其他resource共用的物件, 請放在mansion-shared-resource下
    - VM Spec
      - 透過azure cloud建立三台 ubuntu 22.04 vm, 每台都有 MON + MGR + OSD
      - os public ip segment = 10.10.10.0/24 (希望跟我另個kubernetes專案中的三台vm是在同個segment下且互通)
