@@ -17,19 +17,32 @@ AI agent使用 ai/ceph branch進行修正, 確認沒問題後再merge回main bra
        - os ip: 10.10.10.21/24
        - ceph cluster ip: 172.10.10.21/24
        - 1 * 64G os disk + 2 * 64G osd disk
+       - localtion label:
+         - datacenter: dc1
+         - room: room1
+         - rack: rack1
      - Infra node
        - Standard_D4s_v4 (4C/16G)
        - os ip: 10.10.10.22/24
        - ceph cluster ip: 172.10.10.22/24
        - 1 * 64G os disk + 2 * 64G osd disk
+       - localtion label:
+         - datacenter: dc1
+         - room: room1
+         - rack: rack2
      - Worker node
        - Standard_D4s_v4 (4C/16G)
        - os ip: 10.10.10.23/24
        - ceph cluster ip: 172.10.10.23/24
        - 1 * 64G os disk + 2 * 64G osd disk
+       - localtion label:
+         - datacenter: dc1
+         - room: room1
+         - rack: rack3
    - Installation guide
      - ceph version = v19.2.2
-     - 只需建立rbd pool, name=k8s_rbd_pool (size=3, min_size=1, pg_num=128, pgp_num=128)
+     - 建立rbd pool, name=k8s_rbd_pool (size=3, min_size=1, pg_num=128, pgp_num=128)
+     - 調整crush map, 依照ceph node location label, 並調整failure domain=rack
      - 需要安裝ceph-exporter + ceph-node-exporter將metrics推送到另個kubernetes專案中建立的prometheus
      - 需要安裝fluent-bit將log推送到個kubernetes專案中建立的opensearch
      - 將安裝方式寫成markdown file方便閱讀
@@ -41,3 +54,4 @@ AI agent使用 ai/ceph branch進行修正, 確認沒問題後再merge回main bra
        - all.yml 儲存明碼的variable
        - encrypted.yml 儲存使用ansible vault加密過後的variable, 將secret性質的variable放在這份檔案
 
+2. ceph-cross-dc-migration
