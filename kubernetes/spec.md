@@ -4,8 +4,9 @@ AI agent 請盡可能使用azure mcp來操作azure, 非必要不要使用az comm
 
 1. 3node-kubevirt
    - 透過azure cloud建立vm
-     - resource group name = mansion_kubevirt_resource
-     - 所有相關的resource name都幫我加上mansion_kubevirt prefix作為識別
+     - resource group name = mansion-kubevirt-resource
+     - 所有相關的resource name都幫我加上mansion-kubevirt prefix作為識別
+     - 如果是需要跟其他resource共用的物件, 請放在mansion-shared-resource下 (ex. mansion-shared-vnet)
    - VM Spec
      - 透過azure cloud建立三台 ubuntu 22.04 vm, 分別是master node, infra node 以及worker node
      - 用以學習k8s & kubevirt installation + kubevirt vm provision
@@ -36,6 +37,6 @@ AI agent 請盡可能使用azure mcp來操作azure, 非必要不要使用az comm
      - 安裝Kubevirt version = v1.5.0
 
 2. 3node-multipass
-   - 使用 Mac Mini M4 本機，透過 Multipass 建立三台 Ubuntu 24.04 VM，橋接至 en0（192.168.50.x/24
+   - 使用 Mac Mini M4 本機，透過 Multipass 建立三台 Ubuntu 24.04 VM，橋接至 en0（192.168.50.x/24)
    - 搭建純 K8s 三節點 Lab，不包含 KubeVirt（Apple Silicon 無 nested virtualization 支援
    - 專注於 K8s 核心元件與基礎設施服務的學習
