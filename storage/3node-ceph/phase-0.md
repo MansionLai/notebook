@@ -10,14 +10,14 @@ permalink: /storage/3node-ceph/phase-0/
 
 ## 環境概覽
 
-| 節點 | Azure VM | Public IP (shared-node-subnet) | Cluster IP (ceph-cluster-subnet) | 角色 |
+| 節點 | Azure VM | Public IP (shared-node-subnet) | Cluster IP (mansion-ceph-cluster-subnet) | 角色 |
 |------|----------|--------------------------------|----------------------------------|------|
-| ceph-node-01 | Standard_D4s_v4 (4C/16G) | 10.10.10.20 | 172.10.10.20 | MON + MGR + OSD x2 |
-| ceph-node-02 | Standard_D4s_v4 (4C/16G) | 10.10.10.21 | 172.10.10.21 | MON + MGR + OSD x2 |
-| ceph-node-03 | Standard_D4s_v4 (4C/16G) | 10.10.10.22 | 172.10.10.22 | MON + MGR + OSD x2 |
+| ceph-node-01 | Standard_D4s_v4 (4C/16G) | 10.10.10.21 | 172.10.10.21 | MON + MGR + OSD x2 |
+| ceph-node-02 | Standard_D4s_v4 (4C/16G) | 10.10.10.22 | 172.10.10.22 | MON + MGR + OSD x2 |
+| ceph-node-03 | Standard_D4s_v4 (4C/16G) | 10.10.10.23 | 172.10.10.23 | MON + MGR + OSD x2 |
 
-**Public Network（共用節點子網）:** 10.10.10.0/24 (`shared-node-subnet`，與 KubeVirt K8s 節點共用，KubeVirt 使用 .10-.12，Ceph 使用 .20-.22)  
-**Cluster Network（Ceph 專屬）:** 172.10.10.0/24 (`ceph-cluster-subnet`)
+**Public Network（共用節點子網）:** 10.10.10.0/24 (`shared-node-subnet`，與 KubeVirt K8s 節點共用，KubeVirt 使用 .10-.12，Ceph 使用 .21-.23)  
+**Cluster Network（Ceph 專屬）:** 172.10.10.0/24 (`mansion-ceph-cluster-subnet`)
 
 ---
 
@@ -40,19 +40,19 @@ permalink: /storage/3node-ceph/phase-0/
 
 | 項目 | 值 |
 |------|----|
-| Resource Group | `mansion_resource`（與 KubeVirt lab 共用同一 RG） |
+| Resource Group | `mansion_ceph_resource` |
 | Region | 預設 `japaneast`（Japan East） |
 | VNet（**既存**，由 KubeVirt lab 建立） | `mansion-shared-vnet` |
 | Address space（主，KubeVirt 節點/overlay） | `10.10.0.0/16` |
 | Address space（次，Ceph cluster subnet 預留） | `172.10.0.0/16` |
 | Public subnet（**既存**，共用節點子網） | `shared-node-subnet` / `10.10.10.0/24` |
-| Cluster subnet（**新建**，Ceph 專屬） | `ceph-cluster-subnet` / `172.10.10.0/24` |
+| Cluster subnet（**新建**，Ceph 專屬） | `mansion-ceph-cluster-subnet` / `172.10.10.0/24` |
 | SSH user | `ubuntu` |
 | SSH public key | 由使用者提供 |
-| NSG | `ceph-nsg` |
+| NSG | `mansion-ceph-nsg` |
 | NSG allowed source | 使用者的固定 Public IP 或 CIDR |
 
-> **共用 VNet 說明：** `mansion-shared-vnet` 與 `shared-node-subnet` 為既存資源，由 KubeVirt lab 的 Phase 0 負責建立。Ceph lab 部署前必須確認這兩個資源已存在於 `mansion_resource` 中。Ceph Phase 0 只新建 `ceph-cluster-subnet` 與 Ceph VM/NIC/NSG 資源。
+> **共用 VNet 說明：** `mansion-shared-vnet` 與 `shared-node-subnet` 為既存資源，由 KubeVirt lab 的 Phase 0 負責建立。Ceph lab 部署前必須確認這兩個資源可被目前訂閱存取。Ceph Phase 0 會在 `mansion_ceph_resource` 內建立 Ceph VM/NIC/NSG，並在共用 VNet 中建立/管理 `mansion-ceph-cluster-subnet`。
 
 > Phase 0 Azure 物件命名採用與 KubeVirt lab 一致的風格（小寫 + hyphen），方便在共用訂閱中辨識
 
@@ -71,24 +71,24 @@ permalink: /storage/3node-ceph/phase-0/
 
 ### 步驟 3：確認 KubeVirt lab 已部署（前置條件）
 
-> Ceph Phase 0 依賴 KubeVirt lab 所建立的共用資源。在執行 Ceph 部署前，請確認 `mansion_resource` 資源群組中已存在：
+> Ceph Phase 0 依賴 KubeVirt lab 所建立的共用資源。在執行 Ceph 部署前，請確認 `mansion-shared-vnet` 與 `shared-node-subnet` 已存在且可存取：
 > - `mansion-shared-vnet`（VNet，含 `10.10.0.0/16` 與 `172.10.0.0/16` 兩個 address space）
 > - `shared-node-subnet`（子網，`10.10.10.0/24`，KubeVirt K8s 節點已使用 .10-.12）
 
 ```bash
-az network vnet show --resource-group mansion_resource --name mansion-shared-vnet --query "{name:name, addressSpace:addressSpace.addressPrefixes}" -o json
-az network vnet subnet show --resource-group mansion_resource --vnet-name mansion-shared-vnet --name shared-node-subnet --query "{name:name, prefix:addressPrefix}" -o json
+az network vnet show --resource-group <kubevirt-rg> --name mansion-shared-vnet --query "{name:name, addressSpace:addressSpace.addressPrefixes}" -o json
+az network vnet subnet show --resource-group <kubevirt-rg> --vnet-name mansion-shared-vnet --name shared-node-subnet --query "{name:name, prefix:addressPrefix}" -o json
 ```
 
 ### 步驟 4：建立目標 Resource Group（若尚未存在）
 
 ```bash
 az group create \
-  --name mansion_resource \
+  --name mansion_ceph_resource \
   --location japaneast
 ```
 
-> 若已為 KubeVirt lab 建立過 `mansion_resource`，此步驟可略過
+> 若 `mansion_ceph_resource` 已存在，此步驟可略過
 
 ### 步驟 5：預覽部署變更（what-if）
 
@@ -96,7 +96,7 @@ az group create \
 
 ```bash
 az deployment group what-if \
-  --resource-group mansion_resource \
+  --resource-group mansion_ceph_resource \
   --name mansion-ceph-phase0-preview \
   --template-file storage/3node-ceph/iac/main.bicep \
   --parameters storage/3node-ceph/iac/main.bicepparam
@@ -106,7 +106,7 @@ az deployment group what-if \
 
 ```bash
 az deployment group create \
-  --resource-group mansion_resource \
+  --resource-group mansion_ceph_resource \
   --name mansion-ceph-phase0 \
   --template-file storage/3node-ceph/iac/main.bicep \
   --parameters storage/3node-ceph/iac/main.bicepparam

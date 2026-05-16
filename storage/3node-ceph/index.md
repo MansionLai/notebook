@@ -7,7 +7,7 @@ permalink: /storage/3node-ceph/
 
 # Ceph 3-Node Cluster on Azure
 
-這份筆記已改為 **phase 導覽式結構**。如果你要完整從 Azure 建到 Ceph RBD pool，請依序閱讀 `Phase 0` 到 `Phase 4`；如果你要查整體設計或指令，請直接跳到下方參考文件。
+這份筆記已改為 **phase 導覽式結構**。如果你要完整從 Azure 建到 Ceph RBD pool 與可觀測性，請依序閱讀 `Phase 0` 到 `Phase 5`；如果你要查整體設計或指令，請直接跳到下方參考文件。
 
 ## Build Agenda
 
@@ -18,15 +18,16 @@ permalink: /storage/3node-ceph/
 | [Phase 2](phase-2/) | Ceph v19.2.2 安裝 | Docker、cephadm、SSH key 與環境準備 |
 | [Phase 3](phase-3/) | Cluster bootstrap | Bootstrap、加入節點、部署 MON/MGR/OSD |
 | [Phase 4](phase-4/) | RBD pool 設定 | 建立 RBD pool 與 replication 參數設定 |
+| [Phase 5](phase-5/) | Observability / Log shipping | ceph-exporter、node-exporter、fluent-bit 串接 Prometheus/OpenSearch |
 
 ## Reading Guide
 
-1. 第一次建置：從 `Phase 0` 讀到 `Phase 4`
+1. 第一次建置：從 `Phase 0` 讀到 `Phase 5`
 2. 查指令與設計：參考下方文件
 
 ## Ansible Automation
 
-Phase 1 到 Phase 4 的主執行入口現在都放在：
+Phase 1 到 Phase 5 的主執行入口現在都放在：
 
 ```text
 storage/3node-ceph/ansible/
@@ -42,9 +43,10 @@ ansible-playbook playbooks/phase-1.yml
 ansible-playbook playbooks/phase-2.yml
 ansible-playbook playbooks/phase-3.yml
 ansible-playbook playbooks/phase-4.yml
+ansible-playbook playbooks/phase-5.yml
 ```
 
-如果要一次跑完 Phase 1-4：
+如果要一次跑完 Phase 1-5：
 
 ```bash
 ansible-playbook playbooks/site.yml
@@ -55,7 +57,7 @@ Ansible 目錄內的重要結構：
 - `inventory/hosts.yml` — host groups
 - `group_vars/all.yml` — shared Ceph and lab settings
 - `host_vars/*.yml` — per-node public/cluster IP mapping
-- `playbooks/phase-1.yml` ~ `phase-4.yml` — one playbook per phase
+- `playbooks/phase-1.yml` ~ `phase-5.yml` — one playbook per phase
 - `roles/` — one primary role per phase
 
 每次重新建立 Azure VM 之後，記得先更新：

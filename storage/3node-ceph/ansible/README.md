@@ -4,7 +4,7 @@ published: false
 
 # Ceph 3-Node Ansible Automation
 
-This directory contains the Ansible-first workflow for `storage/3node-ceph/phase-1.md` through `phase-4.md`.
+This directory contains the Ansible-first workflow for `storage/3node-ceph/phase-1.md` through `phase-5.md`.
 
 ## Control node
 
@@ -17,8 +17,8 @@ This directory contains the Ansible-first workflow for `storage/3node-ceph/phase
 - `inventory/hosts.yml` — host groups
 - `group_vars/all.yml` — shared Ceph and lab settings
 - `host_vars/*.yml` — per-node public/cluster IP mapping
-- `playbooks/phase-1.yml` ~ `phase-4.yml` — one playbook per phase
-- `playbooks/site.yml` — full Phase 1-4 chain
+- `playbooks/phase-1.yml` ~ `phase-5.yml` — one playbook per phase
+- `playbooks/site.yml` — full Phase 1-5 chain
 - `roles/` — one primary role per phase
 
 ## Quickstart
@@ -31,6 +31,7 @@ ansible-playbook playbooks/phase-1.yml
 ansible-playbook playbooks/phase-2.yml
 ansible-playbook playbooks/phase-3.yml
 ansible-playbook playbooks/phase-4.yml
+ansible-playbook playbooks/phase-5.yml
 ```
 
 To run the full build in one shot:
@@ -46,7 +47,10 @@ Before running Phase 3 in a non-lab environment, review:
 - `inventory/hosts.yml`
 - `host_vars/*.yml`
 - `ceph_dashboard_password`
+- `ceph_rbd_pool_name`
 - `ceph_rbd_pool_min_size`
+- `prometheus_agent_remote_write_url`
+- `fluent_bit_opensearch_*`
 - `ceph_osd_devices` for each node
 
 The per-host files are the source of truth for:

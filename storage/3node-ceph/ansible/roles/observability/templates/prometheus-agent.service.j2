@@ -1,0 +1,19 @@
+[Unit]
+Description=Prometheus Agent (remote_write mode)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Restart=always
+ExecStartPre=-/usr/bin/docker rm -f prometheus-agent
+ExecStart=/usr/bin/docker run --name prometheus-agent --network host \
+  -v /etc/prometheus-agent/prometheus.yml:/etc/prometheus/prometheus.yml:ro \
+  -v /var/lib/prometheus-agent:/prometheus \
+  {{ prometheus_agent_image }} \
+  --config.file=/etc/prometheus/prometheus.yml \
+  --enable-feature=agent \
+  --storage.agent.path=/prometheus
+ExecStop=/usr/bin/docker stop prometheus-agent
+
+[Install]
+WantedBy=multi-user.target

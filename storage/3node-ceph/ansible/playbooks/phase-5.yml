@@ -1,0 +1,6 @@
+- name: Phase 5 | Observability and log shipping
+  hosts: ceph_nodes
+  gather_facts: true
+  become: true
+  roles:
+      - observability

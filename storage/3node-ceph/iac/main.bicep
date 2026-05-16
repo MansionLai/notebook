@@ -4,7 +4,7 @@ targetScope = 'resourceGroup'
 param location string = 'japaneast'
 @description('Name of the shared virtual network (owned by KubeVirt lab; consumed here as an existing resource).')
 param virtualNetworkName string
-@description('Name of the shared node subnet that already exists in the shared VNet. Ceph public NICs attach here using IPs 10.10.10.20-22.')
+@description('Name of the shared node subnet that already exists in the shared VNet. Ceph public NICs attach here using IPs 10.10.10.21-23.')
 param sharedNodeSubnetName string = 'shared-node-subnet'
 @description('CIDR of the shared node subnet. Used by the NSG internal-traffic rule.')
 param sharedNodeSubnetPrefix string = '10.10.10.0/24'
@@ -61,17 +61,19 @@ param cephNode02ClusterNicName string = '${cephNode02VmName}-nic-cluster'
 @description('Ceph node 03 cluster NIC name.')
 param cephNode03ClusterNicName string = '${cephNode03VmName}-nic-cluster'
 @description('Ceph node 01 public network private IP.')
-param cephNode01PublicIp string = '10.10.10.20'
+param cephNode01PublicIp string = '10.10.10.21'
 @description('Ceph node 02 public network private IP.')
-param cephNode02PublicIp string = '10.10.10.21'
+param cephNode02PublicIp string = '10.10.10.22'
 @description('Ceph node 03 public network private IP.')
-param cephNode03PublicIp string = '10.10.10.22'
+param cephNode03PublicIp string = '10.10.10.23'
 @description('Ceph node 01 cluster network private IP.')
-param cephNode01ClusterIp string = '172.10.10.20'
+param cephNode01ClusterIp string = '172.10.10.21'
 @description('Ceph node 02 cluster network private IP.')
-param cephNode02ClusterIp string = '172.10.10.21'
+param cephNode02ClusterIp string = '172.10.10.22'
 @description('Ceph node 03 cluster network private IP.')
-param cephNode03ClusterIp string = '172.10.10.22'
+param cephNode03ClusterIp string = '172.10.10.23'
+@description('OS disk size in GB for Ubuntu OS disk.')
+param osDiskSizeGb int = 64
 @description('Data disk SKU for OSD disks.')
 param dataDiskSku string = 'StandardSSD_LRS'
 @description('Data disk size in GB for OSD disks.')
@@ -159,6 +161,7 @@ module cephNode01Vm './modules/vm.bicep' = {
     imageOffer: imageOffer
     imageSku: imageSku
     imageVersion: imageVersion
+    osDiskSizeGb: osDiskSizeGb
     dataDiskSku: dataDiskSku
     dataDiskSizeGb: dataDiskSizeGb
   }
@@ -180,6 +183,7 @@ module cephNode02Vm './modules/vm.bicep' = {
     imageOffer: imageOffer
     imageSku: imageSku
     imageVersion: imageVersion
+    osDiskSizeGb: osDiskSizeGb
     dataDiskSku: dataDiskSku
     dataDiskSizeGb: dataDiskSizeGb
   }
@@ -201,6 +205,7 @@ module cephNode03Vm './modules/vm.bicep' = {
     imageOffer: imageOffer
     imageSku: imageSku
     imageVersion: imageVersion
+    osDiskSizeGb: osDiskSizeGb
     dataDiskSku: dataDiskSku
     dataDiskSizeGb: dataDiskSizeGb
   }

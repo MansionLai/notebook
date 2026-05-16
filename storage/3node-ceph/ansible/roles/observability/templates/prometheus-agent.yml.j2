@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: node-exporter
+    static_configs:
+{% for host in groups['ceph_nodes'] %}
+      - targets: ["{{ hostvars[host].ceph_public_ip }}:9100"]
+        labels:
+          ceph_node: "{{ host }}"
+{% endfor %}
+
+  - job_name: ceph-exporter
+    static_configs:
+      - targets: ["{{ hostvars[groups['ceph_admin'][0]].ceph_public_ip }}:{{ ceph_exporter_port }}"]
+        labels:
+          ceph_cluster: "3node-ceph"
+
+remote_write:
+  - url: "{{ prometheus_agent_remote_write_url }}"
+{% if prometheus_agent_remote_write_username | length > 0 %}
+    basic_auth:
+      username: "{{ prometheus_agent_remote_write_username }}"
+      password: "{{ prometheus_agent_remote_write_password }}"
+{% endif %}

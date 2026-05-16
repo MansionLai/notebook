@@ -8,13 +8,13 @@ permalink: /storage/3node-ceph/commands/
 
 # Ceph 3-Node Commands Reference
 
-這份文件整理 Ceph 3-node on Azure 的主要操作指令。Phase 1-4 現在以 **Ansible 從 Mac mini 執行** 為主，手動 Ceph 指令改定位為驗證與除錯用途。
+這份文件整理 Ceph 3-node on Azure 的主要操作指令。Phase 1-5 現在以 **Ansible 從 Mac mini 執行** 為主，手動 Ceph 指令改定位為驗證與除錯用途。
 
 ---
 
 ## Azure Phase 0（Azure MCP + Bicep）
 
-本節以 Azure MCP + Bicep 為主，建議以 Bicep 檔案進行資源生命週期管理，統一命名採用 mansion_ 前綴。
+本節以 Azure MCP + Bicep 為主，建議以 Bicep 檔案進行資源生命週期管理，統一命名採用 `mansion-ceph-` 前綴。
 
 ### Bicep 檔案與參數準備
 
@@ -35,12 +35,12 @@ permalink: /storage/3node-ceph/commands/
 > **前置步驟：確認 KubeVirt lab 的 `mansion-shared-vnet` 與 `shared-node-subnet` 已存在**
 
 ```bash
-az group create --name mansion_resource --location <your-location>
+az group create --name mansion_ceph_resource --location <your-location>
 ```
 
 ```bash
 az deployment group what-if \
-  --resource-group mansion_resource \
+  --resource-group mansion_ceph_resource \
   --name mansion-ceph-phase0-preview \
   --template-file storage/3node-ceph/iac/main.bicep \
   --parameters storage/3node-ceph/iac/main.bicepparam
@@ -50,7 +50,7 @@ az deployment group what-if \
 
 ```bash
 az deployment group create \
-  --resource-group mansion_resource \
+  --resource-group mansion_ceph_resource \
   --name mansion-ceph-phase0 \
   --template-file storage/3node-ceph/iac/main.bicep \
   --parameters storage/3node-ceph/iac/main.bicepparam
@@ -60,7 +60,7 @@ az deployment group create \
 
 ```bash
 az deployment group show \
-  --resource-group mansion_resource \
+  --resource-group mansion_ceph_resource \
   --name mansion-ceph-phase0 \
   --query properties.outputs
 ```
@@ -80,6 +80,7 @@ ansible-playbook playbooks/phase-1.yml
 ansible-playbook playbooks/phase-2.yml
 ansible-playbook playbooks/phase-3.yml
 ansible-playbook playbooks/phase-4.yml
+ansible-playbook playbooks/phase-5.yml
 
 # 或一次跑完整 build
 ansible-playbook playbooks/site.yml
@@ -115,8 +116,8 @@ sudo ceph osd tree
 sudo ceph osd pool ls detail
 sudo ceph pg stat
 sudo ceph df
-sudo rbd ls rbdpool
-sudo rbd info rbdpool/test-image
+sudo rbd ls k8s_rbd_pool
+sudo rbd info k8s_rbd_pool/test-image
 ```
 
 ---
