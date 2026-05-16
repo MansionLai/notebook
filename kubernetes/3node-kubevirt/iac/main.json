@@ -1,0 +1,1736 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.43.1.21952",
+      "templateHash": "7920249328784067252"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "japaneast",
+      "metadata": {
+        "description": "Azure region for deployment."
+      }
+    },
+    "sharedVnetName": {
+      "type": "string",
+      "defaultValue": "mansion-shared-vnet",
+      "metadata": {
+        "description": "Name of the shared virtual network (in mansion-shared-resource)."
+      }
+    },
+    "sharedVnetResourceGroup": {
+      "type": "string",
+      "defaultValue": "mansion-shared-resource",
+      "metadata": {
+        "description": "Resource group containing the shared VNet."
+      }
+    },
+    "k8sSubnetName": {
+      "type": "string",
+      "defaultValue": "mansion_kubevirt_node_subnet",
+      "metadata": {
+        "description": "Name of the new K8s node subnet."
+      }
+    },
+    "k8sSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.10.11.0/24",
+      "metadata": {
+        "description": "CIDR for the K8s node subnet."
+      }
+    },
+    "kubevirtSubnetName": {
+      "type": "string",
+      "defaultValue": "mansion_kubevirt_vm_subnet",
+      "metadata": {
+        "description": "Name of the subnet for VM overlay traffic (Worker eth1)."
+      }
+    },
+    "kubevirtSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.10.100.0/24",
+      "metadata": {
+        "description": "CIDR for the VM overlay subnet."
+      }
+    },
+    "networkSecurityGroupName": {
+      "type": "string",
+      "defaultValue": "mansion_kubevirt_nsg",
+      "metadata": {
+        "description": "Name of the network security group."
+      }
+    },
+    "allowedSourceCidr": {
+      "type": "string",
+      "metadata": {
+        "description": "Trusted source CIDR for inbound rules."
+      }
+    },
+    "masterVmName": {
+      "type": "string",
+      "metadata": {
+        "description": "Master VM name."
+      }
+    },
+    "infraVmName": {
+      "type": "string",
+      "metadata": {
+        "description": "Infra VM name."
+      }
+    },
+    "workerVmName": {
+      "type": "string",
+      "metadata": {
+        "description": "Worker VM name."
+      }
+    },
+    "masterPublicIpName": {
+      "type": "string",
+      "defaultValue": "[format('{0}-pip', parameters('masterVmName'))]",
+      "metadata": {
+        "description": "Master public IP name."
+      }
+    },
+    "infraPublicIpName": {
+      "type": "string",
+      "defaultValue": "[format('{0}-pip', parameters('infraVmName'))]",
+      "metadata": {
+        "description": "Infra public IP name."
+      }
+    },
+    "workerPublicIpName": {
+      "type": "string",
+      "defaultValue": "[format('{0}-pip', parameters('workerVmName'))]",
+      "metadata": {
+        "description": "Worker public IP name."
+      }
+    },
+    "masterNicName": {
+      "type": "string",
+      "defaultValue": "[format('{0}-nic', parameters('masterVmName'))]",
+      "metadata": {
+        "description": "Master NIC name."
+      }
+    },
+    "infraNicName": {
+      "type": "string",
+      "defaultValue": "[format('{0}-nic', parameters('infraVmName'))]",
+      "metadata": {
+        "description": "Infra NIC name."
+      }
+    },
+    "workerNicName": {
+      "type": "string",
+      "defaultValue": "[format('{0}-nic', parameters('workerVmName'))]",
+      "metadata": {
+        "description": "Worker primary NIC name."
+      }
+    },
+    "workerSecondaryNicName": {
+      "type": "string",
+      "defaultValue": "[format('{0}-nic2', parameters('workerVmName'))]",
+      "metadata": {
+        "description": "Worker secondary NIC name."
+      }
+    },
+    "masterPrivateIp": {
+      "type": "string",
+      "defaultValue": "10.10.11.11",
+      "metadata": {
+        "description": "Master private IP."
+      }
+    },
+    "infraPrivateIp": {
+      "type": "string",
+      "defaultValue": "10.10.11.12",
+      "metadata": {
+        "description": "Infra private IP."
+      }
+    },
+    "workerPrivateIp": {
+      "type": "string",
+      "defaultValue": "10.10.11.13",
+      "metadata": {
+        "description": "Worker private IP."
+      }
+    },
+    "workerSecondaryPrivateIp": {
+      "type": "string",
+      "defaultValue": "10.10.100.13",
+      "metadata": {
+        "description": "Worker secondary private IP."
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "ubuntu",
+      "metadata": {
+        "description": "Administrator username for the Linux VMs."
+      }
+    },
+    "adminPublicKey": {
+      "type": "string",
+      "metadata": {
+        "description": "SSH public key content for the Linux VM admin user."
+      }
+    },
+    "masterVmSize": {
+      "type": "string",
+      "defaultValue": "Standard_D2s_v4",
+      "metadata": {
+        "description": "Master VM size."
+      }
+    },
+    "infraVmSize": {
+      "type": "string",
+      "defaultValue": "Standard_D4s_v4",
+      "metadata": {
+        "description": "Infra VM size."
+      }
+    },
+    "workerVmSize": {
+      "type": "string",
+      "defaultValue": "Standard_D4s_v4",
+      "metadata": {
+        "description": "Worker VM size."
+      }
+    },
+    "imagePublisher": {
+      "type": "string",
+      "defaultValue": "Canonical",
+      "metadata": {
+        "description": "Ubuntu image publisher."
+      }
+    },
+    "imageOffer": {
+      "type": "string",
+      "defaultValue": "0001-com-ubuntu-server-jammy",
+      "metadata": {
+        "description": "Ubuntu image offer."
+      }
+    },
+    "imageSku": {
+      "type": "string",
+      "defaultValue": "22_04-lts-gen2",
+      "metadata": {
+        "description": "Ubuntu image SKU."
+      }
+    },
+    "imageVersion": {
+      "type": "string",
+      "defaultValue": "latest",
+      "metadata": {
+        "description": "Ubuntu image version."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "k8sSubnet",
+      "resourceGroup": "[parameters('sharedVnetResourceGroup')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "vnetName": {
+            "value": "[parameters('sharedVnetName')]"
+          },
+          "subnetName": {
+            "value": "[parameters('k8sSubnetName')]"
+          },
+          "subnetPrefix": {
+            "value": "[parameters('k8sSubnetPrefix')]"
+          },
+          "nsgId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'nsg'), '2025-04-01').outputs.networkSecurityGroupId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.1.21952",
+              "templateHash": "15690136500695920981"
+            }
+          },
+          "parameters": {
+            "vnetName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the VNet."
+              }
+            },
+            "subnetName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the subnet."
+              }
+            },
+            "subnetPrefix": {
+              "type": "string",
+              "metadata": {
+                "description": "Address prefix for the subnet."
+              }
+            },
+            "nsgId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "NSG resource ID (optional)."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/virtualNetworks/subnets",
+              "apiVersion": "2023-11-01",
+              "name": "[format('{0}/{1}', parameters('vnetName'), parameters('subnetName'))]",
+              "properties": {
+                "addressPrefix": "[parameters('subnetPrefix')]",
+                "networkSecurityGroup": "[if(empty(parameters('nsgId')), null(), createObject('id', parameters('nsgId')))]"
+              }
+            }
+          ],
+          "outputs": {
+            "subnetId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetName'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'nsg')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "kubevirtSubnet",
+      "resourceGroup": "[parameters('sharedVnetResourceGroup')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "vnetName": {
+            "value": "[parameters('sharedVnetName')]"
+          },
+          "subnetName": {
+            "value": "[parameters('kubevirtSubnetName')]"
+          },
+          "subnetPrefix": {
+            "value": "[parameters('kubevirtSubnetPrefix')]"
+          },
+          "nsgId": {
+            "value": ""
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.1.21952",
+              "templateHash": "15690136500695920981"
+            }
+          },
+          "parameters": {
+            "vnetName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the VNet."
+              }
+            },
+            "subnetName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the subnet."
+              }
+            },
+            "subnetPrefix": {
+              "type": "string",
+              "metadata": {
+                "description": "Address prefix for the subnet."
+              }
+            },
+            "nsgId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "NSG resource ID (optional)."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/virtualNetworks/subnets",
+              "apiVersion": "2023-11-01",
+              "name": "[format('{0}/{1}', parameters('vnetName'), parameters('subnetName'))]",
+              "properties": {
+                "addressPrefix": "[parameters('subnetPrefix')]",
+                "networkSecurityGroup": "[if(empty(parameters('nsgId')), null(), createObject('id', parameters('nsgId')))]"
+              }
+            }
+          ],
+          "outputs": {
+            "subnetId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetName'))]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "nsg",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "networkSecurityGroupName": {
+            "value": "[parameters('networkSecurityGroupName')]"
+          },
+          "allowedSourceCidr": {
+            "value": "[parameters('allowedSourceCidr')]"
+          },
+          "internalSourceCidr": {
+            "value": "10.10.0.0/16"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.1.21952",
+              "templateHash": "6815076849986187992"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the NSG."
+              }
+            },
+            "networkSecurityGroupName": {
+              "type": "string",
+              "metadata": {
+                "description": "Network security group name."
+              }
+            },
+            "allowedSourceCidr": {
+              "type": "string",
+              "metadata": {
+                "description": "External source CIDR allowed in."
+              }
+            },
+            "internalSourceCidr": {
+              "type": "string",
+              "metadata": {
+                "description": "Internal source CIDR allowed in."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/networkSecurityGroups",
+              "apiVersion": "2023-11-01",
+              "name": "[parameters('networkSecurityGroupName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "securityRules": [
+                  {
+                    "name": "AllowSSH",
+                    "properties": {
+                      "priority": 100,
+                      "access": "Allow",
+                      "direction": "Inbound",
+                      "protocol": "Tcp",
+                      "sourcePortRange": "*",
+                      "destinationPortRange": "22",
+                      "sourceAddressPrefix": "[parameters('allowedSourceCidr')]",
+                      "destinationAddressPrefix": "*"
+                    }
+                  },
+                  {
+                    "name": "AllowKubernetesApi",
+                    "properties": {
+                      "priority": 200,
+                      "access": "Allow",
+                      "direction": "Inbound",
+                      "protocol": "Tcp",
+                      "sourcePortRange": "*",
+                      "destinationPortRange": "6443",
+                      "sourceAddressPrefix": "[parameters('allowedSourceCidr')]",
+                      "destinationAddressPrefix": "*"
+                    }
+                  },
+                  {
+                    "name": "AllowNodePort",
+                    "properties": {
+                      "priority": 300,
+                      "access": "Allow",
+                      "direction": "Inbound",
+                      "protocol": "Tcp",
+                      "sourcePortRange": "*",
+                      "destinationPortRange": "30000-32767",
+                      "sourceAddressPrefix": "[parameters('allowedSourceCidr')]",
+                      "destinationAddressPrefix": "*"
+                    }
+                  },
+                  {
+                    "name": "AllowInternalTraffic",
+                    "properties": {
+                      "priority": 1000,
+                      "access": "Allow",
+                      "direction": "Inbound",
+                      "protocol": "*",
+                      "sourcePortRange": "*",
+                      "destinationPortRange": "*",
+                      "sourceAddressPrefix": "[parameters('internalSourceCidr')]",
+                      "destinationAddressPrefix": "[parameters('internalSourceCidr')]"
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "networkSecurityGroupId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('networkSecurityGroupName'))]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "masterNic",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "networkSecurityGroupId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'nsg'), '2025-04-01').outputs.networkSecurityGroupId.value]"
+          },
+          "subnetId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'k8sSubnet'), '2025-04-01').outputs.subnetId.value]"
+          },
+          "nicName": {
+            "value": "[parameters('masterNicName')]"
+          },
+          "publicIpName": {
+            "value": "[parameters('masterPublicIpName')]"
+          },
+          "privateIp": {
+            "value": "[parameters('masterPrivateIp')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.1.21952",
+              "templateHash": "6598497995239372237"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for NIC and public IP resources."
+              }
+            },
+            "networkSecurityGroupId": {
+              "type": "string",
+              "metadata": {
+                "description": "Network security group resource ID shared by the NICs."
+              }
+            },
+            "subnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Primary subnet resource ID."
+              }
+            },
+            "nicName": {
+              "type": "string",
+              "metadata": {
+                "description": "Primary NIC name."
+              }
+            },
+            "publicIpName": {
+              "type": "string",
+              "metadata": {
+                "description": "Primary public IP name."
+              }
+            },
+            "privateIp": {
+              "type": "string",
+              "metadata": {
+                "description": "Primary private IP."
+              }
+            },
+            "createSecondaryNic": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Whether to create a secondary NIC."
+              }
+            },
+            "secondaryNicName": {
+              "type": "string",
+              "defaultValue": "unset",
+              "metadata": {
+                "description": "Required when createSecondaryNic is true."
+              }
+            },
+            "secondarySubnetId": {
+              "type": "string",
+              "defaultValue": "unset",
+              "metadata": {
+                "description": "Required when createSecondaryNic is true."
+              }
+            },
+            "secondaryPrivateIp": {
+              "type": "string",
+              "defaultValue": "unset",
+              "metadata": {
+                "description": "Required when createSecondaryNic is true."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/publicIPAddresses",
+              "apiVersion": "2023-11-01",
+              "name": "[parameters('publicIpName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard"
+              },
+              "properties": {
+                "publicIPAllocationMethod": "Static",
+                "publicIPAddressVersion": "IPv4"
+              }
+            },
+            {
+              "type": "Microsoft.Network/networkInterfaces",
+              "apiVersion": "2023-11-01",
+              "name": "[parameters('nicName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "enableIPForwarding": false,
+                "networkSecurityGroup": {
+                  "id": "[parameters('networkSecurityGroupId')]"
+                },
+                "ipConfigurations": [
+                  {
+                    "name": "ipconfig1",
+                    "properties": {
+                      "privateIPAllocationMethod": "Static",
+                      "privateIPAddress": "[parameters('privateIp')]",
+                      "subnet": {
+                        "id": "[parameters('subnetId')]"
+                      },
+                      "publicIPAddress": {
+                        "id": "[resourceId('Microsoft.Network/publicIPAddresses', parameters('publicIpName'))]"
+                      }
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', parameters('publicIpName'))]"
+              ]
+            },
+            {
+              "condition": "[parameters('createSecondaryNic')]",
+              "type": "Microsoft.Network/networkInterfaces",
+              "apiVersion": "2023-11-01",
+              "name": "[parameters('secondaryNicName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "enableIPForwarding": true,
+                "networkSecurityGroup": {
+                  "id": "[parameters('networkSecurityGroupId')]"
+                },
+                "ipConfigurations": [
+                  {
+                    "name": "ipconfig1",
+                    "properties": {
+                      "privateIPAllocationMethod": "Static",
+                      "privateIPAddress": "[parameters('secondaryPrivateIp')]",
+                      "subnet": {
+                        "id": "[parameters('secondarySubnetId')]"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "nicId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/networkInterfaces', parameters('nicName'))]"
+            },
+            "secondaryNicId": {
+              "type": "string",
+              "metadata": {
+                "description": "Returns an empty string when createSecondaryNic is false."
+              },
+              "value": "[if(parameters('createSecondaryNic'), resourceId('Microsoft.Network/networkInterfaces', parameters('secondaryNicName')), '')]"
+            },
+            "publicIpAddress": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', parameters('publicIpName')), '2023-11-01').ipAddress]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'k8sSubnet')]",
+        "[resourceId('Microsoft.Resources/deployments', 'nsg')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "infraNic",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "networkSecurityGroupId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'nsg'), '2025-04-01').outputs.networkSecurityGroupId.value]"
+          },
+          "subnetId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'k8sSubnet'), '2025-04-01').outputs.subnetId.value]"
+          },
+          "nicName": {
+            "value": "[parameters('infraNicName')]"
+          },
+          "publicIpName": {
+            "value": "[parameters('infraPublicIpName')]"
+          },
+          "privateIp": {
+            "value": "[parameters('infraPrivateIp')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.1.21952",
+              "templateHash": "6598497995239372237"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for NIC and public IP resources."
+              }
+            },
+            "networkSecurityGroupId": {
+              "type": "string",
+              "metadata": {
+                "description": "Network security group resource ID shared by the NICs."
+              }
+            },
+            "subnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Primary subnet resource ID."
+              }
+            },
+            "nicName": {
+              "type": "string",
+              "metadata": {
+                "description": "Primary NIC name."
+              }
+            },
+            "publicIpName": {
+              "type": "string",
+              "metadata": {
+                "description": "Primary public IP name."
+              }
+            },
+            "privateIp": {
+              "type": "string",
+              "metadata": {
+                "description": "Primary private IP."
+              }
+            },
+            "createSecondaryNic": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Whether to create a secondary NIC."
+              }
+            },
+            "secondaryNicName": {
+              "type": "string",
+              "defaultValue": "unset",
+              "metadata": {
+                "description": "Required when createSecondaryNic is true."
+              }
+            },
+            "secondarySubnetId": {
+              "type": "string",
+              "defaultValue": "unset",
+              "metadata": {
+                "description": "Required when createSecondaryNic is true."
+              }
+            },
+            "secondaryPrivateIp": {
+              "type": "string",
+              "defaultValue": "unset",
+              "metadata": {
+                "description": "Required when createSecondaryNic is true."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/publicIPAddresses",
+              "apiVersion": "2023-11-01",
+              "name": "[parameters('publicIpName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard"
+              },
+              "properties": {
+                "publicIPAllocationMethod": "Static",
+                "publicIPAddressVersion": "IPv4"
+              }
+            },
+            {
+              "type": "Microsoft.Network/networkInterfaces",
+              "apiVersion": "2023-11-01",
+              "name": "[parameters('nicName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "enableIPForwarding": false,
+                "networkSecurityGroup": {
+                  "id": "[parameters('networkSecurityGroupId')]"
+                },
+                "ipConfigurations": [
+                  {
+                    "name": "ipconfig1",
+                    "properties": {
+                      "privateIPAllocationMethod": "Static",
+                      "privateIPAddress": "[parameters('privateIp')]",
+                      "subnet": {
+                        "id": "[parameters('subnetId')]"
+                      },
+                      "publicIPAddress": {
+                        "id": "[resourceId('Microsoft.Network/publicIPAddresses', parameters('publicIpName'))]"
+                      }
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', parameters('publicIpName'))]"
+              ]
+            },
+            {
+              "condition": "[parameters('createSecondaryNic')]",
+              "type": "Microsoft.Network/networkInterfaces",
+              "apiVersion": "2023-11-01",
+              "name": "[parameters('secondaryNicName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "enableIPForwarding": true,
+                "networkSecurityGroup": {
+                  "id": "[parameters('networkSecurityGroupId')]"
+                },
+                "ipConfigurations": [
+                  {
+                    "name": "ipconfig1",
+                    "properties": {
+                      "privateIPAllocationMethod": "Static",
+                      "privateIPAddress": "[parameters('secondaryPrivateIp')]",
+                      "subnet": {
+                        "id": "[parameters('secondarySubnetId')]"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "nicId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/networkInterfaces', parameters('nicName'))]"
+            },
+            "secondaryNicId": {
+              "type": "string",
+              "metadata": {
+                "description": "Returns an empty string when createSecondaryNic is false."
+              },
+              "value": "[if(parameters('createSecondaryNic'), resourceId('Microsoft.Network/networkInterfaces', parameters('secondaryNicName')), '')]"
+            },
+            "publicIpAddress": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', parameters('publicIpName')), '2023-11-01').ipAddress]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'k8sSubnet')]",
+        "[resourceId('Microsoft.Resources/deployments', 'nsg')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "workerNic",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "networkSecurityGroupId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'nsg'), '2025-04-01').outputs.networkSecurityGroupId.value]"
+          },
+          "subnetId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'k8sSubnet'), '2025-04-01').outputs.subnetId.value]"
+          },
+          "nicName": {
+            "value": "[parameters('workerNicName')]"
+          },
+          "publicIpName": {
+            "value": "[parameters('workerPublicIpName')]"
+          },
+          "privateIp": {
+            "value": "[parameters('workerPrivateIp')]"
+          },
+          "createSecondaryNic": {
+            "value": true
+          },
+          "secondaryNicName": {
+            "value": "[parameters('workerSecondaryNicName')]"
+          },
+          "secondarySubnetId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'kubevirtSubnet'), '2025-04-01').outputs.subnetId.value]"
+          },
+          "secondaryPrivateIp": {
+            "value": "[parameters('workerSecondaryPrivateIp')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.1.21952",
+              "templateHash": "6598497995239372237"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for NIC and public IP resources."
+              }
+            },
+            "networkSecurityGroupId": {
+              "type": "string",
+              "metadata": {
+                "description": "Network security group resource ID shared by the NICs."
+              }
+            },
+            "subnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Primary subnet resource ID."
+              }
+            },
+            "nicName": {
+              "type": "string",
+              "metadata": {
+                "description": "Primary NIC name."
+              }
+            },
+            "publicIpName": {
+              "type": "string",
+              "metadata": {
+                "description": "Primary public IP name."
+              }
+            },
+            "privateIp": {
+              "type": "string",
+              "metadata": {
+                "description": "Primary private IP."
+              }
+            },
+            "createSecondaryNic": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Whether to create a secondary NIC."
+              }
+            },
+            "secondaryNicName": {
+              "type": "string",
+              "defaultValue": "unset",
+              "metadata": {
+                "description": "Required when createSecondaryNic is true."
+              }
+            },
+            "secondarySubnetId": {
+              "type": "string",
+              "defaultValue": "unset",
+              "metadata": {
+                "description": "Required when createSecondaryNic is true."
+              }
+            },
+            "secondaryPrivateIp": {
+              "type": "string",
+              "defaultValue": "unset",
+              "metadata": {
+                "description": "Required when createSecondaryNic is true."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/publicIPAddresses",
+              "apiVersion": "2023-11-01",
+              "name": "[parameters('publicIpName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard"
+              },
+              "properties": {
+                "publicIPAllocationMethod": "Static",
+                "publicIPAddressVersion": "IPv4"
+              }
+            },
+            {
+              "type": "Microsoft.Network/networkInterfaces",
+              "apiVersion": "2023-11-01",
+              "name": "[parameters('nicName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "enableIPForwarding": false,
+                "networkSecurityGroup": {
+                  "id": "[parameters('networkSecurityGroupId')]"
+                },
+                "ipConfigurations": [
+                  {
+                    "name": "ipconfig1",
+                    "properties": {
+                      "privateIPAllocationMethod": "Static",
+                      "privateIPAddress": "[parameters('privateIp')]",
+                      "subnet": {
+                        "id": "[parameters('subnetId')]"
+                      },
+                      "publicIPAddress": {
+                        "id": "[resourceId('Microsoft.Network/publicIPAddresses', parameters('publicIpName'))]"
+                      }
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', parameters('publicIpName'))]"
+              ]
+            },
+            {
+              "condition": "[parameters('createSecondaryNic')]",
+              "type": "Microsoft.Network/networkInterfaces",
+              "apiVersion": "2023-11-01",
+              "name": "[parameters('secondaryNicName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "enableIPForwarding": true,
+                "networkSecurityGroup": {
+                  "id": "[parameters('networkSecurityGroupId')]"
+                },
+                "ipConfigurations": [
+                  {
+                    "name": "ipconfig1",
+                    "properties": {
+                      "privateIPAllocationMethod": "Static",
+                      "privateIPAddress": "[parameters('secondaryPrivateIp')]",
+                      "subnet": {
+                        "id": "[parameters('secondarySubnetId')]"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "nicId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/networkInterfaces', parameters('nicName'))]"
+            },
+            "secondaryNicId": {
+              "type": "string",
+              "metadata": {
+                "description": "Returns an empty string when createSecondaryNic is false."
+              },
+              "value": "[if(parameters('createSecondaryNic'), resourceId('Microsoft.Network/networkInterfaces', parameters('secondaryNicName')), '')]"
+            },
+            "publicIpAddress": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', parameters('publicIpName')), '2023-11-01').ipAddress]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'k8sSubnet')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'kubevirtSubnet')]",
+        "[resourceId('Microsoft.Resources/deployments', 'nsg')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "masterVm",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "vmName": {
+            "value": "[parameters('masterVmName')]"
+          },
+          "nicIds": {
+            "value": [
+              "[reference(resourceId('Microsoft.Resources/deployments', 'masterNic'), '2025-04-01').outputs.nicId.value]"
+            ]
+          },
+          "adminUsername": {
+            "value": "[parameters('adminUsername')]"
+          },
+          "adminPublicKey": {
+            "value": "[parameters('adminPublicKey')]"
+          },
+          "vmSize": {
+            "value": "[parameters('masterVmSize')]"
+          },
+          "imagePublisher": {
+            "value": "[parameters('imagePublisher')]"
+          },
+          "imageOffer": {
+            "value": "[parameters('imageOffer')]"
+          },
+          "imageSku": {
+            "value": "[parameters('imageSku')]"
+          },
+          "imageVersion": {
+            "value": "[parameters('imageVersion')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.1.21952",
+              "templateHash": "8364632687878137059"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the VM."
+              }
+            },
+            "vmName": {
+              "type": "string",
+              "metadata": {
+                "description": "Virtual machine name."
+              }
+            },
+            "nicIds": {
+              "type": "array",
+              "metadata": {
+                "description": "NIC resource IDs attached to the VM. The first NIC is primary."
+              }
+            },
+            "adminUsername": {
+              "type": "string",
+              "defaultValue": "ubuntu",
+              "metadata": {
+                "description": "Administrator username for the Linux VM."
+              }
+            },
+            "adminPublicKey": {
+              "type": "securestring",
+              "metadata": {
+                "description": "SSH public key content for the Linux VM admin user."
+              }
+            },
+            "imagePublisher": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure Marketplace image publisher."
+              }
+            },
+            "imageOffer": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure Marketplace image offer."
+              }
+            },
+            "imageSku": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure Marketplace image SKU."
+              }
+            },
+            "imageVersion": {
+              "type": "string",
+              "defaultValue": "latest",
+              "metadata": {
+                "description": "Azure Marketplace image version."
+              }
+            },
+            "vmSize": {
+              "type": "string",
+              "metadata": {
+                "description": "VM size."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Compute/virtualMachines",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('vmName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "hardwareProfile": {
+                  "vmSize": "[parameters('vmSize')]"
+                },
+                "storageProfile": {
+                  "imageReference": {
+                    "publisher": "[parameters('imagePublisher')]",
+                    "offer": "[parameters('imageOffer')]",
+                    "sku": "[parameters('imageSku')]",
+                    "version": "[parameters('imageVersion')]"
+                  },
+                  "osDisk": {
+                    "createOption": "FromImage",
+                    "caching": "ReadWrite",
+                    "deleteOption": "Delete",
+                    "managedDisk": {
+                      "storageAccountType": "StandardSSD_LRS"
+                    }
+                  }
+                },
+                "osProfile": {
+                  "computerName": "[replace(parameters('vmName'), '_', '-')]",
+                  "adminUsername": "[parameters('adminUsername')]",
+                  "linuxConfiguration": {
+                    "disablePasswordAuthentication": true,
+                    "ssh": {
+                      "publicKeys": [
+                        {
+                          "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
+                          "keyData": "[parameters('adminPublicKey')]"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "networkProfile": {
+                  "copy": [
+                    {
+                      "name": "networkInterfaces",
+                      "count": "[length(parameters('nicIds'))]",
+                      "input": {
+                        "id": "[parameters('nicIds')[copyIndex('networkInterfaces')]]",
+                        "properties": {
+                          "primary": "[equals(copyIndex('networkInterfaces'), 0)]",
+                          "deleteOption": "Delete"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "vmId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+            },
+            "vmName": {
+              "type": "string",
+              "value": "[parameters('vmName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'masterNic')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "infraVm",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "vmName": {
+            "value": "[parameters('infraVmName')]"
+          },
+          "nicIds": {
+            "value": [
+              "[reference(resourceId('Microsoft.Resources/deployments', 'infraNic'), '2025-04-01').outputs.nicId.value]"
+            ]
+          },
+          "adminUsername": {
+            "value": "[parameters('adminUsername')]"
+          },
+          "adminPublicKey": {
+            "value": "[parameters('adminPublicKey')]"
+          },
+          "vmSize": {
+            "value": "[parameters('infraVmSize')]"
+          },
+          "imagePublisher": {
+            "value": "[parameters('imagePublisher')]"
+          },
+          "imageOffer": {
+            "value": "[parameters('imageOffer')]"
+          },
+          "imageSku": {
+            "value": "[parameters('imageSku')]"
+          },
+          "imageVersion": {
+            "value": "[parameters('imageVersion')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.1.21952",
+              "templateHash": "8364632687878137059"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the VM."
+              }
+            },
+            "vmName": {
+              "type": "string",
+              "metadata": {
+                "description": "Virtual machine name."
+              }
+            },
+            "nicIds": {
+              "type": "array",
+              "metadata": {
+                "description": "NIC resource IDs attached to the VM. The first NIC is primary."
+              }
+            },
+            "adminUsername": {
+              "type": "string",
+              "defaultValue": "ubuntu",
+              "metadata": {
+                "description": "Administrator username for the Linux VM."
+              }
+            },
+            "adminPublicKey": {
+              "type": "securestring",
+              "metadata": {
+                "description": "SSH public key content for the Linux VM admin user."
+              }
+            },
+            "imagePublisher": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure Marketplace image publisher."
+              }
+            },
+            "imageOffer": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure Marketplace image offer."
+              }
+            },
+            "imageSku": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure Marketplace image SKU."
+              }
+            },
+            "imageVersion": {
+              "type": "string",
+              "defaultValue": "latest",
+              "metadata": {
+                "description": "Azure Marketplace image version."
+              }
+            },
+            "vmSize": {
+              "type": "string",
+              "metadata": {
+                "description": "VM size."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Compute/virtualMachines",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('vmName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "hardwareProfile": {
+                  "vmSize": "[parameters('vmSize')]"
+                },
+                "storageProfile": {
+                  "imageReference": {
+                    "publisher": "[parameters('imagePublisher')]",
+                    "offer": "[parameters('imageOffer')]",
+                    "sku": "[parameters('imageSku')]",
+                    "version": "[parameters('imageVersion')]"
+                  },
+                  "osDisk": {
+                    "createOption": "FromImage",
+                    "caching": "ReadWrite",
+                    "deleteOption": "Delete",
+                    "managedDisk": {
+                      "storageAccountType": "StandardSSD_LRS"
+                    }
+                  }
+                },
+                "osProfile": {
+                  "computerName": "[replace(parameters('vmName'), '_', '-')]",
+                  "adminUsername": "[parameters('adminUsername')]",
+                  "linuxConfiguration": {
+                    "disablePasswordAuthentication": true,
+                    "ssh": {
+                      "publicKeys": [
+                        {
+                          "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
+                          "keyData": "[parameters('adminPublicKey')]"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "networkProfile": {
+                  "copy": [
+                    {
+                      "name": "networkInterfaces",
+                      "count": "[length(parameters('nicIds'))]",
+                      "input": {
+                        "id": "[parameters('nicIds')[copyIndex('networkInterfaces')]]",
+                        "properties": {
+                          "primary": "[equals(copyIndex('networkInterfaces'), 0)]",
+                          "deleteOption": "Delete"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "vmId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+            },
+            "vmName": {
+              "type": "string",
+              "value": "[parameters('vmName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'infraNic')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "workerVm",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "vmName": {
+            "value": "[parameters('workerVmName')]"
+          },
+          "nicIds": {
+            "value": [
+              "[reference(resourceId('Microsoft.Resources/deployments', 'workerNic'), '2025-04-01').outputs.nicId.value]",
+              "[reference(resourceId('Microsoft.Resources/deployments', 'workerNic'), '2025-04-01').outputs.secondaryNicId.value]"
+            ]
+          },
+          "adminUsername": {
+            "value": "[parameters('adminUsername')]"
+          },
+          "adminPublicKey": {
+            "value": "[parameters('adminPublicKey')]"
+          },
+          "vmSize": {
+            "value": "[parameters('workerVmSize')]"
+          },
+          "imagePublisher": {
+            "value": "[parameters('imagePublisher')]"
+          },
+          "imageOffer": {
+            "value": "[parameters('imageOffer')]"
+          },
+          "imageSku": {
+            "value": "[parameters('imageSku')]"
+          },
+          "imageVersion": {
+            "value": "[parameters('imageVersion')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.1.21952",
+              "templateHash": "8364632687878137059"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the VM."
+              }
+            },
+            "vmName": {
+              "type": "string",
+              "metadata": {
+                "description": "Virtual machine name."
+              }
+            },
+            "nicIds": {
+              "type": "array",
+              "metadata": {
+                "description": "NIC resource IDs attached to the VM. The first NIC is primary."
+              }
+            },
+            "adminUsername": {
+              "type": "string",
+              "defaultValue": "ubuntu",
+              "metadata": {
+                "description": "Administrator username for the Linux VM."
+              }
+            },
+            "adminPublicKey": {
+              "type": "securestring",
+              "metadata": {
+                "description": "SSH public key content for the Linux VM admin user."
+              }
+            },
+            "imagePublisher": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure Marketplace image publisher."
+              }
+            },
+            "imageOffer": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure Marketplace image offer."
+              }
+            },
+            "imageSku": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure Marketplace image SKU."
+              }
+            },
+            "imageVersion": {
+              "type": "string",
+              "defaultValue": "latest",
+              "metadata": {
+                "description": "Azure Marketplace image version."
+              }
+            },
+            "vmSize": {
+              "type": "string",
+              "metadata": {
+                "description": "VM size."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Compute/virtualMachines",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('vmName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "hardwareProfile": {
+                  "vmSize": "[parameters('vmSize')]"
+                },
+                "storageProfile": {
+                  "imageReference": {
+                    "publisher": "[parameters('imagePublisher')]",
+                    "offer": "[parameters('imageOffer')]",
+                    "sku": "[parameters('imageSku')]",
+                    "version": "[parameters('imageVersion')]"
+                  },
+                  "osDisk": {
+                    "createOption": "FromImage",
+                    "caching": "ReadWrite",
+                    "deleteOption": "Delete",
+                    "managedDisk": {
+                      "storageAccountType": "StandardSSD_LRS"
+                    }
+                  }
+                },
+                "osProfile": {
+                  "computerName": "[replace(parameters('vmName'), '_', '-')]",
+                  "adminUsername": "[parameters('adminUsername')]",
+                  "linuxConfiguration": {
+                    "disablePasswordAuthentication": true,
+                    "ssh": {
+                      "publicKeys": [
+                        {
+                          "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
+                          "keyData": "[parameters('adminPublicKey')]"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "networkProfile": {
+                  "copy": [
+                    {
+                      "name": "networkInterfaces",
+                      "count": "[length(parameters('nicIds'))]",
+                      "input": {
+                        "id": "[parameters('nicIds')[copyIndex('networkInterfaces')]]",
+                        "properties": {
+                          "primary": "[equals(copyIndex('networkInterfaces'), 0)]",
+                          "deleteOption": "Delete"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "vmId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+            },
+            "vmName": {
+              "type": "string",
+              "value": "[parameters('vmName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'workerNic')]"
+      ]
+    }
+  ],
+  "outputs": {
+    "targetResourceGroupName": {
+      "type": "string",
+      "value": "[resourceGroup().name]"
+    },
+    "k8sSubnetId": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'k8sSubnet'), '2025-04-01').outputs.subnetId.value]"
+    },
+    "kubevirtSubnetId": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'kubevirtSubnet'), '2025-04-01').outputs.subnetId.value]"
+    },
+    "networkSecurityGroupId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'nsg'), '2025-04-01').outputs.networkSecurityGroupId.value]"
+    }
+  }
+}
