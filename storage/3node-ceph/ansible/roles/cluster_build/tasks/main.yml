@@ -68,6 +68,94 @@
     - (ceph_status_json.stdout | from_json).osdmap.num_up_osds | int == 6
     - (ceph_status_json.stdout | from_json).osdmap.num_in_osds | int == 6
 
+- name: Build location mappings from inventory
+  ansible.builtin.set_fact:
+    ceph_location_mappings: >-
+      {%- set ns = namespace(items=[]) -%}
+      {%- for host in groups['ceph_nodes'] -%}
+      {%-   set location = hostvars[host].ceph_location -%}
+      {%-   set _ = ns.items.append({
+              'hostname': host,
+              'datacenter': location.datacenter,
+              'room': location.room,
+              'rack': location.rack
+            }) -%}
+      {%- endfor -%}
+      {{ ns.items }}
+
+- name: Build unique room to datacenter mappings
+  ansible.builtin.set_fact:
+    ceph_room_mappings: >-
+      {%- set ns = namespace(items=[]) -%}
+      {%- for item in ceph_location_mappings -%}
+      {%-   if {'room': item.room, 'datacenter': item.datacenter} not in ns.items -%}
+      {%-     set _ = ns.items.append({'room': item.room, 'datacenter': item.datacenter}) -%}
+      {%-   endif -%}
+      {%- endfor -%}
+      {{ ns.items }}
+
+- name: Build unique rack to room mappings
+  ansible.builtin.set_fact:
+    ceph_rack_mappings: >-
+      {%- set ns = namespace(items=[]) -%}
+      {%- for item in ceph_location_mappings -%}
+      {%-   if {'rack': item.rack, 'room': item.room} not in ns.items -%}
+      {%-     set _ = ns.items.append({'rack': item.rack, 'room': item.room}) -%}
+      {%-   endif -%}
+      {%- endfor -%}
+      {{ ns.items }}
+
+- name: Ensure datacenter buckets exist
+  ansible.builtin.command: ceph osd crush add-bucket {{ item }} datacenter
+  loop: "{{ ceph_location_mappings | map(attribute='datacenter') | unique | list }}"
+  register: ceph_datacenter_bucket
+  failed_when:
+    - ceph_datacenter_bucket.rc != 0
+    - "'already exists' not in ceph_datacenter_bucket.stderr"
+  changed_when: "'already exists' not in ceph_datacenter_bucket.stderr"
+
+- name: Ensure room buckets exist
+  ansible.builtin.command: ceph osd crush add-bucket {{ item.room }} room
+  loop: "{{ ceph_room_mappings }}"
+  register: ceph_room_bucket
+  failed_when:
+    - ceph_room_bucket.rc != 0
+    - "'already exists' not in ceph_room_bucket.stderr"
+  changed_when: "'already exists' not in ceph_room_bucket.stderr"
+
+- name: Ensure rack buckets exist
+  ansible.builtin.command: ceph osd crush add-bucket {{ item.rack }} rack
+  loop: "{{ ceph_rack_mappings }}"
+  register: ceph_rack_bucket
+  failed_when:
+    - ceph_rack_bucket.rc != 0
+    - "'already exists' not in ceph_rack_bucket.stderr"
+  changed_when: "'already exists' not in ceph_rack_bucket.stderr"
+
+- name: Move room buckets under datacenter buckets
+  ansible.builtin.command: ceph osd crush move {{ item.room }} datacenter={{ item.datacenter }}
+  loop: "{{ ceph_room_mappings }}"
+
+- name: Move rack buckets under room buckets
+  ansible.builtin.command: ceph osd crush move {{ item.rack }} room={{ item.room }}
+  loop: "{{ ceph_rack_mappings }}"
+
+- name: Move hosts under rack buckets
+  ansible.builtin.command: ceph osd crush move {{ item.hostname }} rack={{ item.rack }}
+  loop: "{{ ceph_location_mappings }}"
+
+- name: Ensure replicated crush rule uses rack failure domain
+  ansible.builtin.command: >
+    ceph osd crush rule create-replicated
+    {{ ceph_rbd_crush_rule_name }}
+    default
+    rack
+  register: ceph_crush_rule_create
+  failed_when:
+    - ceph_crush_rule_create.rc != 0
+    - "'already exists' not in ceph_crush_rule_create.stderr"
+  changed_when: "'already exists' not in ceph_crush_rule_create.stderr"
+
 - name: Verify MON quorum
   ansible.builtin.command: ceph mon stat
   changed_when: false

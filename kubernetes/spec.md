@@ -28,9 +28,9 @@ AI agent使用 ai/k8s branch進行修正, 確認沒問題後再merge回main bran
      - container runtime = cri-o
      - cni = cilium
      - 透過rook-ceph(v1.17)建立storageclass, volumesnapshotclass, 連線我自建的ceph cluster
-     - 需要安裝prometheus & alertmanager
-     - 需要安裝grafana dashboard串接prometheus
-     - 需要安裝opensearch
+     - 需要安裝prometheus & alertmanager (on infra node)
+     - 需要安裝grafana dashboard串接prometheus (on infra node)
+     - 需要安裝opensearch (on infra node)
      - 每個node上都要安裝node exporter + fluent-bit(負責將pod log送給opensearch)
      - 安裝Kubevirt version = v1.5.0
 

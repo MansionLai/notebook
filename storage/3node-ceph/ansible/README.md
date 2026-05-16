@@ -49,8 +49,10 @@ Before running Phase 3 in a non-lab environment, review:
 - `ceph_dashboard_password`
 - `ceph_rbd_pool_name`
 - `ceph_rbd_pool_min_size`
+- `ceph_rbd_crush_rule_name`
 - `prometheus_agent_remote_write_url`
 - `fluent_bit_opensearch_*`
+- `ceph_location.datacenter|room|rack` for each node
 - `ceph_osd_devices` for each node
 
 The inventory file is the source of truth for:
@@ -58,6 +60,7 @@ The inventory file is the source of truth for:
 - `ansible_host`
 - `ceph_public_ip`
 - `ceph_cluster_ip`
+- `ceph_location`
 - `ceph_osd_devices`
 
 ## Notes

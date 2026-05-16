@@ -38,6 +38,7 @@ ceph_rbd_pool_pg_num: 128
 ceph_rbd_pool_pgp_num: 128
 ceph_rbd_pool_size: 3
 ceph_rbd_pool_min_size: 1
+ceph_rbd_crush_rule_name: k8s_rbd_pool_rack
 ceph_test_image_name: test-image
 ceph_test_image_size: 10G
 
