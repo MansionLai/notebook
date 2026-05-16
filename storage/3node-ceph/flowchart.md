@@ -26,11 +26,13 @@ flowchart TD
     I --> J[部署 MGR 到全部節點\nactive/standby 模式]
     J --> K[加入 6 顆 OSD\n每台 2 顆 data disk]
     K --> L[驗證 Ceph Health\nceph -s · ceph osd tree]
-    L --> M[建立 rbdpool\nsize=3 · min_size=1 · pg_num=128]
+    L --> M[建立 k8s_rbd_pool\nsize=3 · min_size=1 · pg_num=128]
     M --> N[啟用 RBD 應用\nrbd pool init]
     N --> O[建立測試 RBD image\nrbd create --size 10G]
     O --> P[驗證 pool 與 image\nrbd ls · ceph df]
-    P --> Q([完成 ✅])
+    P --> Q[安裝 exporter 與 log agent\nceph-exporter · node-exporter · fluent-bit]
+    Q --> R[驗證 Prometheus/OpenSearch 收到資料]
+    R --> S([完成 ✅])
 ```
 
 ---
@@ -50,10 +52,12 @@ flowchart TD
 | 9 | 部署 MGR | 全部節點 | active/standby MGR 高可用 |
 | 10 | 加入 OSD | 全部節點 | `ceph orch daemon add osd` 每台 2 顆 |
 | 11 | 驗證 Ceph Health | ceph-node-01 | `ceph -s` 確認 HEALTH_OK |
-| 12 | 建立 rbdpool | ceph-node-01 | `ceph osd pool create rbdpool 128 128` |
-| 13 | 啟用 RBD 應用 | ceph-node-01 | `ceph osd pool application enable rbdpool rbd` |
-| 14 | 建立測試 image | ceph-node-01 | `rbd create --size 10G rbdpool/test-image` |
-| 15 | 驗證 pool 與 image | ceph-node-01 | `rbd ls rbdpool` · `ceph df` |
+| 12 | 建立 k8s_rbd_pool | ceph-node-01 | `ceph osd pool create k8s_rbd_pool 128 128` |
+| 13 | 啟用 RBD 應用 | ceph-node-01 | `ceph osd pool application enable k8s_rbd_pool rbd` |
+| 14 | 建立測試 image | ceph-node-01 | `rbd create --size 10G k8s_rbd_pool/test-image` |
+| 15 | 驗證 pool 與 image | ceph-node-01 | `rbd ls k8s_rbd_pool` · `ceph df` |
+| 16 | 安裝可觀測性元件 | 全部節點 | `ceph-exporter`、`prometheus-node-exporter`、`fluent-bit` |
+| 17 | 驗證資料流向 | Prometheus / OpenSearch | metrics 可查、logs 可查 |
 
 ---
 
@@ -98,7 +102,7 @@ flowchart TD
 
 完成 RBD Pool 設定：
 
-- ✅ rbdpool 建立（size=3, min_size=1, pg_num=128）
+- ✅ k8s_rbd_pool 建立（size=3, min_size=1, pg_num=128）
 - ✅ RBD 應用啟用
 - ✅ 測試 image 可建立與列出
 - ✅ `ceph df` 顯示 pool 容量正常
@@ -112,7 +116,7 @@ flowchart TD
 ```bash
 # 從 ceph-node-01 測試雙網路
 ping -c 3 10.10.10.21    # shared-node-subnet (public network)
-ping -c 3 172.10.10.21   # ceph-cluster-subnet (cluster network)
+ping -c 3 172.10.10.21   # mansion-ceph-cluster-subnet (cluster network)
 ```
 
 ### 驗證磁碟
@@ -142,13 +146,13 @@ ceph mon stat
 # 列出 pool
 ceph osd pool ls detail
 
-# 檢查 rbdpool 設定
-ceph osd pool get rbdpool size
-ceph osd pool get rbdpool min_size
-ceph osd pool get rbdpool pg_num
+# 檢查 k8s_rbd_pool 設定
+ceph osd pool get k8s_rbd_pool size
+ceph osd pool get k8s_rbd_pool min_size
+ceph osd pool get k8s_rbd_pool pg_num
 
 # 列出 RBD images
-rbd ls rbdpool
+rbd ls k8s_rbd_pool
 
 # 檢查 pool 使用量
 ceph df

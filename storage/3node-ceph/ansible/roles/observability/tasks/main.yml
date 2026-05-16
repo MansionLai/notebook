@@ -1,0 +1,126 @@
+- name: Validate observability endpoints are configured
+  ansible.builtin.assert:
+    that:
+      - "'REPLACE_WITH_' not in prometheus_agent_remote_write_url"
+      - "'REPLACE_WITH_' not in fluent_bit_opensearch_host"
+      - "'REPLACE_WITH_' not in fluent_bit_opensearch_username"
+      - "'REPLACE_WITH_' not in fluent_bit_opensearch_password"
+    fail_msg: >-
+      Please set prometheus/opensearch endpoint variables in group_vars/all.yml
+      before running Phase 5.
+
+- name: Ensure docker is present for observability containers
+  ansible.builtin.apt:
+    name: docker.io
+    state: present
+    update_cache: true
+
+- name: Ensure docker is enabled
+  ansible.builtin.service:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Create fluent-bit config directory
+  ansible.builtin.file:
+    path: /etc/fluent-bit
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create fluent-bit state directory
+  ansible.builtin.file:
+    path: /var/lib/fluent-bit
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure fluent-bit OpenSearch output
+  ansible.builtin.template:
+    src: fluent-bit.conf.j2
+    dest: /etc/fluent-bit/fluent-bit.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart fluent-bit
+
+- name: Install fluent-bit systemd unit
+  ansible.builtin.template:
+    src: fluent-bit.service.j2
+    dest: /etc/systemd/system/fluent-bit.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install ceph-exporter systemd unit on admin node
+  ansible.builtin.template:
+    src: ceph-exporter.service.j2
+    dest: /etc/systemd/system/ceph-exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: inventory_hostname in groups['ceph_admin']
+
+- name: Install node exporter
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    state: present
+
+- name: Ensure node exporter is enabled
+  ansible.builtin.service:
+    name: prometheus-node-exporter
+    enabled: true
+    state: started
+
+- name: Ensure fluent-bit is enabled
+  ansible.builtin.service:
+    name: "{{ fluent_bit_service }}"
+    enabled: true
+    state: started
+
+- name: Create Prometheus agent config directory
+  ansible.builtin.file:
+    path: /etc/prometheus-agent
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: inventory_hostname in groups['ceph_admin']
+
+- name: Render Prometheus agent config
+  ansible.builtin.template:
+    src: prometheus-agent.yml.j2
+    dest: /etc/prometheus-agent/prometheus.yml
+    owner: root
+    group: root
+    mode: "0644"
+  when: inventory_hostname in groups['ceph_admin']
+
+- name: Install Prometheus agent systemd unit
+  ansible.builtin.template:
+    src: prometheus-agent.service.j2
+    dest: /etc/systemd/system/prometheus-agent.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: inventory_hostname in groups['ceph_admin']
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Start Prometheus agent
+  ansible.builtin.service:
+    name: prometheus-agent
+    enabled: true
+    state: started
+  when: inventory_hostname in groups['ceph_admin']
+
+- name: Start ceph-exporter
+  ansible.builtin.service:
+    name: ceph-exporter
+    enabled: true
+    state: started
+  when: inventory_hostname in groups['ceph_admin']

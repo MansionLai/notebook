@@ -33,7 +33,7 @@ ceph_sysctl_settings:
   vm.swappiness: "0"
   vm.min_free_kbytes: "4194304"
 
-ceph_rbd_pool_name: rbdpool
+ceph_rbd_pool_name: k8s_rbd_pool
 ceph_rbd_pool_pg_num: 128
 ceph_rbd_pool_pgp_num: 128
 ceph_rbd_pool_size: 3
@@ -41,16 +41,32 @@ ceph_rbd_pool_min_size: 1
 ceph_test_image_name: test-image
 ceph_test_image_size: 10G
 
+ceph_exporter_port: 9128
+ceph_exporter_image: quay.io/digitalocean/ceph_exporter:latest
+
+prometheus_agent_image: prom/prometheus:v2.53.0
+prometheus_agent_remote_write_url: REPLACE_WITH_PROMETHEUS_REMOTE_WRITE_URL
+prometheus_agent_remote_write_username: ""
+prometheus_agent_remote_write_password: ""
+
+fluent_bit_service: fluent-bit
+fluent_bit_image: cr.fluentbit.io/fluent/fluent-bit:3.0.7
+fluent_bit_opensearch_host: REPLACE_WITH_OPENSEARCH_HOST
+fluent_bit_opensearch_port: 9200
+fluent_bit_opensearch_username: REPLACE_WITH_OPENSEARCH_USERNAME
+fluent_bit_opensearch_password: REPLACE_WITH_OPENSEARCH_PASSWORD
+fluent_bit_opensearch_index: ceph-lab
+
 ceph_hosts_entries:
-  - ip: 10.10.10.20
-    name: ceph-node-01
   - ip: 10.10.10.21
-    name: ceph-node-02
+    name: ceph-node-01
   - ip: 10.10.10.22
+    name: ceph-node-02
+  - ip: 10.10.10.23
     name: ceph-node-03
-  - ip: 172.10.10.20
-    name: ceph-node-01-cls
   - ip: 172.10.10.21
-    name: ceph-node-02-cls
+    name: ceph-node-01-cls
   - ip: 172.10.10.22
+    name: ceph-node-02-cls
+  - ip: 172.10.10.23
     name: ceph-node-03-cls

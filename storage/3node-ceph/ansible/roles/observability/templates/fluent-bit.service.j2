@@ -1,0 +1,17 @@
+[Unit]
+Description=Fluent Bit (containerized)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Restart=always
+ExecStartPre=-/usr/bin/docker rm -f fluent-bit
+ExecStart=/usr/bin/docker run --name fluent-bit --network host \
+  -v /etc/fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro \
+  -v /var/log:/var/log:ro \
+  -v /var/lib/fluent-bit:/var/lib/fluent-bit \
+  {{ fluent_bit_image }}
+ExecStop=/usr/bin/docker stop fluent-bit
+
+[Install]
+WantedBy=multi-user.target

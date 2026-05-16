@@ -10,7 +10,7 @@ permalink: /storage/3node-ceph/phase-4/
 
 ## 目標
 
-從 Mac mini 透過 Ansible 建立 `rbdpool`、設定 replication 與 PG 參數、初始化 RBD 應用，並驗證 test image 可正常建立。
+從 Mac mini 透過 Ansible 建立 `k8s_rbd_pool`、設定 replication 與 PG 參數、初始化 RBD 應用，並驗證 test image 可正常建立。
 
 ---
 
@@ -40,7 +40,7 @@ ansible-playbook playbooks/phase-4.yml
 
 ## 這個 Phase 的 role 會做什麼
 
-- 建立 `rbdpool`
+- 建立 `k8s_rbd_pool`
 - 設定 `size=3`、`min_size=1`
 - 啟用 `rbd` application
 - 執行 `rbd pool init`
@@ -60,16 +60,16 @@ storage/3node-ceph/ansible/roles/rbd_pool/
 
 ```bash
 ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph osd pool ls detail"
-ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph osd pool get rbdpool size"
-ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph osd pool get rbdpool min_size"
-ssh ubuntu@<ceph-node-01-public-ip> "sudo rbd ls rbdpool"
-ssh ubuntu@<ceph-node-01-public-ip> "sudo rbd info rbdpool/test-image"
+ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph osd pool get k8s_rbd_pool size"
+ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph osd pool get k8s_rbd_pool min_size"
+ssh ubuntu@<ceph-node-01-public-ip> "sudo rbd ls k8s_rbd_pool"
+ssh ubuntu@<ceph-node-01-public-ip> "sudo rbd info k8s_rbd_pool/test-image"
 ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph pg stat"
 ```
 
 預期結果：
 
-- pool `rbdpool` 存在
+- pool `k8s_rbd_pool` 存在
 - `size=3`
 - `min_size=1`
 - `test-image` 已建立

@@ -24,16 +24,16 @@ graph TB
     subgraph Azure["Azure Cloud"]
         subgraph PublicNet["Public/OS Network — shared-node-subnet (10.10.10.0/24)"]
             direction LR
-            PUB1["10.10.10.20"]
-            PUB2["10.10.10.21"]
-            PUB3["10.10.10.22"]
+            PUB1["10.10.10.21"]
+            PUB2["10.10.10.22"]
+            PUB3["10.10.10.23"]
         end
 
-        subgraph ClusterNet["Cluster/Sync Network — ceph-cluster-subnet (172.10.10.0/24)"]
+        subgraph ClusterNet["Cluster/Sync Network — mansion-ceph-cluster-subnet (172.10.10.0/24)"]
             direction LR
-            CLU1["172.10.10.20"]
-            CLU2["172.10.10.21"]
-            CLU3["172.10.10.22"]
+            CLU1["172.10.10.21"]
+            CLU2["172.10.10.22"]
+            CLU3["172.10.10.23"]
         end
 
         subgraph Node1["ceph-node-01 (Standard_D4s_v4)"]
@@ -96,11 +96,11 @@ graph TB
 
 ### 節點基本配置
 
-| 節點名稱 | VM 規格 | vCPU | RAM | OS Disk | OSD Disks | Public IP (shared-node-subnet) | Cluster IP (ceph-cluster-subnet) |
+| 節點名稱 | VM 規格 | vCPU | RAM | OS Disk | OSD Disks | Public IP (shared-node-subnet) | Cluster IP (mansion-ceph-cluster-subnet) |
 |---------|---------|------|-----|---------|-----------|--------------------------------|----------------------------------|
-| `ceph-node-01` | Standard_D4s_v4 | 4 | 16 GiB | 64 GiB | 64 GiB x2 | 10.10.10.20 | 172.10.10.20 |
-| `ceph-node-02` | Standard_D4s_v4 | 4 | 16 GiB | 64 GiB | 64 GiB x2 | 10.10.10.21 | 172.10.10.21 |
-| `ceph-node-03` | Standard_D4s_v4 | 4 | 16 GiB | 64 GiB | 64 GiB x2 | 10.10.10.22 | 172.10.10.22 |
+| `ceph-node-01` | Standard_D4s_v4 | 4 | 16 GiB | 64 GiB | 64 GiB x2 | 10.10.10.21 | 172.10.10.21 |
+| `ceph-node-02` | Standard_D4s_v4 | 4 | 16 GiB | 64 GiB | 64 GiB x2 | 10.10.10.22 | 172.10.10.22 |
+| `ceph-node-03` | Standard_D4s_v4 | 4 | 16 GiB | 64 GiB | 64 GiB x2 | 10.10.10.23 | 172.10.10.23 |
 
 > 💡 **設計考量：** Standard_D4s_v4 提供穩定 CPU 效能，避免 Burstable 系列對 MON 與 OSD 的效能影響
 
@@ -126,17 +126,17 @@ graph TB
 | 網路類型 | Subnet 名稱 | CIDR | 用途 | 流量特性 |
 |---------|------------|------|------|---------|
 | **Public Network（共用）** | `shared-node-subnet` | 10.10.10.0/24 | SSH、Ceph 管理、Client 存取、MON 通訊 | 管理流量、Client I/O |
-| **Cluster Network（Ceph 專屬）** | `ceph-cluster-subnet` | 172.10.10.0/24 | OSD replication、backfill、recovery | 大量資料傳輸 |
+| **Cluster Network（Ceph 專屬）** | `mansion-ceph-cluster-subnet` | 172.10.10.0/24 | OSD replication、backfill、recovery | 大量資料傳輸 |
 
-> 💡 `shared-node-subnet` 由 KubeVirt lab 建立並共用，KubeVirt K8s 節點佔用 10.10.10.10-12，Ceph 節點使用 10.10.10.20-22。`ceph-cluster-subnet` 為 Ceph 專屬，由 Ceph Phase 0 在同一 `mansion-shared-vnet` 中建立。
+> 💡 `shared-node-subnet` 由 KubeVirt lab 建立並共用，KubeVirt K8s 節點佔用 10.10.10.10-12，Ceph 節點使用 10.10.10.21-23。`mansion-ceph-cluster-subnet` 為 Ceph 專屬，由 Ceph Phase 0 在同一 `mansion-shared-vnet` 中建立。
 
 ### IP 分配表
 
-| 節點 | Public/OS IP（shared-node-subnet） | Cluster/Sync IP（ceph-cluster-subnet） |
+| 節點 | Public/OS IP（shared-node-subnet） | Cluster/Sync IP（mansion-ceph-cluster-subnet） |
 |------|-----------------------------------|---------------------------------------|
-| `ceph-node-01` | 10.10.10.20 | 172.10.10.20 |
-| `ceph-node-02` | 10.10.10.21 | 172.10.10.21 |
-| `ceph-node-03` | 10.10.10.22 | 172.10.10.22 |
+| `ceph-node-01` | 10.10.10.21 | 172.10.10.21 |
+| `ceph-node-02` | 10.10.10.22 | 172.10.10.22 |
+| `ceph-node-03` | 10.10.10.23 | 172.10.10.23 |
 
 > 💡 **網路分離優勢：** 將 OSD replication 流量與管理/Client 流量隔離，避免 backfill/recovery 影響前端效能
 
@@ -175,11 +175,11 @@ graph TB
 
 ### Pool 參數表
 
-建立預設 RBD pool `rbdpool`：
+建立預設 RBD pool `k8s_rbd_pool`：
 
 | 參數 | 設定值 | 說明 |
 |------|--------|------|
-| Pool Name | `rbdpool` | RBD block storage pool |
+| Pool Name | `k8s_rbd_pool` | RBD block storage pool |
 | `size` | 3 | 每個 object 複製 3 份 |
 | `min_size` | 1 | 至少 1 份可用即可寫入（降級模式） |
 | `pg_num` | 128 | Placement Group 數量 |
@@ -192,17 +192,17 @@ graph TB
 
 ```bash
 # 建立 pool
-ceph osd pool create rbdpool 128 128
+ceph osd pool create k8s_rbd_pool 128 128
 
 # 設定 size 與 min_size
-ceph osd pool set rbdpool size 3
-ceph osd pool set rbdpool min_size 1
+ceph osd pool set k8s_rbd_pool size 3
+ceph osd pool set k8s_rbd_pool min_size 1
 
 # 啟用 RBD 應用
-ceph osd pool application enable rbdpool rbd
+ceph osd pool application enable k8s_rbd_pool rbd
 
 # 初始化 RBD pool
-rbd pool init rbdpool
+rbd pool init k8s_rbd_pool
 ```
 
 ---
@@ -223,9 +223,9 @@ rbd pool init rbdpool
 
 ```ini
 [global]
-# shared-node-subnet: 10.10.10.0/24 (KubeVirt K8s .10-.12, Ceph .20-.22)
+# shared-node-subnet: 10.10.10.0/24 (KubeVirt K8s .10-.12, Ceph .21-.23)
 public_network = 10.10.10.0/24
-# ceph-cluster-subnet: 172.10.10.0/24 (Ceph dedicated)
+# mansion-ceph-cluster-subnet: 172.10.10.0/24 (Ceph dedicated)
 cluster_network = 172.10.10.0/24
 ```
 

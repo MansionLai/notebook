@@ -1,0 +1,17 @@
+[Unit]
+Description=Ceph Exporter (containerized)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Restart=always
+ExecStartPre=-/usr/bin/docker rm -f ceph-exporter
+ExecStart=/usr/bin/docker run --name ceph-exporter --network host \
+  -v /etc/ceph:/etc/ceph:ro \
+  -e CEPH_ADDR=127.0.0.1 \
+  -e WEB_LISTEN_ADDRESS=:{{ ceph_exporter_port }} \
+  {{ ceph_exporter_image }}
+ExecStop=/usr/bin/docker stop ceph-exporter
+
+[Install]
+WantedBy=multi-user.target

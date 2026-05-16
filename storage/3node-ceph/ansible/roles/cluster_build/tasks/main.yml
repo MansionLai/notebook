@@ -11,7 +11,6 @@
     --initial-dashboard-user {{ ceph_dashboard_user }}
     --initial-dashboard-password {{ ceph_dashboard_password }}
     --allow-fqdn-hostname
-    --skip-monitoring-stack
     --ssh-user {{ ansible_user }}
     --ssh-private-key /home/{{ ansible_user }}/.ssh/id_rsa
     --ssh-public-key /home/{{ ansible_user }}/.ssh/id_rsa.pub

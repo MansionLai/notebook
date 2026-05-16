@@ -2,3 +2,4 @@
 - import_playbook: phase-2.yml
 - import_playbook: phase-3.yml
 - import_playbook: phase-4.yml
+- import_playbook: phase-5.yml

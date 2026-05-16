@@ -23,6 +23,8 @@ param imageVersion string = 'latest'
 param vmSize string
 @description('Data disk SKU for OSD disks.')
 param dataDiskSku string
+@description('OS disk size in GB.')
+param osDiskSizeGb int = 64
 @description('Data disk size in GB for OSD disks.')
 param dataDiskSizeGb int
 
@@ -43,6 +45,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
       osDisk: {
         createOption: 'FromImage'
         caching: 'ReadWrite'
+        diskSizeGB: osDiskSizeGb
         deleteOption: 'Delete'
         managedDisk: {
           storageAccountType: 'StandardSSD_LRS'
