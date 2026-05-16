@@ -32,4 +32,12 @@ AI agent使用 ai/ceph branch進行修正, 確認沒問題後再merge回main bra
      - 只需建立rbd pool, name=k8s_rbd_pool (size=3, min_size=1, pg_num=128, pgp_num=128)
      - 需要安裝ceph-exporter + ceph-node-exporter將metrics推送到另個kubernetes專案中建立的prometheus
      - 需要安裝fluent-bit將log推送到個kubernetes專案中建立的opensearch
+     - 將安裝方式寫成markdown file方便閱讀
+   - ansible 
+     - 產生 ansible playbook將ceph cluster安裝過程自動化
+     - 將不同安裝phase拆成不同的role
+     - host var定義在 inventory yaml內
+     - group_vars內有兩份檔案
+       - all.yml 儲存明碼的variable
+       - encrypted.yml 儲存使用ansible vault加密過後的variable, 將secret性質的variable放在這份檔案
 
