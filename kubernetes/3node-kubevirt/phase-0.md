@@ -148,7 +148,7 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 
 ### Step 0-6：Worker eth1 啟用 IP Forwarding
 
-1. Portal → k8s-worker → **Networking** → 點選第二張 NIC（`mansion_kubevirt_worker_nic2`）
+1. Portal → mansion_kubevirt_worker → **Networking** → 點選第二張 NIC（`mansion_kubevirt_worker_nic2`）
 2. → **IP configurations** → 頂部有 **IP forwarding** 選項 → 設為 **Enabled**
 3. 儲存
 

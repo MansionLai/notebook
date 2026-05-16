@@ -8,7 +8,7 @@ permalink: /kubernetes/3node-kubevirt/phase-2/
 
 # Phase 2 — Multus CNI
 
-> 在 **k8s-master** 執行
+> 在 **mansion-kubevirt-master** 執行
 
 ### Step 2-1：安裝 Multus Thick Plugin（multus namespace）
 

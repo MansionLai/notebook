@@ -86,13 +86,13 @@ spec:
                   plain_text_passwd: ubuntu
               runcmd:
                 # 設定 gateway static ARP（因為 vmbr0 bridge 無法回應 ARP）
-                - ip neigh replace 10.10.100.12 lladdr 7c:1e:52:4d:3b:a4 dev enp1s0 nud permanent
+                - ip neigh replace 10.10.100.13 lladdr 7c:1e:52:4d:3b:a4 dev enp1s0 nud permanent
                 # 持久化（開機後自動執行）
                 - mkdir -p /etc/networkd-dispatcher/routable.d
                 - |
                   cat > /etc/networkd-dispatcher/routable.d/50-gw-arp.sh << 'SCRIPT'
                   #!/bin/bash
-                  [ "$IFACE" = "enp1s0" ] && ip neigh replace 10.10.100.12 lladdr 7c:1e:52:4d:3b:a4 dev enp1s0 nud permanent
+                  [ "$IFACE" = "enp1s0" ] && ip neigh replace 10.10.100.13 lladdr 7c:1e:52:4d:3b:a4 dev enp1s0 nud permanent
                   SCRIPT
                 - chmod +x /etc/networkd-dispatcher/routable.d/50-gw-arp.sh
             networkData: |
@@ -102,7 +102,7 @@ spec:
                   enp1s0:
                     dhcp4: false
                     addresses: [10.10.100.100/24]
-                    gateway4: 10.10.100.12
+                    gateway4: 10.10.100.13
                     nameservers:
                       addresses: [8.8.8.8, 1.1.1.1]
 ```
@@ -201,7 +201,7 @@ ping 8.8.8.8               # ❌ Azure NAT GW 不支援 ICMP（正常）
 
 | 問題 | 原因 | 解法 |
 |------|------|------|
-| VM 無法 ping gateway | vmbr0 bridge 不回應 ARP（bridge L2 forwarding 與 L3 ARP reply 衝突） | cloud-init runcmd 設 static ARP: `ip neigh replace 10.10.100.12 lladdr 7c:1e:52:4d:3b:a4 dev enp1s0 nud permanent` |
+| VM 無法 ping gateway | vmbr0 bridge 不回應 ARP（bridge L2 forwarding 與 L3 ARP reply 衝突） | cloud-init runcmd 設 static ARP: `ip neigh replace 10.10.100.13 lladdr 7c:1e:52:4d:3b:a4 dev enp1s0 nud permanent` |
 | VM ping gateway 的 ARP reply 不通 | ARP request 進 vmbr0 但 bridge 不回應（疑似 Azure kernel 或 Cilium 干擾） | ebtables nat PREROUTING arpreply rule（或 cloud-init static ARP 繞過） |
 | Worker ping VM 100% packet loss | Policy routing rule 99 把 VM reply (src 10.10.100.0/24) forward 出去而非 local deliver | 加 rule 97: `from 10.10.100.0/24 lookup local priority 97`（先查 local table） |
 | Worker vmbr0 MAC 不對 | vmbr0 bridge 預設 MAC ≠ eth1 registered MAC → Azure 不回 ARP | netplan 設 `macaddress: 7c:1e:52:4d:3b:a4` on vmbr0 |

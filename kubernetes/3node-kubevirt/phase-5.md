@@ -11,7 +11,7 @@ permalink: /kubernetes/3node-kubevirt/phase-5/
 
 ### Step 5-1：確認 Worker 支援 Nested Virtualization
 
-在 **k8s-worker** 執行：
+在 **mansion-kubevirt-worker** 執行：
 
 ```bash
 egrep -c '(vmx|svm)' /proc/cpuinfo
@@ -23,7 +23,7 @@ ls /dev/kvm
 
 ---
 
-### Step 5-2：安裝 KubeVirt Operator（在 k8s-master）
+### Step 5-2：安裝 KubeVirt Operator（在 mansion-kubevirt-master）
 
 ```bash
 KUBEVIRT_VERSION=v1.5.0
@@ -95,17 +95,17 @@ kubectl wait kv kubevirt -n kubevirt \
 
 kubectl get pods -n kubevirt -o wide
 # 預期：
-# virt-operator-*    Running  k8s-infra
-# virt-api-*         Running  k8s-infra
-# virt-controller-*  Running  k8s-infra
-# virt-handler-*     Running  k8s-worker（DaemonSet + nodeSelector kubevirt-workload=true）
+# virt-operator-*    Running  mansion-kubevirt-infra
+# virt-api-*         Running  mansion-kubevirt-infra
+# virt-controller-*  Running  mansion-kubevirt-infra
+# virt-handler-*     Running  mansion-kubevirt-worker（DaemonSet + nodeSelector kubevirt-workload=true）
 ```
 
 ---
 
 ### Step 5-5：安裝 virtctl
 
-在 **k8s-master** 執行：
+在 **mansion-kubevirt-master** 執行：
 
 ```bash
 KUBEVIRT_VERSION=$(kubectl get kubevirt -n kubevirt kubevirt \
@@ -123,7 +123,7 @@ virtctl version
 
 ---
 
-### Step 5-6：Worker 設定 vmbr0 Bridge（在 k8s-worker）
+### Step 5-6：Worker 設定 vmbr0 Bridge（在 mansion-kubevirt-worker）
 
 #### 臨時設定（立即生效）
 
@@ -165,7 +165,7 @@ ip link show vmbr0
 
 ---
 
-### Step 5-7：建立 NetworkAttachmentDefinition（在 k8s-master）
+### Step 5-7：建立 NetworkAttachmentDefinition（在 mansion-kubevirt-master）
 
 ```bash
 kubectl create namespace vmnetwork
@@ -208,7 +208,7 @@ git clone https://github.com/k8snetworkplumbingwg/multus-networkpolicy /tmp/mult
 scp -i ~/.ssh/id_ed25519 /tmp/multus-networkpolicy/deploy.yml \
   ubuntu@<master-ip>:/tmp/multus-networkpolicy-deploy.yml
 
-# 在 k8s-master 執行
+# 在 mansion-kubevirt-master 執行
 kubectl apply -f /tmp/multus-networkpolicy-deploy.yml
 ```
 
@@ -230,10 +230,10 @@ kubectl get kubevirt -n kubevirt
 # 所有 KubeVirt pods
 kubectl get pods -n kubevirt -o wide
 # 預期：
-# virt-api       → k8s-infra（2 replicas）
-# virt-controller → k8s-infra（2 replicas）
-# virt-handler   → 只在 k8s-worker（DaemonSet + nodeSelector kubevirt-workload=true）
-# virt-operator  → k8s-infra（2 replicas）
+# virt-api       → mansion-kubevirt-infra（2 replicas）
+# virt-controller → mansion-kubevirt-infra（2 replicas）
+# virt-handler   → 只在 mansion-kubevirt-worker（DaemonSet + nodeSelector kubevirt-workload=true）
+# virt-operator  → mansion-kubevirt-infra（2 replicas）
 
 # NAD 確認
 kubectl get network-attachment-definitions -n vmnetwork
@@ -265,16 +265,16 @@ virtctl version --client
 ```
 kubectl get nodes
 NAME         STATUS   ROLES           AGE   VERSION
-k8s-infra    Ready    infra           -     v1.32.x
-k8s-master   Ready    control-plane   -     v1.32.x
-k8s-worker   Ready    worker          -     v1.32.x
+mansion-kubevirt-infra    Ready    infra           -     v1.31.x
+mansion-kubevirt-master   Ready    control-plane   -     v1.31.x
+mansion-kubevirt-worker   Ready    worker          -     v1.31.x
 
 kubectl get pods -n kubevirt -o wide
 NAME                              READY   STATUS    NODE
-virt-api-xxx                      1/1     Running   k8s-infra
-virt-controller-xxx               1/1     Running   k8s-infra
-virt-handler-xxx (worker)         1/1     Running   k8s-worker
-virt-operator-xxx                 1/1     Running   k8s-infra
+virt-api-xxx                      1/1     Running   mansion-kubevirt-infra
+virt-controller-xxx               1/1     Running   mansion-kubevirt-infra
+virt-handler-xxx (worker)         1/1     Running   mansion-kubevirt-worker
+virt-operator-xxx                 1/1     Running   mansion-kubevirt-infra
 ```
 
 ---

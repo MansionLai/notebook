@@ -14,7 +14,7 @@ permalink: /kubernetes/3node-kubevirt/phase-4/
 
 ## Phase 4a：Prometheus Stack（kube-prometheus-stack）
 
-> 在 **k8s-master** 執行
+> 在 **mansion-kubevirt-master** 執行
 
 **目的：** 安裝 kube-prometheus-stack（Prometheus + AlertManager + Grafana + node-exporter + kube-state-metrics），提供完整的叢集監控能力。所有元件釘在 infra node，node-exporter 以 DaemonSet 部署到三台 node。
 
@@ -117,7 +117,7 @@ helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
 
 ```bash
 kubectl get pods -n monitoring -o wide
-# 預期：prometheus-*, alertmanager-*, grafana-*, kube-state-metrics-* 在 mansion-k8s-infra
+# 預期：prometheus-*, alertmanager-*, grafana-*, kube-state-metrics-* 在 mansion-kubevirt-infra
 #        node-exporter-* 在三台 node 各一個（master/infra/worker）
 
 kubectl get pvc -n monitoring
@@ -128,7 +128,7 @@ kubectl get pvc -n monitoring
 
 ## Phase 4b：OpenSearch + OpenSearch Dashboards
 
-> 在 **k8s-master** 執行
+> 在 **mansion-kubevirt-master** 執行
 
 **目的：** 安裝 OpenSearch（Elasticsearch 相容的搜尋/分析引擎）和 OpenSearch Dashboards（Kibana 相容的視覺化 UI），用於收集和查詢 Fluent Bit 轉送的 log。Single-node 模式，釘在 infra node。
 
@@ -222,7 +222,7 @@ helm install opensearch-dashboards opensearch/opensearch-dashboards \
 
 ```bash
 kubectl get pods -n monitoring -o wide | grep opensearch
-# 預期：opensearch-cluster-master-0 和 opensearch-dashboards-* 在 mansion-k8s-infra
+# 預期：opensearch-cluster-master-0 和 opensearch-dashboards-* 在 mansion-kubevirt-infra
 
 kubectl get pvc -n monitoring | grep opensearch
 # 預期：opensearch-cluster-master-... Bound 10Gi local-path
@@ -232,7 +232,7 @@ kubectl get pvc -n monitoring | grep opensearch
 
 ## Phase 4c：Fluent Bit
 
-> 在 **k8s-master** 執行
+> 在 **mansion-kubevirt-master** 執行
 
 ### Step 4c-1：新增 Helm repo
 

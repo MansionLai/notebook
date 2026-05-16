@@ -16,7 +16,7 @@ permalink: /kubernetes/3node-kubevirt/phase-3/
 
 ## Phase 3-1：安裝 Rook-Ceph Operator
 
-> 在 **k8s-master** 執行
+> 在 **mansion-kubevirt-master** 執行
 
 ### Step 3-1-1：部署 Rook-Ceph CRD 與 Operator
 

@@ -31,7 +31,7 @@ permalink: /kubernetes/3node-kubevirt/iac/
 | Worker VM | `mansion_kubevirt_worker` (10.10.10.13) |
 | Worker NIC2 | `mansion_kubevirt_worker_nic2` (10.10.100.13) |
 
-> **注意：** ARM / Bicep 無法原地更名既有 Azure 資源。若環境中已存在舊命名資源（`mansion-k8s-*` / `mansion-shared-vnet` 等），請視為全新部署（fresh deploy），手動刪除舊資源後再重新部署。
+> **注意：** ARM / Bicep 無法原地更名既有 Azure 資源。若環境中已存在舊命名資源（例如早期 `mansion-k8s-*`），請視為全新部署（fresh deploy），手動刪除舊資源後再重新部署。
 
 ---
 
