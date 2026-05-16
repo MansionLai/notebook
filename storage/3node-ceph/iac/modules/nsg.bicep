@@ -6,9 +6,9 @@ param location string
 param networkSecurityGroupName string
 @description('External source CIDR allowed in.')
 param allowedSourceCidr string
-@description('Public subnet prefix for internal traffic rules.')
+@description('Shared node subnet prefix for internal east-west traffic rules (10.10.10.0/24).')
 param publicSubnetPrefix string
-@description('Cluster subnet prefix for internal traffic rules.')
+@description('Ceph cluster subnet prefix for internal replication traffic rules (172.10.10.0/24).')
 param clusterSubnetPrefix string
 
 resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
@@ -30,7 +30,7 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2023-11-0
         }
       }
       {
-        name: 'AllowPublicSubnetTraffic'
+        name: 'AllowSharedNodeSubnetTraffic'
         properties: {
           priority: 1000
           access: 'Allow'
@@ -43,7 +43,7 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2023-11-0
         }
       }
       {
-        name: 'AllowClusterSubnetTraffic'
+        name: 'AllowCephClusterSubnetTraffic'
         properties: {
           priority: 1001
           access: 'Allow'

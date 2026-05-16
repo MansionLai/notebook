@@ -42,15 +42,15 @@ ceph_test_image_name: test-image
 ceph_test_image_size: 10G
 
 ceph_hosts_entries:
-  - ip: 10.10.10.10
+  - ip: 10.10.10.20
     name: ceph-node-01
-  - ip: 10.10.10.11
+  - ip: 10.10.10.21
     name: ceph-node-02
-  - ip: 10.10.10.12
+  - ip: 10.10.10.22
     name: ceph-node-03
-  - ip: 172.10.10.10
+  - ip: 172.10.10.20
     name: ceph-node-01-cls
-  - ip: 172.10.10.11
+  - ip: 172.10.10.21
     name: ceph-node-02-cls
-  - ip: 172.10.10.12
+  - ip: 172.10.10.22
     name: ceph-node-03-cls

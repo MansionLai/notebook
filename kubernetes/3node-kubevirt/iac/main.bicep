@@ -2,18 +2,24 @@ targetScope = 'resourceGroup'
 
 @description('Azure region for deployment.')
 param location string = 'japaneast'
-@description('Name of the virtual network.')
+@description('Name of the shared virtual network (owned by KubeVirt lab; also consumed by Ceph lab).')
 param virtualNetworkName string
-@description('CIDR for the virtual network.')
+@description('CIDR for the shared virtual network (KubeVirt side, e.g. 10.10.0.0/16).')
 param virtualNetworkAddressPrefix string
-@description('Name of the Kubernetes subnet.')
+@description('Second CIDR for the shared virtual network address space (e.g. 172.10.0.0/16). Required from day one so the Ceph cluster subnet (172.10.10.0/24) can later exist within the same shared VNet without a destructive VNet update.')
+param clusterAddressPrefix string
+@description('Name of the shared node subnet (10.10.10.0/24). KubeVirt K8s nodes use .10-.12; Ceph nodes will later use .20-.22.')
 param k8sSubnetName string
-@description('CIDR for the Kubernetes subnet.')
+@description('CIDR for the shared node subnet.')
 param k8sSubnetPrefix string
-@description('Name of the KubeVirt subnet.')
+@description('Name of the KubeVirt-exclusive secondary subnet for VM overlay traffic (Worker eth1).')
 param kubevirtSubnetName string
-@description('CIDR for the KubeVirt subnet.')
+@description('CIDR for the KubeVirt secondary subnet.')
 param kubevirtSubnetPrefix string
+@description('Name of the Ceph-dedicated cluster subnet inside the shared VNet. Declared in the KubeVirt-owned VNet so that ARM PUT semantics on VNet redeployment never delete it. Must match the value in storage/3node-ceph/iac/main.bicepparam.')
+param cephClusterSubnetName string
+@description('CIDR for the Ceph cluster subnet (e.g. 172.10.10.0/24). Must be within clusterAddressPrefix.')
+param cephClusterSubnetPrefix string
 @description('Name of the network security group.')
 param networkSecurityGroupName string
 @description('Trusted source CIDR for inbound rules.')
@@ -51,11 +57,11 @@ param adminUsername string = 'ubuntu'
 @description('SSH public key content for the Linux VM admin user.')
 param adminPublicKey string
 @description('Master VM size.')
-param masterVmSize string = 'Standard_D2s_v5'
+param masterVmSize string = 'Standard_D2s_v4'
 @description('Infra VM size.')
-param infraVmSize string = 'Standard_D4s_v5'
+param infraVmSize string = 'Standard_D4s_v4'
 @description('Worker VM size.')
-param workerVmSize string = 'Standard_D4s_v5'
+param workerVmSize string = 'Standard_D4s_v4'
 @description('Ubuntu image publisher.')
 param imagePublisher string = 'Canonical'
 @description('Ubuntu image offer.')
@@ -71,10 +77,13 @@ module network './modules/network.bicep' = {
     location: location
     virtualNetworkName: virtualNetworkName
     virtualNetworkAddressPrefix: virtualNetworkAddressPrefix
+    clusterAddressPrefix: clusterAddressPrefix
     k8sSubnetName: k8sSubnetName
     k8sSubnetPrefix: k8sSubnetPrefix
     kubevirtSubnetName: kubevirtSubnetName
     kubevirtSubnetPrefix: kubevirtSubnetPrefix
+    cephClusterSubnetName: cephClusterSubnetName
+    cephClusterSubnetPrefix: cephClusterSubnetPrefix
   }
 }
 
@@ -187,6 +196,7 @@ output targetResourceGroupName string = resourceGroup().name
 output virtualNetworkId string = network.outputs.virtualNetworkId
 output k8sSubnetId string = network.outputs.k8sSubnetId
 output kubevirtSubnetId string = network.outputs.kubevirtSubnetId
+output cephClusterSubnetId string = network.outputs.cephClusterSubnetId
 output networkSecurityGroupId string = nsg.outputs.networkSecurityGroupId
 output masterNicId string = masterNic.outputs.nicId
 output infraNicId string = infraNic.outputs.nicId

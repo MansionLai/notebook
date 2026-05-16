@@ -15,7 +15,7 @@ permalink: /kubernetes/3node-kubevirt/phase-5/
 
 ```bash
 egrep -c '(vmx|svm)' /proc/cpuinfo
-# 預期：> 0（Azure Dv5 支援 nested virt）
+# 預期：> 0（Azure Dv4 支援 nested virt）
 
 ls /dev/kvm
 # 預期：/dev/kvm

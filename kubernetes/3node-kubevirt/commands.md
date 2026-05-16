@@ -35,7 +35,7 @@ sudo apt-mark hold kubelet kubeadm kubectl
 ### Master: 初始化 Control Plane
 
 ```bash
-# 初始化（替換 <MASTER_IP>）
+# 初始化（替換 <MASTER_IP>，即 shared-node-subnet 上的 10.10.10.10）
 sudo kubeadm init \
   --pod-network-cidr=10.244.0.0/16 \
   --apiserver-advertise-address=<MASTER_IP>

@@ -1,12 +1,24 @@
 using './main.bicep'
 
 param location = 'japaneast'
-param virtualNetworkName = 'mansion-k8s-vnet'
+// Shared VNet — owned by KubeVirt lab, consumed by Ceph lab when it is provisioned.
+param virtualNetworkName = 'mansion-shared-vnet'
+// KubeVirt primary range: K8s nodes (10.10.10.x) and VM overlay (10.10.100.x).
 param virtualNetworkAddressPrefix = '10.10.0.0/16'
-param k8sSubnetName = 'k8s-subnet'
+// Ceph cluster subnet (172.10.10.0/24) lives in this range; declared from day one so the
+// shared VNet already covers it when the Ceph lab is provisioned later.
+param clusterAddressPrefix = '172.10.0.0/16'
+// Shared node subnet: KubeVirt K8s nodes 10.10.10.10-12; Ceph nodes will use 10.10.10.20-22.
+param k8sSubnetName = 'shared-node-subnet'
 param k8sSubnetPrefix = '10.10.10.0/24'
+// KubeVirt-exclusive secondary subnet for VM overlay traffic (Worker eth1).
 param kubevirtSubnetName = 'kubevirt-subnet'
 param kubevirtSubnetPrefix = '10.10.100.0/24'
+// Ceph-dedicated cluster subnet — declared in the KubeVirt-owned VNet so that ARM PUT
+// semantics on VNet redeployment never delete it.
+// These values MUST match storage/3node-ceph/iac/main.bicepparam (clusterSubnetName / clusterSubnetPrefix).
+param cephClusterSubnetName = 'ceph-cluster-subnet'
+param cephClusterSubnetPrefix = '172.10.10.0/24'
 param networkSecurityGroupName = 'k8s-nsg'
 // Documentation placeholder; replace before deployment.
 param allowedSourceCidr = '203.0.113.10/32'
@@ -30,6 +42,6 @@ param masterVmSize = 'Standard_D2s_v4'
 param infraVmSize = 'Standard_D4s_v4'
 param workerVmSize = 'Standard_D4s_v4'
 param imagePublisher = 'Canonical'
-param imageOffer = '0001-com-ubuntu-server-jammy'
-param imageSku = '22_04-lts-gen2'
+param imageOffer = '0001-com-ubuntu-server-noble'
+param imageSku = '24_04-lts-gen2'
 param imageVersion = 'latest'

@@ -15,7 +15,7 @@ permalink: /kubernetes/3node-kubevirt/flowchart/
 
 ```mermaid
 flowchart TD
-    A([開始]) --> B[申請 3 台 Azure VM\nMaster D2s_v5 · Infra D4s_v5 · Worker D4s_v5]
+    A([開始]) --> B[申請 3 台 Azure VM\nMaster D2s_v4 · Infra D4s_v4 · Worker D4s_v4]
     B --> C[三台 VM 安裝基礎套件\ncontainerd · kubeadm · kubelet · kubectl]
     C --> D[Master: kubeadm init\n初始化 Control Plane]
     D --> E[安裝 CNI Plugin\nFlannel / Calico]
@@ -39,7 +39,7 @@ flowchart TD
 
 | 步驟 | 動作 | 執行節點 | Option A 備註 |
 |------|------|---------|--------------|
-| 1 | 申請 Azure VM(Master/Infra/Worker) | — | Infra 需 D4s_v5(多承載基礎設施服務與 KubeVirt 管理面) |
+| 1 | 申請 Azure VM(Master/Infra/Worker) | — | Infra 需 D4s_v4(多承載基礎設施服務與 KubeVirt 管理面) |
 | 2 | 安裝 containerd + kubeadm + kubelet + kubectl | 全部 | — |
 | 3 | `kubeadm init` 初始化 Control Plane | Master | — |
 | 4 | 安裝 CNI Plugin（Flannel） | Master | — |

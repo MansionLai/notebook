@@ -8,19 +8,30 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 
 # Phase 0 — Azure 資源建立
 
+> ⚠️ **資源更名遷移說明（重要）**  
+> 此版本將 KubeVirt 預設資源名稱從舊版（`mansion-k8s-vnet` / `k8s-subnet`）更改為共用命名（`mansion-shared-vnet` / `shared-node-subnet`）。  
+> ARM / Bicep **無法原地更名** Azure 資源。若環境中已存在舊版資源，請將此次部署視為**全新部署（fresh deploy / migration）**，而非升級。  
+> 詳見 [IaC README 遷移說明](../iac/#資源更名遷移說明重要)。
+
 ## 共通輸入
 
 | 項目 | 值 |
 |------|----|
 | Resource Group | `mansion_resource` |
 | Region | 例如 `East Asia` |
-| VNet | `mansion-k8s-vnet` |
-| Address space | `10.10.0.0/16` |
-| `k8s-subnet` | `10.10.10.0/24` |
-| `kubevirt-subnet` | `10.10.100.0/24` |
+| VNet（共用，由 KubeVirt lab 建立） | `mansion-shared-vnet` |
+| Address space（主，KubeVirt 節點/overlay） | `10.10.0.0/16` |
+| Address space（次，Ceph cluster subnet 預留） | `172.10.0.0/16` |
+| `shared-node-subnet`（KubeVirt + Ceph 共用節點子網） | `10.10.10.0/24` |
+| `kubevirt-subnet`（KubeVirt 專屬 VM overlay） | `10.10.100.0/24` |
 | SSH user | `ubuntu` |
 | SSH public key | 由使用者提供 |
 | NSG allowed source | 使用者的固定 Public IP 或 CIDR |
+
+> **共用 VNet 設計說明**  
+> `mansion-shared-vnet` 由 KubeVirt lab 負責建立與擁有，宣告兩個 address prefix：`10.10.0.0/16`（KubeVirt 節點 & VM overlay）與 `172.10.0.0/16`（Ceph cluster subnet 預留）。  
+> Ceph lab 未來會共用相同的 VNet 與 `shared-node-subnet`，使用 IP `10.10.10.20-22`，並在 `172.10.0.0/16` 範圍內新增專屬 cluster subnet `172.10.10.0/24`。  
+> 兩個 address prefix 從建立 VNet 時即一併宣告，避免未來 Ceph 加入時需要對既有 VNet 進行破壞性的 address space 變更。
 
 
 ## 環境概覽
@@ -55,21 +66,23 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 
 ---
 
-### Step 0-2：建立 Virtual Network
+### Step 0-2：建立 Virtual Network（共用，由 KubeVirt lab 建立）
 
 1. Portal → **Virtual networks** → **Create**
 2. Basics:
    - Resource group: `mansion_resource`
-   - Name: `mansion-k8s-vnet`
+   - Name: `mansion-shared-vnet`
    - Region: 同上
 3. **IP addresses** tab：
-   - Address space: `10.10.0.0/16`
+   - Address space: `10.10.0.0/16`（主，KubeVirt 節點 & overlay）
+   - 新增第二個 address space: `172.10.0.0/16`（次，Ceph cluster subnet 預留）
    - 刪除預設 subnet，新增兩個：
 
-   | Subnet name | Address range |
-   |-------------|---------------|
-   | `k8s-subnet` | `10.10.10.0/24` |
-   | `kubevirt-subnet` | `10.10.100.0/24` |
+   | Subnet name | Address range | 用途 |
+   |-------------|---------------|------|
+   | `shared-node-subnet` | `10.10.10.0/24` | KubeVirt K8s 節點（.10-.12）；Ceph 節點未來將共用此子網（.20-.22） |
+   | `kubevirt-subnet` | `10.10.100.0/24` | KubeVirt VM overlay（Worker eth1 專用） |
+   | `ceph-cluster-subnet` | `172.10.10.0/24` | Ceph 專屬 cluster 子網（預建，避免 KubeVirt 重部署時被 ARM PUT 刪除） |
 
 4. → **Review + create** → **Create**
 
@@ -88,7 +101,9 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 | 300 | Allow-NodePort | 30000-32767 | TCP | **Your IP** | Allow |
 | 1000 | Allow-Internal | Any | Any | `10.10.0.0/16` | Allow |
 
-> ⚠️ Source 的 **Your IP** 填你家/辦公室的 Public IP（可到 https://myip.is 查詢）
+> ⚠️ Source 的 **Your IP** 填你家/辦公室的 Public IP（可到 https://myip.is 查詢）  
+> 💡 `Allow-Internal` 的 Source CIDR `10.10.0.0/16` 覆蓋 KubeVirt 節點（10.10.10.10-12）、KubeVirt VM overlay（10.10.100.x）以及未來 Ceph 節點（10.10.10.20-22）之間的東西向流量。  
+> 📌 Ceph 的 cluster subnet（`172.10.10.0/24`）使用不同的 address space（`172.10.0.0/16`）。當 Ceph lab 部署時，需另行新增一條 `Allow-Internal-Ceph`（Source: `172.10.0.0/16`）NSG 規則以允許 Ceph cluster 內部流量。
 
 ---
 
@@ -113,8 +128,8 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 #### Networking Tab
 | 欄位 | 設定 |
 |------|------|
-| Virtual network | `mansion-k8s-vnet` |
-| Subnet | `k8s-subnet` |
+| Virtual network | `mansion-shared-vnet` |
+| Subnet | `shared-node-subnet` |
 | Public IP | 建立新的（Static，名稱如 `k8s-master-pip`）|
 | NIC network security group | **Advanced** → 選 `k8s-nsg` |
 
@@ -170,10 +185,10 @@ ip addr show
 # worker 應看到 eth0: 10.10.10.12 + eth1: 10.10.100.12
 ```
 
-三台互 ping（確認 NSG 允許內部流量）：
+三台互 ping（確認 NSG `Allow-Internal` 規則允許共用 VNet 內部東西向流量）：
 
 ```bash
-# 在 master 上
+# 在 master 上（eth0: 10.10.10.10，位於 shared-node-subnet）
 ping -c 3 10.10.10.11  # infra
 ping -c 3 10.10.10.12  # worker
 ```
@@ -253,9 +268,10 @@ flowchart TD
 ### Option B 預期輸出
 
 - `mansion_resource`
-- `mansion-k8s-vnet`
-- `k8s-subnet`
-- `kubevirt-subnet`
+- `mansion-shared-vnet`（共用 VNet，由 KubeVirt lab 建立）
+- `shared-node-subnet`（10.10.10.0/24，KubeVirt K8s 節點；Ceph 節點未來共用）
+- `kubevirt-subnet`（10.10.100.0/24，KubeVirt 專屬 VM overlay）
+- `ceph-cluster-subnet`（172.10.10.0/24，Ceph 專屬 cluster 子網，由 KubeVirt VNet 宣告以防止重部署時被刪除）
 - `k8s-nsg`
 - `mansion-k8s-master`
 - `mansion-k8s-infra`

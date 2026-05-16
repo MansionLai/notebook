@@ -22,18 +22,18 @@ permalink: /storage/3node-ceph/architecture/
 ```mermaid
 graph TB
     subgraph Azure["Azure Cloud"]
-        subgraph PublicNet["Public/OS Network (10.10.10.0/24)"]
+        subgraph PublicNet["Public/OS Network — shared-node-subnet (10.10.10.0/24)"]
             direction LR
-            PUB1["10.10.10.10"]
-            PUB2["10.10.10.11"]
-            PUB3["10.10.10.12"]
+            PUB1["10.10.10.20"]
+            PUB2["10.10.10.21"]
+            PUB3["10.10.10.22"]
         end
 
-        subgraph ClusterNet["Cluster/Sync Network (172.10.10.0/24)"]
+        subgraph ClusterNet["Cluster/Sync Network — ceph-cluster-subnet (172.10.10.0/24)"]
             direction LR
-            CLU1["172.10.10.10"]
-            CLU2["172.10.10.11"]
-            CLU3["172.10.10.12"]
+            CLU1["172.10.10.20"]
+            CLU2["172.10.10.21"]
+            CLU3["172.10.10.22"]
         end
 
         subgraph Node1["ceph-node-01 (Standard_D4s_v4)"]
@@ -96,11 +96,11 @@ graph TB
 
 ### 節點基本配置
 
-| 節點名稱 | VM 規格 | vCPU | RAM | OS Disk | OSD Disks | Public IP | Cluster IP |
-|---------|---------|------|-----|---------|-----------|-----------|------------|
-| `ceph-node-01` | Standard_D4s_v4 | 4 | 16 GiB | 64 GiB | 64 GiB x2 | 10.10.10.10 | 172.10.10.10 |
-| `ceph-node-02` | Standard_D4s_v4 | 4 | 16 GiB | 64 GiB | 64 GiB x2 | 10.10.10.11 | 172.10.10.11 |
-| `ceph-node-03` | Standard_D4s_v4 | 4 | 16 GiB | 64 GiB | 64 GiB x2 | 10.10.10.12 | 172.10.10.12 |
+| 節點名稱 | VM 規格 | vCPU | RAM | OS Disk | OSD Disks | Public IP (shared-node-subnet) | Cluster IP (ceph-cluster-subnet) |
+|---------|---------|------|-----|---------|-----------|--------------------------------|----------------------------------|
+| `ceph-node-01` | Standard_D4s_v4 | 4 | 16 GiB | 64 GiB | 64 GiB x2 | 10.10.10.20 | 172.10.10.20 |
+| `ceph-node-02` | Standard_D4s_v4 | 4 | 16 GiB | 64 GiB | 64 GiB x2 | 10.10.10.21 | 172.10.10.21 |
+| `ceph-node-03` | Standard_D4s_v4 | 4 | 16 GiB | 64 GiB | 64 GiB x2 | 10.10.10.22 | 172.10.10.22 |
 
 > 💡 **設計考量：** Standard_D4s_v4 提供穩定 CPU 效能，避免 Burstable 系列對 MON 與 OSD 的效能影響
 
@@ -123,18 +123,20 @@ graph TB
 
 ### 雙網路分離
 
-| 網路類型 | CIDR | 用途 | 流量特性 |
-|---------|------|------|---------|
-| **Public Network** | 10.10.10.0/24 | SSH、Ceph 管理、Client 存取、MON 通訊 | 管理流量、Client I/O |
-| **Cluster Network** | 172.10.10.0/24 | OSD replication、backfill、recovery | 大量資料傳輸 |
+| 網路類型 | Subnet 名稱 | CIDR | 用途 | 流量特性 |
+|---------|------------|------|------|---------|
+| **Public Network（共用）** | `shared-node-subnet` | 10.10.10.0/24 | SSH、Ceph 管理、Client 存取、MON 通訊 | 管理流量、Client I/O |
+| **Cluster Network（Ceph 專屬）** | `ceph-cluster-subnet` | 172.10.10.0/24 | OSD replication、backfill、recovery | 大量資料傳輸 |
+
+> 💡 `shared-node-subnet` 由 KubeVirt lab 建立並共用，KubeVirt K8s 節點佔用 10.10.10.10-12，Ceph 節點使用 10.10.10.20-22。`ceph-cluster-subnet` 為 Ceph 專屬，由 Ceph Phase 0 在同一 `mansion-shared-vnet` 中建立。
 
 ### IP 分配表
 
-| 節點 | Public/OS IP | Cluster/Sync IP |
-|------|--------------|-----------------|
-| `ceph-node-01` | 10.10.10.10 | 172.10.10.10 |
-| `ceph-node-02` | 10.10.10.11 | 172.10.10.11 |
-| `ceph-node-03` | 10.10.10.12 | 172.10.10.12 |
+| 節點 | Public/OS IP（shared-node-subnet） | Cluster/Sync IP（ceph-cluster-subnet） |
+|------|-----------------------------------|---------------------------------------|
+| `ceph-node-01` | 10.10.10.20 | 172.10.10.20 |
+| `ceph-node-02` | 10.10.10.21 | 172.10.10.21 |
+| `ceph-node-03` | 10.10.10.22 | 172.10.10.22 |
 
 > 💡 **網路分離優勢：** 將 OSD replication 流量與管理/Client 流量隔離，避免 backfill/recovery 影響前端效能
 
@@ -221,7 +223,9 @@ rbd pool init rbdpool
 
 ```ini
 [global]
+# shared-node-subnet: 10.10.10.0/24 (KubeVirt K8s .10-.12, Ceph .20-.22)
 public_network = 10.10.10.0/24
+# ceph-cluster-subnet: 172.10.10.0/24 (Ceph dedicated)
 cluster_network = 172.10.10.0/24
 ```
 

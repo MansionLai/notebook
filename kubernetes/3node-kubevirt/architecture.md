@@ -22,7 +22,7 @@ permalink: /kubernetes/3node-kubevirt/architecture/
 ```mermaid
 graph TB
     subgraph Azure["Azure Cloud"]
-        subgraph Master["Master Node (Standard_D2s_v5 · 2C/8G)"]
+        subgraph Master["Master Node (Standard_D2s_v4 · 2C/8G)"]
             API[kube-apiserver]
             ETCD[(etcd)]
             SCH[kube-scheduler]
@@ -32,7 +32,7 @@ graph TB
             API <--> CM
         end
 
-        subgraph Infra["Infra Node (Standard_D4s_v5 · 4C/16G)"]
+        subgraph Infra["Infra Node (Standard_D4s_v4 · 4C/16G)"]
             DNS[CoreDNS]
             ING[Ingress Controller]
             MS[Metrics Server]
@@ -46,7 +46,7 @@ graph TB
             VO --> VC
         end
 
-        subgraph Worker["Worker Node (Standard_D4s_v5 · 4C/16G · Nested Virt)"]
+        subgraph Worker["Worker Node (Standard_D4s_v4 · 4C/16G · Nested Virt)"]
             VH[virt-handler\nDaemonSet]
             VL[virt-launcher]
             UB[Ubuntu 24.04 VM\nQEMU/KVM]
@@ -112,7 +112,7 @@ graph TB
 | KVM overhead | Nested virt 損耗 | ~5–10% | — |
 | **合計** | | **≥4 vCPU** | 建議 6–8 |
 
-> ⚠️ Worker 必須選支援 **Nested Virtualization** 的 Azure VM（Dv3/Dv4/Dv5 系列）
+> ⚠️ Worker 必須選支援 **Nested Virtualization** 的 Azure VM（Dv3/Dv4 系列）
 
 ---
 
@@ -186,8 +186,32 @@ graph TB
 ### Option B 的特點
 
 1. Option B 讓 `virt-api` / `virt-controller` 與 K8s Control Plane 放在一起，整體概念更一致，對 Lab 環境更容易理解。
-2. 代價是 Master 需要較多資源（Standard_D4s_v5 4C/16G），且單點故障會同時失去 K8s CP 與 KubeVirt 管理面。
+2. 代價是 Master 需要較多資源（Standard_D4s_v4 4C/16G），且單點故障會同時失去 K8s CP 與 KubeVirt 管理面。
 3. 適合 Lab / 中低 VM 密度環境；高 VM 密度生產環境建議採用 **Option A**。
+
+---
+
+## Azure 網路架構（共用 VNet）
+
+KubeVirt lab 負責建立並擁有 `mansion-shared-vnet`，這個 VNet 是兩個 lab 的共同基礎設施。
+
+| 資源 | 名稱 | CIDR | 說明 |
+|------|------|------|------|
+| VNet（共用） | `mansion-shared-vnet` | `10.10.0.0/16`、`172.10.0.0/16` | 由 KubeVirt lab 建立；Ceph lab 共用。兩個 address prefix 從建立時即同時宣告，確保 Ceph cluster subnet（`172.10.10.0/24`）可直接使用，無需事後修改 VNet |
+| 節點子網（共用） | `shared-node-subnet` | `10.10.10.0/24` | KubeVirt K8s 節點 `.10-.12`；Ceph 節點未來使用 `.20-.22` |
+| KubeVirt VM overlay 子網 | `kubevirt-subnet` | `10.10.100.0/24` | Worker eth1 專用，KubeVirt 內部 VM 流量 |
+| Ceph cluster 子網 | `ceph-cluster-subnet` | `172.10.10.0/24` | Ceph 專屬 cluster 子網。**由 KubeVirt 在 VNet inline subnets 宣告**（`cephClusterSubnetName` 參數），確保 KubeVirt 重部署時 ARM PUT 語義不會刪除此子網。Ceph lab 以 `existing` 方式引用。 |
+
+### 節點 IP 分配
+
+| 節點 | eth0（shared-node-subnet） | eth1（kubevirt-subnet） |
+|------|---------------------------|------------------------|
+| mansion-k8s-master | `10.10.10.10` | — |
+| mansion-k8s-infra | `10.10.10.11` | — |
+| mansion-k8s-worker | `10.10.10.12` | `10.10.100.12` |
+| *(Ceph — 未來)* | `10.10.10.20-22` | — |
+
+> **NSG 東西向規則**：`Allow-Internal`（Priority 1000）允許來源 `10.10.0.0/16` 的所有流量，涵蓋 KubeVirt 節點、KubeVirt VM overlay 以及未來 Ceph 節點（10.10.10.20-22）之間的東西向通訊。當 Ceph lab 部署時，需另行新增 `Allow-Internal-Ceph`（Source: `172.10.0.0/16`）以覆蓋 Ceph cluster subnet（`172.10.10.0/24`）的內部流量。
 
 ---
 
@@ -197,18 +221,18 @@ graph TB
 
 | 節點 | 推薦 VM | vCPU | RAM | 月費(約) | 說明 |
 |------|---------|------|-----|---------|------|
-| Master | **Standard_D2s_v5** | 2 | 8GB | ~$70 USD | K8s Control Plane only |
-| Infra | **Standard_D4s_v5** | 4 | 16GB | ~$140 USD | 基礎設施服務 + KubeVirt 管理面 |
-| Worker | **Standard_D4s_v5** | 4 | 16GB | ~$140 USD | Nested Virt + Ubuntu VM |
+| Master | **Standard_D2s_v4** | 2 | 8GB | ~$70 USD | K8s Control Plane only |
+| Infra | **Standard_D4s_v4** | 4 | 16GB | ~$140 USD | 基礎設施服務 + KubeVirt 管理面 |
+| Worker | **Standard_D4s_v4** | 4 | 16GB | ~$140 USD | Nested Virt + Ubuntu VM |
 | **合計** | | **10 vCPU** | **40GB** | **~$350/月** | |
 
 ### Production / 穩定環境
 
 | 節點 | 推薦 VM | vCPU | RAM | 月費(約) | 說明 |
 |------|---------|------|-----|---------|------|
-| Master | **Standard_D2s_v5** | 2 | 8GB | ~$70 USD | K8s CP 穩定配置 |
-| Infra | **Standard_D4s_v5** | 4 | 16GB | ~$140 USD | Prometheus + Loki + KubeVirt 管理面 |
-| Worker | **Standard_D8s_v5** | 8 | 32GB | ~$280 USD | 可跑多個 KubeVirt VM |
+| Master | **Standard_D2s_v4** | 2 | 8GB | ~$70 USD | K8s CP 穩定配置 |
+| Infra | **Standard_D4s_v4** | 4 | 16GB | ~$140 USD | Prometheus + Loki + KubeVirt 管理面 |
+| Worker | **Standard_D8s_v4** | 8 | 32GB | ~$280 USD | 可跑多個 KubeVirt VM |
 | **合計** | | **14 vCPU** | **56GB** | **~$490/月** | |
 
 ---
@@ -219,7 +243,7 @@ graph TB
 |-|----------------|-----------------|
 | KubeVirt 管理面 | **Infra Node** | Master Node |
 | 概念一致性 | 管理面分散兩處 | 管理面集中 |
-| etcd 鄰居風險 | ✅ 低（Master 單純） | 中（需 D4s_v5） |
+| etcd 鄰居風險 | ✅ 低（Master 單純） | 中（需 D4s_v4） |
 | 適合情境 | ✅ 高 VM 密度生產 | Lab / 中低密度 |
 | Master 掛掉影響 | ✅ 只失去 K8s CP | K8s CP + KubeVirt 管理面 |
 | 資源彈性 | ✅ Infra 可獨立擴充 | Master 需更大規格 |
@@ -231,5 +255,5 @@ graph TB
 - [Kubernetes 官方文件](https://kubernetes.io/docs/)
 - [KubeVirt 官方文件](https://kubevirt.io/user-guide/)
 - [KubeVirt Architecture](https://kubevirt.io/user-guide/architecture/)
-- [Azure Dv5 Series](https://learn.microsoft.com/en-us/azure/virtual-machines/dv5-dsv5-series)
+- [Azure D-series VM sizes](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/general-purpose/d-series)
 - [etcd Hardware Recommendations](https://etcd.io/docs/v3.5/op-guide/hardware/)
