@@ -4,6 +4,7 @@ param location = 'japaneast'
 // Shared VNet — owned by KubeVirt lab, consumed here as an existing resource.
 // KubeVirt creates this VNet with address spaces 10.10.0.0/16 and 172.10.0.0/16.
 param virtualNetworkName = 'mansion-shared-vnet'
+param virtualNetworkResourceGroupName = 'mansion-shared-resource'
 // Shared node subnet — already exists in the shared VNet (created by KubeVirt lab).
 // KubeVirt K8s nodes occupy 10.10.10.10-12; Ceph nodes use 10.10.10.21-23.
 param sharedNodeSubnetName = 'shared-node-subnet'
