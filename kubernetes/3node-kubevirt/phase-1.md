@@ -16,9 +16,9 @@ permalink: /kubernetes/3node-kubevirt/phase-1/
 
 ```bash
 sudo tee -a /etc/hosts <<EOF
-10.10.10.10 k8s-master
-10.10.10.11 k8s-infra
-10.10.10.12 k8s-worker
+10.10.10.11 k8s-master
+10.10.10.12 k8s-infra
+10.10.10.13 k8s-worker
 EOF
 ```
 
@@ -111,7 +111,7 @@ sudo apt-get install -y ca-certificates curl gnupg
 sudo install -m 0755 -d /etc/apt/keyrings
 
 # 加入 CRI-O 官方 repo（版本對應 K8s 1.32）
-KUBERNETES_VERSION=v1.32
+KUBERNETES_VERSION=v1.31
 
 curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/stable:/${KUBERNETES_VERSION}/deb/Release.key | \
   sudo gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
@@ -155,11 +155,11 @@ sudo crictl info | grep -E 'cgroup|sandbox'
 ```bash
 sudo apt-get install -y apt-transport-https
 
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | \
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | \
   sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
 echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] \
-  https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | \
+  https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' | \
   sudo tee /etc/apt/sources.list.d/kubernetes.list
 
 sudo apt-get update
@@ -188,7 +188,7 @@ kubectl version --client --short 2>/dev/null
 
 ```bash
 sudo kubeadm init \
-  --apiserver-advertise-address=10.10.10.10 \
+  --apiserver-advertise-address=10.10.10.11 \
   --pod-network-cidr=10.244.0.0/16
 ```
 
@@ -249,7 +249,7 @@ kubectl get nodes
 在 **k8s-infra** 和 **k8s-worker** 各執行 Step 1-8 記錄的 join 指令：
 
 ```bash
-sudo kubeadm join 10.10.10.10:6443 --token <TOKEN> \
+sudo kubeadm join 10.10.10.11:6443 --token <TOKEN> \
   --discovery-token-ca-cert-hash sha256:<HASH>
 ```
 
@@ -289,7 +289,7 @@ kubectl get nodes
 ### Step 1-12：設定 Mac 本機 kubectl
 
 > **目的：** 讓 Mac 本機的 `kubectl` 可以直接管理 Azure 上的叢集，不用每次都 SSH 進去。
-> 將 master 的 `admin.conf` 複製到本機，並把 server address 改為 Public IP（因為本機無法直接連 10.10.10.10）。
+> 將 master 的 `admin.conf` 複製到本機，並把 server address 改為 Public IP（因為本機無法直接連 10.10.10.11）。
 
 ```bash
 # 在 k8s-master 查看 admin.conf
@@ -302,7 +302,7 @@ cat ~/.kube/config
 scp ubuntu@<MASTER_PUBLIC_IP>:~/.kube/config ~/.kube/config-kubevirt
 
 # 修改 server 為 Public IP
-sed -i '' 's|10.10.10.10|<MASTER_PUBLIC_IP>|g' ~/.kube/config-kubevirt
+sed -i '' 's|10.10.10.11|<MASTER_PUBLIC_IP>|g' ~/.kube/config-kubevirt
 
 # 合併到 kubeconfig 或直接使用
 export KUBECONFIG=~/.kube/config:~/.kube/config-kubevirt

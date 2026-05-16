@@ -26,9 +26,7 @@ ls /dev/kvm
 ### Step 5-2：安裝 KubeVirt Operator（在 k8s-master）
 
 ```bash
-KUBEVIRT_VERSION=$(curl -s https://api.github.com/repos/kubevirt/kubevirt/releases/latest \
-  | grep '"tag_name"' | cut -d '"' -f 4)
-echo "KubeVirt version: $KUBEVIRT_VERSION"
+KUBEVIRT_VERSION=v1.5.0
 
 kubectl apply -f \
   https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-operator.yaml
