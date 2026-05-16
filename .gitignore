@@ -1,1 +1,16 @@
 .worktrees/
+
+# macOS metadata
+.DS_Store
+
+# local secret/temp runtime files
+**/.vault-pass
+**/*.retry
+**/*.log
+**/__pycache__/
+**/*.py[cod]
+**/.env*
+
+# merged from storage/.gitignore files
+/storage/3node-ceph/iac/*.json
+/storage/3node-ceph/ansible/.ansible-venv/
