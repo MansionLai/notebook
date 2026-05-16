@@ -2,23 +2,23 @@ targetScope = 'resourceGroup'
 
 @description('Azure region for deployment.')
 param location string = 'japaneast'
-@description('Name of the shared virtual network (owned by KubeVirt lab; also consumed by Ceph lab).')
+@description('Name of the mansion_kubevirt virtual network.')
 param virtualNetworkName string
-@description('CIDR for the shared virtual network (KubeVirt side, e.g. 10.10.0.0/16).')
+@description('CIDR for the mansion_kubevirt virtual network primary address space (e.g. 10.10.0.0/16).')
 param virtualNetworkAddressPrefix string
-@description('Second CIDR for the shared virtual network address space (e.g. 172.10.0.0/16). Required from day one so the Ceph cluster subnet (172.10.10.0/24) can later exist within the same shared VNet without a destructive VNet update.')
+@description('Secondary CIDR for the virtual network address space (e.g. 172.10.0.0/16). Covers the ceph subnet so ARM PUT on the VNet never needs a destructive address-space update.')
 param clusterAddressPrefix string
-@description('Name of the shared node subnet (10.10.10.0/24). KubeVirt K8s nodes use .10-.12; Ceph nodes will later use .20-.22.')
+@description('Name of the mansion_kubevirt node subnet (10.10.10.0/24).')
 param k8sSubnetName string
-@description('CIDR for the shared node subnet.')
+@description('CIDR for the node subnet.')
 param k8sSubnetPrefix string
-@description('Name of the KubeVirt-exclusive secondary subnet for VM overlay traffic (Worker eth1).')
+@description('Name of the secondary subnet for VM overlay traffic (Worker eth1).')
 param kubevirtSubnetName string
-@description('CIDR for the KubeVirt secondary subnet.')
+@description('CIDR for the VM overlay subnet.')
 param kubevirtSubnetPrefix string
-@description('Name of the Ceph-dedicated cluster subnet inside the shared VNet. Declared in the KubeVirt-owned VNet so that ARM PUT semantics on VNet redeployment never delete it. Must match the value in storage/3node-ceph/iac/main.bicepparam.')
+@description('Name of the ceph subnet retained inside the mansion_kubevirt VNet so ARM PUT semantics never delete it on redeployment.')
 param cephClusterSubnetName string
-@description('CIDR for the Ceph cluster subnet (e.g. 172.10.10.0/24). Must be within clusterAddressPrefix.')
+@description('CIDR for the ceph subnet (e.g. 172.10.10.0/24). Must be within clusterAddressPrefix.')
 param cephClusterSubnetPrefix string
 @description('Name of the network security group.')
 param networkSecurityGroupName string
@@ -45,13 +45,13 @@ param workerNicName string = '${workerVmName}-nic'
 @description('Worker secondary NIC name.')
 param workerSecondaryNicName string = '${workerVmName}-nic2'
 @description('Master private IP.')
-param masterPrivateIp string = '10.10.10.10'
+param masterPrivateIp string = '10.10.10.11'
 @description('Infra private IP.')
-param infraPrivateIp string = '10.10.10.11'
+param infraPrivateIp string = '10.10.10.12'
 @description('Worker private IP.')
-param workerPrivateIp string = '10.10.10.12'
+param workerPrivateIp string = '10.10.10.13'
 @description('Worker secondary private IP.')
-param workerSecondaryPrivateIp string = '10.10.100.12'
+param workerSecondaryPrivateIp string = '10.10.100.13'
 @description('Administrator username for the Linux VMs.')
 param adminUsername string = 'ubuntu'
 @description('SSH public key content for the Linux VM admin user.')

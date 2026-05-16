@@ -14,36 +14,38 @@ permalink: /kubernetes/3node-kubevirt/iac/
 
 > 預設映像已改為 Canonical Ubuntu Jammy 22.04；`main.bicep` / `main.bicepparam` 現在直接使用 `japaneast` 可部署的 image reference，因此可不覆寫映像參數直接執行部署或 what-if。
 
-## 資源更名遷移說明（重要）
+## 資源命名
 
-> ⚠️ **此次變更將 KubeVirt 預設資源名稱從舊版（`mansion-k8s-vnet` / `k8s-subnet`）更改為共用命名（`mansion-shared-vnet` / `shared-node-subnet`）。**
->
-> ARM / Bicep **無法原地更名**既有的 Azure 資源（VNet、Subnet 名稱不支援 rename）。部署此版本 Bicep 時，ARM 將建立**全新**的資源，而非重命名舊資源。
->
-> 若你的環境已存在舊版資源（`mansion-k8s-vnet`、`k8s-subnet`）：
-> 1. 將此次部署視為**全新部署（fresh deploy）**，而非升級。
-> 2. 遷移前需先將舊 VM / NIC 與舊 VNet 解除關聯（或刪除舊 VM），否則部署不會影響舊資源。
-> 3. 舊資源（`mansion-k8s-vnet`、`k8s-subnet`）不會被自動刪除，需手動清除以避免混淆。
-> 4. 所有後續 lab（Ceph 等）請以新名稱 `mansion-shared-vnet` / `shared-node-subnet` 為準。
+所有 Azure 資源使用 `mansion_kubevirt` prefix：
+
+| 資源類型 | 名稱 |
+|---------|------|
+| Resource Group | `mansion_kubevirt_resource` |
+| VNet | `mansion_kubevirt_vnet` |
+| Node subnet | `mansion_kubevirt_node_subnet` (10.10.10.0/24) |
+| VM overlay subnet | `mansion_kubevirt_vm_subnet` (10.10.100.0/24) |
+| Ceph subnet (保留) | `mansion_kubevirt_ceph_subnet` (172.10.10.0/24) |
+| NSG | `mansion_kubevirt_nsg` |
+| Master VM | `mansion_kubevirt_master` (10.10.10.11) |
+| Infra VM | `mansion_kubevirt_infra` (10.10.10.12) |
+| Worker VM | `mansion_kubevirt_worker` (10.10.10.13) |
+| Worker NIC2 | `mansion_kubevirt_worker_nic2` (10.10.100.13) |
+
+> **注意：** ARM / Bicep 無法原地更名既有 Azure 資源。若環境中已存在舊命名資源（`mansion-k8s-*` / `mansion-shared-vnet` 等），請視為全新部署（fresh deploy），手動刪除舊資源後再重新部署。
 
 ---
 
 ## 共用 VNet 設計
 
-此 Bicep 模板部署的 VNet（`mansion-shared-vnet`，`10.10.0.0/16` + `172.10.0.0/16`）是由 **KubeVirt lab 建立並擁有**的共用網路基礎設施：
+此 Bicep 模板部署 `mansion_kubevirt_vnet`（`10.10.0.0/16` + `172.10.0.0/16`）：
 
 | 子網 | CIDR | 用途 |
 |------|------|------|
-| `shared-node-subnet` | `10.10.10.0/24` | KubeVirt K8s 節點（`.10-.12`）；Ceph 節點未來使用（`.20-.22`） |
-| `kubevirt-subnet` | `10.10.100.0/24` | KubeVirt VM overlay（Worker eth1 專用） |
-| `ceph-cluster-subnet` | `172.10.10.0/24` | Ceph 專屬 cluster 子網（Ceph NICs 使用 `.20-.22`）。**由 KubeVirt 在 VNet inline subnets 中宣告**，確保 KubeVirt 重部署時 ARM PUT 不會刪除此子網。Ceph lab 部署時以 `existing` 方式引用此子網。 |
+| `mansion_kubevirt_node_subnet` | `10.10.10.0/24` | K8s 節點（master .11, infra .12, worker .13） |
+| `mansion_kubevirt_vm_subnet` | `10.10.100.0/24` | KubeVirt VM overlay（Worker eth1 專用） |
+| `mansion_kubevirt_ceph_subnet` | `172.10.10.0/24` | 保留在 VNet inline subnets，避免 ARM PUT 在 KubeVirt 重部署時刪除此子網 |
 
-VNet 宣告兩個 address prefix（`10.10.0.0/16` 與 `172.10.0.0/16`），確保 Ceph lab 稍後新增 `172.10.10.0/24`（Ceph 專屬 cluster subnet）時，不需要對既有 VNet 進行破壞性的 address space 變更。
-
-Ceph lab 部署時將直接使用既有的 `mansion-shared-vnet` 與 `shared-node-subnet`，不需另建 VNet。
-
-> **⚠️ shared-VNet 子網擁有者模型**  
-> ARM 對 VNet 的 PUT 語義會**取代整個 subnets 集合**。為避免 KubeVirt 重部署時刪除 Ceph 的 `ceph-cluster-subnet`，該子網也必須宣告在 KubeVirt 的 `modules/network.bicep` inline subnets 中（見 `cephClusterSubnetName` / `cephClusterSubnetPrefix` 參數）。Ceph lab 的 `modules/network.bicep` 以 `existing` 方式引用此子網，不再重複建立。
+> **ARM PUT 語義說明**：ARM 對 VNet 的 PUT 語義會取代整個 subnets 集合。`mansion_kubevirt_ceph_subnet` 宣告在 `modules/network.bicep` inline subnets 中，確保每次重部署都保留此子網。
 
 ## FAQ
 

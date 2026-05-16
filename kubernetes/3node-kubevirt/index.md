@@ -17,7 +17,7 @@ permalink: /kubernetes/3node-kubevirt/
 | [Phase 0](phase-0/) | Azure 資源建立 | Azure 網路、NSG、3 台 VM、Worker 第 2 張 NIC；同頁提供 Option A / Option B |
 | [Phase 1](phase-1/) | OS 基礎 + kubeadm + Cilium | 主機初始化、container runtime、kubeadm、Cilium |
 | [Phase 2](phase-2/) | Multus CNI | 安裝與驗證 Multus |
-| [Phase 3](phase-3/) | Storage + Ingress | local-path-provisioner、MetalLB、Istio |
+| [Phase 3](phase-3/) | Rook-Ceph | Rook-Ceph v1.17，連線外部 Ceph cluster，建立 StorageClass & VolumeSnapshotClass |
 | [Phase 4](phase-4/) | Observability | Prometheus、OpenSearch、Dashboards、Fluent Bit |
 | [Phase 5](phase-5/) | KubeVirt 平台層 | KubeVirt、NAD、network policy |
 | [Phase 6](phase-6/) | VM workload | 建立 ub24-01 VM 與外網連線處理 |

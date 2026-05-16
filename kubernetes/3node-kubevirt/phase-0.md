@@ -8,42 +8,32 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 
 # Phase 0 — Azure 資源建立
 
-> ⚠️ **資源更名遷移說明（重要）**  
-> 此版本將 KubeVirt 預設資源名稱從舊版（`mansion-k8s-vnet` / `k8s-subnet`）更改為共用命名（`mansion-shared-vnet` / `shared-node-subnet`）。  
-> ARM / Bicep **無法原地更名** Azure 資源。若環境中已存在舊版資源，請將此次部署視為**全新部署（fresh deploy / migration）**，而非升級。  
-> 詳見 [IaC README 遷移說明](../iac/#資源更名遷移說明重要)。
-
 ## 共通輸入
 
 | 項目 | 值 |
 |------|----|
-| Resource Group | `mansion_resource` |
-| Region | 例如 `East Asia` |
-| VNet（共用，由 KubeVirt lab 建立） | `mansion-shared-vnet` |
-| Address space（主，KubeVirt 節點/overlay） | `10.10.0.0/16` |
-| Address space（次，Ceph cluster subnet 預留） | `172.10.0.0/16` |
-| `shared-node-subnet`（KubeVirt + Ceph 共用節點子網） | `10.10.10.0/24` |
-| `kubevirt-subnet`（KubeVirt 專屬 VM overlay） | `10.10.100.0/24` |
+| Resource Group | `mansion_kubevirt_resource` |
+| Region | 例如 `japaneast` |
+| VNet | `mansion_kubevirt_vnet` |
+| Address space（節點 & VM overlay） | `10.10.0.0/16` |
+| `mansion_kubevirt_node_subnet`（K8s 節點子網） | `10.10.10.0/24` |
+| `mansion_kubevirt_vm_subnet`（VM overlay，Worker eth1） | `10.10.100.0/24` |
+| `mansion_kubevirt_ceph_subnet`（保留，ARM PUT 安全） | `172.10.10.0/24` |
 | SSH user | `ubuntu` |
 | SSH public key | 由使用者提供 |
 | NSG allowed source | 使用者的固定 Public IP 或 CIDR |
-
-> **共用 VNet 設計說明**  
-> `mansion-shared-vnet` 由 KubeVirt lab 負責建立與擁有，宣告兩個 address prefix：`10.10.0.0/16`（KubeVirt 節點 & VM overlay）與 `172.10.0.0/16`（Ceph cluster subnet 預留）。  
-> Ceph lab 未來會共用相同的 VNet 與 `shared-node-subnet`，使用 IP `10.10.10.20-22`，並在 `172.10.0.0/16` 範圍內新增專屬 cluster subnet `172.10.10.0/24`。  
-> 兩個 address prefix 從建立 VNet 時即一併宣告，避免未來 Ceph 加入時需要對既有 VNet 進行破壞性的 address space 變更。
 
 
 ## 環境概覽
 
 | 節點 | Azure VM | Private IP | 角色 |
 |------|----------|------------|------|
-| mansion-k8s-master | Standard_D2s_v4 (2C/8G) | 10.10.10.10 | K8s CP |
-| mansion-k8s-infra | Standard_D4s_v4 (4C/16G) | 10.10.10.11 | Prometheus + OpenSearch + Fluent Bit + KubeVirt 管理面 |
-| mansion-k8s-worker | Standard_D4s_v4 (4C/16G) | 10.10.10.12 | KubeVirt VM workload |
+| mansion_kubevirt_master | Standard_D2s_v4 (2C/8G) | 10.10.10.11 | K8s CP |
+| mansion_kubevirt_infra | Standard_D4s_v4 (4C/16G) | 10.10.10.12 | Prometheus + OpenSearch + Fluent Bit + KubeVirt 管理面 |
+| mansion_kubevirt_worker | Standard_D4s_v4 (4C/16G) | 10.10.10.13 | KubeVirt VM workload |
 
 **Pod 網段：** 10.244.0.0/16（Cilium）  
-**KubeVirt VM 網段：** 10.10.100.0/24（kubevirt-subnet，Worker eth1）
+**KubeVirt VM 網段：** 10.10.100.0/24（mansion_kubevirt_vm_subnet，Worker eth1）
 
 ---
 
@@ -60,7 +50,7 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 
 1. Portal → **Resource groups** → **Create**
 2. Subscription: 選你的訂閱
-3. Resource group name: `mansion_resource`
+3. Resource group name: `mansion_kubevirt_resource`
 4. Region: 選你最近的地區（例如 East Asia）
 5. → **Review + create** → **Create**
 
@@ -70,19 +60,19 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 
 1. Portal → **Virtual networks** → **Create**
 2. Basics:
-   - Resource group: `mansion_resource`
-   - Name: `mansion-shared-vnet`
+   - Resource group: `mansion_kubevirt_resource`
+   - Name: `mansion_kubevirt_vnet`
    - Region: 同上
 3. **IP addresses** tab：
-   - Address space: `10.10.0.0/16`（主，KubeVirt 節點 & overlay）
-   - 新增第二個 address space: `172.10.0.0/16`（次，Ceph cluster subnet 預留）
-   - 刪除預設 subnet，新增兩個：
+   - Address space: `10.10.0.0/16`（K8s 節點 & VM overlay）
+   - 新增第二個 address space: `172.10.0.0/16`（mansion_kubevirt_ceph_subnet 預留）
+   - 刪除預設 subnet，新增三個：
 
    | Subnet name | Address range | 用途 |
    |-------------|---------------|------|
-   | `shared-node-subnet` | `10.10.10.0/24` | KubeVirt K8s 節點（.10-.12）；Ceph 節點未來將共用此子網（.20-.22） |
-   | `kubevirt-subnet` | `10.10.100.0/24` | KubeVirt VM overlay（Worker eth1 專用） |
-   | `ceph-cluster-subnet` | `172.10.10.0/24` | Ceph 專屬 cluster 子網（預建，避免 KubeVirt 重部署時被 ARM PUT 刪除） |
+   | `mansion_kubevirt_node_subnet` | `10.10.10.0/24` | K8s 節點（master .11, infra .12, worker .13） |
+   | `mansion_kubevirt_vm_subnet` | `10.10.100.0/24` | KubeVirt VM overlay（Worker eth1 專用） |
+   | `mansion_kubevirt_ceph_subnet` | `172.10.10.0/24` | 預留，避免 KubeVirt 重部署時被 ARM PUT 刪除 |
 
 4. → **Review + create** → **Create**
 
@@ -91,7 +81,7 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 ### Step 0-3：建立 Network Security Group
 
 1. Portal → **Network security groups** → **Create**
-2. Name: `k8s-nsg`，Resource group: `mansion_resource`
+2. Name: `mansion_kubevirt_nsg`，Resource group: `mansion_kubevirt_resource`
 3. 建立後進入 NSG → **Inbound security rules** → 新增以下規則：
 
 | Priority | Name | Port | Protocol | Source | Action |
@@ -102,8 +92,7 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 | 1000 | Allow-Internal | Any | Any | `10.10.0.0/16` | Allow |
 
 > ⚠️ Source 的 **Your IP** 填你家/辦公室的 Public IP（可到 https://myip.is 查詢）  
-> 💡 `Allow-Internal` 的 Source CIDR `10.10.0.0/16` 覆蓋 KubeVirt 節點（10.10.10.10-12）、KubeVirt VM overlay（10.10.100.x）以及未來 Ceph 節點（10.10.10.20-22）之間的東西向流量。  
-> 📌 Ceph 的 cluster subnet（`172.10.10.0/24`）使用不同的 address space（`172.10.0.0/16`）。當 Ceph lab 部署時，需另行新增一條 `Allow-Internal-Ceph`（Source: `172.10.0.0/16`）NSG 規則以允許 Ceph cluster 內部流量。
+> 💡 `Allow-Internal` 的 Source CIDR `10.10.0.0/16` 覆蓋 mansion_kubevirt 所有節點（K8s 節點 10.10.10.x、VM overlay 10.10.100.x）之間的東西向流量。
 
 ---
 
@@ -113,10 +102,10 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 
 #### Basics Tab
 
-| 欄位 | mansion-k8s-master | mansion-k8s-infra | mansion-k8s-worker |
+| 欄位 | mansion_kubevirt_master | mansion_kubevirt_infra | mansion_kubevirt_worker |
 |------|-----------|-----------|-----------|
-| VM name | `mansion-k8s-master` | `mansion-k8s-infra` | `mansion-k8s-worker` |
-| Image | Ubuntu Server 24.04 LTS (Gen2) | 同左 | 同左 |
+| VM name | `mansion_kubevirt_master` | `mansion_kubevirt_infra` | `mansion_kubevirt_worker` |
+| Image | Ubuntu Server 22.04 LTS (Gen2) | 同左 | 同左 |
 | Size | Standard_D2s_v4 | Standard_D4s_v4 | Standard_D4s_v4 |
 | Auth type | SSH public key | 同左 | 同左 |
 | Username | `ubuntu` | 同左 | 同左 |
@@ -128,10 +117,10 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 #### Networking Tab
 | 欄位 | 設定 |
 |------|------|
-| Virtual network | `mansion-shared-vnet` |
-| Subnet | `shared-node-subnet` |
-| Public IP | 建立新的（Static，名稱如 `k8s-master-pip`）|
-| NIC network security group | **Advanced** → 選 `k8s-nsg` |
+| Virtual network | `mansion_kubevirt_vnet` |
+| Subnet | `mansion_kubevirt_node_subnet` |
+| Public IP | 建立新的（Static，名稱如 `mansion_kubevirt_master_pip`）|
+| NIC network security group | **Advanced** → 選 `mansion_kubevirt_nsg` |
 
 **⚠️ 重要：設定 Static Private IP**
 
@@ -139,27 +128,27 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 
 | 節點 | Private IP |
 |------|-----------|
-| mansion-k8s-master | `10.10.10.10` |
-| mansion-k8s-infra | `10.10.10.11` |
-| mansion-k8s-worker | `10.10.10.12` |
+| mansion_kubevirt_master | `10.10.10.11` |
+| mansion_kubevirt_infra | `10.10.10.12` |
+| mansion_kubevirt_worker | `10.10.10.13` |
 
 ---
 
 ### Step 0-5：Worker 加第二張 NIC
 
-1. **先停止 k8s-worker**（Worker 必須停機才能加 NIC）
-2. Portal → k8s-worker → **Networking** → **Attach network interface** → **Create and attach network interface**
+1. **先停止 mansion_kubevirt_worker**（Worker 必須停機才能加 NIC）
+2. Portal → mansion_kubevirt_worker → **Networking** → **Attach network interface** → **Create and attach network interface**
 3. 設定：
-   - Name: `k8s-worker-nic2`
-   - Subnet: `kubevirt-subnet`（10.10.100.0/24）
-   - Private IP assignment: **Static** → `10.10.100.12`（Worker eth1 IP）
+   - Name: `mansion_kubevirt_worker_nic2`
+   - Subnet: `mansion_kubevirt_vm_subnet`（10.10.100.0/24）
+   - Private IP assignment: **Static** → `10.10.100.13`（Worker eth1 IP）
 4. 建立後 → 啟動 Worker
 
 ---
 
 ### Step 0-6：Worker eth1 啟用 IP Forwarding
 
-1. Portal → k8s-worker → **Networking** → 點選第二張 NIC（`k8s-worker-nic2`）
+1. Portal → k8s-worker → **Networking** → 點選第二張 NIC（`mansion_kubevirt_worker_nic2`）
 2. → **IP configurations** → 頂部有 **IP forwarding** 選項 → 設為 **Enabled**
 3. 儲存
 
@@ -180,17 +169,17 @@ ssh ubuntu@<WORKER_PUBLIC_IP>
 
 ```bash
 ip addr show
-# master 應看到 eth0: 10.10.10.10
-# infra  應看到 eth0: 10.10.10.11
-# worker 應看到 eth0: 10.10.10.12 + eth1: 10.10.100.12
+# master 應看到 eth0: 10.10.10.11
+# infra  應看到 eth0: 10.10.10.12
+# worker 應看到 eth0: 10.10.10.13 + eth1: 10.10.100.13
 ```
 
-三台互 ping（確認 NSG `Allow-Internal` 規則允許共用 VNet 內部東西向流量）：
+三台互 ping（確認 NSG `Allow-Internal` 規則允許東西向流量）：
 
 ```bash
-# 在 master 上（eth0: 10.10.10.10，位於 shared-node-subnet）
-ping -c 3 10.10.10.11  # infra
-ping -c 3 10.10.10.12  # worker
+# 在 master 上（eth0: 10.10.10.11，位於 mansion_kubevirt_node_subnet）
+ping -c 3 10.10.10.12  # infra
+ping -c 3 10.10.10.13  # worker
 ```
 
 ---
@@ -267,13 +256,13 @@ flowchart TD
 
 ### Option B 預期輸出
 
-- `mansion_resource`
-- `mansion-shared-vnet`（共用 VNet，由 KubeVirt lab 建立）
-- `shared-node-subnet`（10.10.10.0/24，KubeVirt K8s 節點；Ceph 節點未來共用）
-- `kubevirt-subnet`（10.10.100.0/24，KubeVirt 專屬 VM overlay）
-- `ceph-cluster-subnet`（172.10.10.0/24，Ceph 專屬 cluster 子網，由 KubeVirt VNet 宣告以防止重部署時被刪除）
-- `k8s-nsg`
-- `mansion-k8s-master`
-- `mansion-k8s-infra`
-- `mansion-k8s-worker`
-- Worker 第 2 張 NIC 與 `10.10.100.12`
+- `mansion_kubevirt_resource`
+- `mansion_kubevirt_vnet`
+- `mansion_kubevirt_node_subnet`（10.10.10.0/24，K8s 節點子網）
+- `mansion_kubevirt_vm_subnet`（10.10.100.0/24，VM overlay）
+- `mansion_kubevirt_ceph_subnet`（172.10.10.0/24，保留）
+- `mansion_kubevirt_nsg`
+- `mansion_kubevirt_master`（10.10.10.11）
+- `mansion_kubevirt_infra`（10.10.10.12）
+- `mansion_kubevirt_worker`（10.10.10.13）
+- Worker 第 2 張 NIC `mansion_kubevirt_worker_nic2`（10.10.100.13）

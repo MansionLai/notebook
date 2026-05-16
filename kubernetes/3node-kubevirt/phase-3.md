@@ -1,209 +1,190 @@
 ---
-title: Phase 3 - Storage + Ingress
+title: Phase 3 - Rook-Ceph
 parent: 3-Node KubeVirt (Azure)
 grand_parent: Kubernetes
 nav_order: 13
 permalink: /kubernetes/3node-kubevirt/phase-3/
 ---
 
-# Phase 3 — Storage + Ingress
+# Phase 3 — Rook-Ceph
 
 ## 範圍
 
-本頁整合原本的 `Phase 3` 與 `Phase 3.5`，因為兩者都屬於 storage / ingress / traffic entry 相關的基礎設施配置。
+連線我自建的外部 Ceph cluster，透過 Rook-Ceph v1.17 的 External Cluster 模式建立 `StorageClass` 與 `VolumeSnapshotClass`，讓 K8s workload 可以直接使用外部 Ceph 提供的 RBD 儲存。
 
-## Phase 3：local-path-provisioner
+---
+
+## Phase 3-1：安裝 Rook-Ceph Operator
 
 > 在 **k8s-master** 執行
 
-**目的：** local-path-provisioner 是 Rancher 提供的輕量 StorageClass，直接使用每個 node 本地磁碟（`/opt/local-path-provisioner`），不需要外部 storage backend。後續 Prometheus、OpenSearch 的 PersistentVolumeClaim 都依賴此 StorageClass。
-
-### Step 3-1：安裝
-
-> 套用官方 YAML，會建立 `local-path-storage` namespace、ServiceAccount、ClusterRole、ConfigMap 及 Deployment。
+### Step 3-1-1：部署 Rook-Ceph CRD 與 Operator
 
 ```bash
+ROOK_VERSION=v1.17.0
+
+# 部署 CRD
 kubectl apply -f \
-  https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
+  https://raw.githubusercontent.com/rook/rook/${ROOK_VERSION}/deploy/examples/crds.yaml
+
+# 部署 Operator
+kubectl apply -f \
+  https://raw.githubusercontent.com/rook/rook/${ROOK_VERSION}/deploy/examples/operator.yaml
 ```
 
-### Step 3-2：設為預設 StorageClass
-
-> K8s 叢集預設沒有任何 StorageClass，PVC 若沒有指定 `storageClassName` 會卡在 Pending。將 `local-path` 設為 default 可讓未指定的 PVC 自動使用本地儲存。
+### Step 3-1-2：驗證 Operator 就緒
 
 ```bash
-kubectl patch storageclass local-path \
-  -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+kubectl get pods -n rook-ceph -l app=rook-ceph-operator
+# 預期：rook-ceph-operator-* 1/1 Running
 ```
 
-### Step 3-3：驗證
+---
 
-> 確認 StorageClass 出現且有 `(default)` 標記；Deployment 在 `local-path-storage` namespace Ready。
+## Phase 3-2：建立 External Cluster 設定
+
+> 以下步驟需要你的外部 Ceph cluster admin 金鑰與 monitor 位址
+
+### Step 3-2-1：準備 external cluster 輸入
 
 ```bash
+# 替換為你的 Ceph cluster 資訊
+CEPH_MON_ENDPOINTS="<mon1_ip>:6789,<mon2_ip>:6789,<mon3_ip>:6789"
+CEPH_CLUSTER_ID="<fsid>"       # ceph fsid
+CEPH_ADMIN_KEY="<admin_key>"   # ceph auth get-key client.admin
+```
+
+### Step 3-2-2：建立 rook-ceph namespace 與 secret
+
+```bash
+kubectl create namespace rook-ceph
+
+kubectl create secret generic rook-ceph-mon \
+  --from-literal=ceph-username=client.admin \
+  --from-literal=ceph-secret="${CEPH_ADMIN_KEY}" \
+  -n rook-ceph
+```
+
+### Step 3-2-3：部署 CephCluster（External 模式）
+
+```yaml
+# /tmp/ceph-external-cluster.yaml
+apiVersion: ceph.rook.io/v1
+kind: CephCluster
+metadata:
+  name: rook-ceph-external
+  namespace: rook-ceph
+spec:
+  external:
+    enable: true
+  crashCollector:
+    disable: true
+  healthCheck:
+    daemonHealth:
+      mon:
+        interval: 45s
+```
+
+```bash
+kubectl apply -f /tmp/ceph-external-cluster.yaml
+```
+
+### Step 3-2-4：驗證 External Cluster 連線
+
+```bash
+kubectl get cephcluster -n rook-ceph
+# 預期：rook-ceph-external  Connected  ...  True
+
+kubectl get pods -n rook-ceph
+# 預期：rook-ceph-operator Running；無 OSD/MON pods（外部模式不部署本地 OSD）
+```
+
+---
+
+## Phase 3-3：建立 StorageClass（RBD）
+
+> 使用 Ceph RBD 作為 ReadWriteOnce 的 Block storage
+
+### Step 3-3-1：建立 RBD StorageClass
+
+```yaml
+# /tmp/ceph-rbd-sc.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ceph-rbd
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: rook-ceph.rbd.csi.ceph.com
+parameters:
+  clusterID: rook-ceph
+  pool: kubernetes              # 替換為你的 RBD pool 名稱
+  imageFormat: "2"
+  imageFeatures: layering
+  csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/provisioner-secret-namespace: rook-ceph
+  csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/controller-expand-secret-namespace: rook-ceph
+  csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+  csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+```
+
+```bash
+kubectl apply -f /tmp/ceph-rbd-sc.yaml
 kubectl get sc
-# 預期：local-path (default)
-
-kubectl get pods -n local-path-storage
-# 預期：local-path-provisioner-xxx   1/1   Running
+# 預期：ceph-rbd (default)
 ```
 
 ---
 
-## Phase 3.5：MetalLB + Istio（Service Mesh + Ingress Gateway）
+## Phase 3-4：建立 VolumeSnapshotClass
 
-> 在 **k8s-master** 執行
-
-**目的：** 安裝 Istio 作為 Ingress Gateway，統一管理 Grafana、Prometheus、OpenSearch Dashboards 等服務的外部連線。由於本叢集是自建 K8s（非 AKS），使用 **MetalLB** 賦予 LoadBalancer Service 一個真實 IP，再透過 Azure NAT 從外部連入。
-
-**部署策略：**
-- `MetalLB` → 使用 infra 節點的 Private IP（`10.10.10.11`）作為 LB pool，不需 ARP 宣告（Azure 已知此 IP → infra NIC）
-- `istiod`（控制面） → **infra node**（與監控服務同節點；需加 infra toleration）
-- `IngressGateway`（資料面） → **infra node**（與監控服務同節點，路由效率高）
-- 外部存取：`http://20.243.24.191` → Azure NAT → `10.10.10.11:80`
-- Sidecar injection → 只對有需要的 namespace 啟用（`monitoring`）
-
-### Step 3.5-0：安裝 MetalLB
-
-> Azure 自建 K8s 不支援 cloud-controller，`LoadBalancer` type Service 預設 EXTERNAL-IP 永遠 Pending。
-> MetalLB 負責將指定 IP pool 中的地址指派給 LoadBalancer Service。
-> 使用 infra 節點現有 Private IP（`10.10.10.11/32`），Azure 已路由此 IP 到 infra NIC，不需額外 Portal 操作。
-
-```bash
-# 安裝 MetalLB（官方 manifest）
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.9/config/manifests/metallb-native.yaml
-
-# 等待 MetalLB controller 與 speaker 就緒
-kubectl wait --namespace metallb-system \
-  --for=condition=ready pod \
-  --selector=app=metallb \
-  --timeout=90s
-
-# 設定 IP pool：使用 infra 節點的現有 Private IP
-cat <<EOF | kubectl apply -f -
-apiVersion: metallb.io/v1beta1
-kind: IPAddressPool
+```yaml
+# /tmp/ceph-rbd-snapclass.yaml
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
 metadata:
-  name: azure-infra-pool
-  namespace: metallb-system
-spec:
-  addresses:
-    - 10.10.10.11/32
----
-apiVersion: metallb.io/v1beta1
-kind: L2Advertisement
-metadata:
-  name: azure-infra-l2
-  namespace: metallb-system
-spec:
-  ipAddressPools:
-    - azure-infra-pool
-EOF
+  name: ceph-rbd-snapclass
+driver: rook-ceph.rbd.csi.ceph.com
+parameters:
+  clusterID: rook-ceph
+  csi.storage.k8s.io/snapshotter-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/snapshotter-secret-namespace: rook-ceph
+deletionPolicy: Delete
 ```
 
-驗證：
-
 ```bash
-kubectl get pods -n metallb-system
-# 預期：controller-* 1/1 Running，speaker-* 1/1 Running（3 pods）
-
-kubectl get IPAddressPool -n metallb-system
-# 預期：azure-infra-pool   True
-```
-
-> 完成後，`istio-ingressgateway` Service 的 EXTERNAL-IP 應自動從 `<pending>` 變為 `10.10.10.11`。
-
-### Step 3.5-1：下載 istioctl
-
-> `istioctl` 是 Istio 的命令列安裝與管理工具。這裡固定安裝 1.22.3（LTS 穩定版）。
-
-```bash
-curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.22.3 sh -
-cd istio-1.22.3
-export PATH=$PWD/bin:$PATH
-istioctl version
-```
-
-### Step 3.5-2：建立 IstioOperator 設定檔
-
-> 使用 `minimal` profile（只含 istiod + IngressGateway，不裝 EgressGateway 省資源）。
-> istiod 以 Infra 為目標，使用 infra taint / toleration 模型來排程到 infra node。
-
-```bash
-cat > /tmp/istio-operator.yaml <<'EOF'
-apiVersion: install.istio.io/v1alpha1
-kind: IstioOperator
-metadata:
-  name: istio-control-plane
-spec:
-  profile: minimal
-  components:
-    pilot:
-      k8s:
-        nodeSelector:
-          role: infra
-        tolerations:
-          - key: "node-role.kubernetes.io/infra"
-            operator: "Exists"
-            effect: "NoSchedule"
-        resources:
-          requests:
-            cpu: 200m
-            memory: 256Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
-    ingressGateways:
-      - name: istio-ingressgateway
-        enabled: true
-        k8s:
-          nodeSelector:
-            role: infra
-          service:
-            type: LoadBalancer
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 500m
-              memory: 256Mi
-  values:
-    global:
-      proxy:
-        resources:
-          requests:
-            cpu: 50m
-            memory: 64Mi
-          limits:
-            cpu: 200m
-            memory: 128Mi
-EOF
-```
-
-### Step 3.5-3：安裝 Istio
-
-> `istioctl install` 讀取 IstioOperator 設定，建立 `istio-system` namespace 並部署 istiod 及 IngressGateway。
-
-```bash
-istioctl install -f /tmp/istio-operator.yaml -y
-```
-
-### Step 3.5-4：驗證
-
-> 確認 istiod 與 IngressGateway 都排到 infra node；Azure 會自動 provision 一個外部 IP 給 LoadBalancer Service。
-
-```bash
-kubectl get pods -n istio-system -o wide
-# 預期：istiod-* 在 mansion-k8s-infra
-#        istio-ingressgateway-* 在 mansion-k8s-infra
-
-kubectl get svc -n istio-system
-# 預期：istio-ingressgateway  LoadBalancer  <cluster-ip>  <EXTERNAL-IP>  15021/TCP,80/TCP,443/TCP
-
-istioctl verify-install -f /tmp/istio-operator.yaml
-# 預期：✔ Istio is installed and verified successfully
+kubectl apply -f /tmp/ceph-rbd-snapclass.yaml
+kubectl get volumesnapshotclass
+# 預期：ceph-rbd-snapclass   rook-ceph.rbd.csi.ceph.com
 ```
 
 ---
 
+## Phase 3-5：端對端驗證
+
+```yaml
+# /tmp/test-rbd-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: test-rbd-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: ceph-rbd
+```
+
+```bash
+kubectl apply -f /tmp/test-rbd-pvc.yaml
+kubectl get pvc test-rbd-pvc
+# 預期：STATUS = Bound
+
+# 清除測試資源
+kubectl delete pvc test-rbd-pvc
+```
