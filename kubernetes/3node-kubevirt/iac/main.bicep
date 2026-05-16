@@ -6,10 +6,8 @@ param location string = 'japaneast'
 param sharedVnetName string = 'mansion-shared-vnet'
 @description('Resource group containing the shared VNet.')
 param sharedVnetResourceGroup string = 'mansion-shared-resource'
-@description('Name of the new K8s node subnet.')
-param k8sSubnetName string = 'mansion_kubevirt_node_subnet'
-@description('CIDR for the K8s node subnet.')
-param k8sSubnetPrefix string = '10.10.11.0/24'
+@description('Name of the existing shared node subnet (in mansion-shared-vnet).')
+param k8sSubnetName string = 'shared-node-subnet'
 @description('Name of the subnet for VM overlay traffic (Worker eth1).')
 param kubevirtSubnetName string = 'mansion_kubevirt_vm_subnet'
 @description('CIDR for the VM overlay subnet.')
@@ -39,11 +37,11 @@ param workerNicName string = '${workerVmName}-nic'
 @description('Worker secondary NIC name.')
 param workerSecondaryNicName string = '${workerVmName}-nic2'
 @description('Master private IP.')
-param masterPrivateIp string = '10.10.11.11'
+param masterPrivateIp string = '10.10.10.24'
 @description('Infra private IP.')
-param infraPrivateIp string = '10.10.11.12'
+param infraPrivateIp string = '10.10.10.25'
 @description('Worker private IP.')
-param workerPrivateIp string = '10.10.11.13'
+param workerPrivateIp string = '10.10.10.26'
 @description('Worker secondary private IP.')
 param workerSecondaryPrivateIp string = '10.10.100.13'
 @description('Administrator username for the Linux VMs.')
@@ -65,17 +63,8 @@ param imageSku string = '22_04-lts-gen2'
 @description('Ubuntu image version.')
 param imageVersion string = 'latest'
 
-// Create K8s subnet in shared VNet using module (deployed to shared RG scope)
-module k8sSubnetModule './modules/subnet.bicep' = {
-  scope: resourceGroup(sharedVnetResourceGroup)
-  name: 'k8sSubnet'
-  params: {
-    vnetName: sharedVnetName
-    subnetName: k8sSubnetName
-    subnetPrefix: k8sSubnetPrefix
-    nsgId: nsg.outputs.networkSecurityGroupId
-  }
-}
+// Reference existing shared-node-subnet by constructing its ID
+var k8sSubnetId = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${sharedVnetResourceGroup}/providers/Microsoft.Network/virtualNetworks/${sharedVnetName}/subnets/${k8sSubnetName}'
 
 // Create KubeVirt subnet in shared VNet using module
 module kubevirtSubnetModule './modules/subnet.bicep' = {
@@ -104,7 +93,7 @@ module masterNic './modules/nic.bicep' = {
   params: {
     location: location
     networkSecurityGroupId: nsg.outputs.networkSecurityGroupId
-    subnetId: k8sSubnetModule.outputs.subnetId
+    subnetId: k8sSubnetId
     nicName: masterNicName
     publicIpName: masterPublicIpName
     privateIp: masterPrivateIp
@@ -116,7 +105,7 @@ module infraNic './modules/nic.bicep' = {
   params: {
     location: location
     networkSecurityGroupId: nsg.outputs.networkSecurityGroupId
-    subnetId: k8sSubnetModule.outputs.subnetId
+    subnetId: k8sSubnetId
     nicName: infraNicName
     publicIpName: infraPublicIpName
     privateIp: infraPrivateIp
@@ -128,7 +117,7 @@ module workerNic './modules/nic.bicep' = {
   params: {
     location: location
     networkSecurityGroupId: nsg.outputs.networkSecurityGroupId
-    subnetId: k8sSubnetModule.outputs.subnetId
+    subnetId: k8sSubnetId
     nicName: workerNicName
     publicIpName: workerPublicIpName
     privateIp: workerPrivateIp
@@ -195,6 +184,6 @@ module workerVm './modules/vm.bicep' = {
 }
 
 output targetResourceGroupName string = resourceGroup().name
-output k8sSubnetId string = k8sSubnetModule.outputs.subnetId
+output k8sSubnetId string = k8sSubnetId
 output kubevirtSubnetId string = kubevirtSubnetModule.outputs.subnetId
 output networkSecurityGroupId string = nsg.outputs.networkSecurityGroupId
