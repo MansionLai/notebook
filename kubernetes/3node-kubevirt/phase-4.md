@@ -30,9 +30,9 @@ helm repo update
 ### Step 4a-2：建立 values 檔
 
 > 各元件透過 `nodeSelector: role: infra` 釘在 infra node。
-> infra node 無 taint，不需要額外 toleration。
+> infra node 有 NoSchedule taint，因此需加 toleration。
 > node-exporter 需加 control-plane toleration 才能部署到 master。
-> Prometheus 使用 local-path SC 建立 10Gi PVC 保存 7 天 metrics。
+> Prometheus 使用 ceph-rbd SC 建立 10Gi PVC 保存 7 天 metrics。
 
 ```bash
 cat > /tmp/prometheus-values.yaml <<'EOF'
@@ -40,6 +40,10 @@ prometheus:
   prometheusSpec:
     nodeSelector:
       role: infra
+    tolerations:
+      - key: "node-role.kubernetes.io/infra"
+        operator: "Exists"
+        effect: "NoSchedule"
     retention: 7d
     # 讓 Prometheus 選取所有 namespace 的 ServiceMonitor/Rule（含 KubeVirt 等第三方）
     serviceMonitorSelectorNilUsesHelmValues: false
@@ -48,7 +52,7 @@ prometheus:
     storageSpec:
       volumeClaimTemplate:
         spec:
-          storageClassName: local-path
+          storageClassName: ceph-rbd
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
@@ -65,10 +69,18 @@ alertmanager:
   alertmanagerSpec:
     nodeSelector:
       role: infra
+    tolerations:
+      - key: "node-role.kubernetes.io/infra"
+        operator: "Exists"
+        effect: "NoSchedule"
 
 grafana:
   nodeSelector:
     role: infra
+  tolerations:
+    - key: "node-role.kubernetes.io/infra"
+      operator: "Exists"
+      effect: "NoSchedule"
   resources:
     requests:
       memory: 128Mi
@@ -78,10 +90,18 @@ grafana:
 prometheusOperator:
   nodeSelector:
     role: infra
+  tolerations:
+    - key: "node-role.kubernetes.io/infra"
+      operator: "Exists"
+      effect: "NoSchedule"
 
 kube-state-metrics:
   nodeSelector:
     role: infra
+  tolerations:
+    - key: "node-role.kubernetes.io/infra"
+      operator: "Exists"
+      effect: "NoSchedule"
 
 prometheus-node-exporter:
   # DaemonSet，部署到所有 node
@@ -156,6 +176,9 @@ import yaml
 vals = {
     'singleNode': True,
     'nodeSelector': {'role': 'infra'},
+    'tolerations': [
+        {'key': 'node-role.kubernetes.io/infra', 'operator': 'Exists', 'effect': 'NoSchedule'}
+    ],
     'resources': {
         'requests': {'memory': '512Mi', 'cpu': '200m'},
         'limits': {'memory': '1Gi', 'cpu': '500m'}
@@ -163,7 +186,7 @@ vals = {
     'opensearchJavaOpts': '-Xmx512m -Xms512m',
     'persistence': {
         'enabled': True,
-        'storageClass': 'local-path',
+        'storageClass': 'ceph-rbd',
         'size': '10Gi'
     },
     'config': {
@@ -192,11 +215,17 @@ helm install opensearch opensearch/opensearch \
 ### Step 4b-4：建立 OpenSearch Dashboards values
 
 > Dashboards 連線到 OpenSearch cluster master service（9200 port）。
+> 需加 toleration 以部署到 infra node。
 
 ```bash
 cat > /tmp/opensearch-dashboards-values.yaml <<'EOF'
 nodeSelector:
   role: infra
+
+tolerations:
+  - key: "node-role.kubernetes.io/infra"
+    operator: "Exists"
+    effect: "NoSchedule"
 
 resources:
   requests:
@@ -225,7 +254,7 @@ kubectl get pods -n monitoring -o wide | grep opensearch
 # 預期：opensearch-cluster-master-0 和 opensearch-dashboards-* 在 mansion-kubevirt-infra
 
 kubectl get pvc -n monitoring | grep opensearch
-# 預期：opensearch-cluster-master-... Bound 10Gi local-path
+# 預期：opensearch-cluster-master-... Bound 10Gi ceph-rbd
 ```
 
 ---
