@@ -23,7 +23,7 @@ param cephNode03VmSize = 'Standard_D4s_v4'
 param adminUsername = 'ubuntu'
 // REQUIRED: Operators MUST replace this empty string with a valid SSH public key before deployment.
 // Password authentication is disabled; SSH key authentication is mandatory.
-param adminPublicKey = ''
+param adminPublicKey = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGPrTSUgVBJAg7NEFNg17pfs2eRGd0H+xRDSU5cG4Oyp mansionlai@MansiondeMac-mini.local'
 param imagePublisher = 'Canonical'
 param imageOffer = '0001-com-ubuntu-server-jammy'
 param imageSku = '22_04-lts-gen2'
