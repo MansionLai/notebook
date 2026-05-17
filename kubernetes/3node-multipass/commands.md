@@ -13,7 +13,7 @@ nav_order: 3
 
 ---
 
-## Step 0：Mac 前置（只做一次）
+## Step.0：Mac 前置（只做一次）
 
 ```bash
 # 確認 Multipass bridge 網卡設定（橋接 en0）
@@ -25,7 +25,7 @@ ifconfig en0 | grep "inet "
 
 ---
 
-## Step 1：建立三台 VM 並設定靜態 IP
+## Step.1：建立三台 VM 並設定靜態 IP
 
 ```bash
 # 1. 啟動 VM
@@ -61,7 +61,7 @@ exit
 
 ---
 
-## Step 2：所有節點前置設定（三台都執行）
+## Step.2：所有節點前置設定（三台都執行）
 
 ```bash
 # 1. 設定 /etc/hosts
@@ -122,7 +122,7 @@ sudo systemctl enable --now kubelet
 
 ---
 
-## Step 3：Master 初始化（只在 k8s-master 執行）
+## Step.3：Master 初始化（只在 k8s-master 執行）
 
 ```bash
 sudo kubeadm init \
@@ -140,10 +140,10 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
 ---
 
-## Step 4：Infra + Worker 加入 Cluster
+## Step.4：Infra + Worker 加入 Cluster
 
 ```bash
-# 使用 Step 3 產生的 token
+# 使用 Step.3 產生的 token
 sudo kubeadm join 192.168.50.201:6443 \
   --token <TOKEN> \
   --discovery-token-ca-cert-hash sha256:<HASH> \
@@ -155,7 +155,7 @@ sudo kubeadm join 192.168.50.201:6443 \
 
 ---
 
-## Step 5：安裝 CNI（Cilium）
+## Step.5：安裝 CNI（Cilium）
 
 ```bash
 # 安裝 Cilium CLI
@@ -182,7 +182,7 @@ cilium status --wait
 
 ---
 
-## Step 6：節點 Label 與 Taint
+## Step.6：節點 Label 與 Taint
 
 ```bash
 # 標記 Infra 節點
@@ -202,9 +202,9 @@ kubectl get nodes --show-labels
 
 ---
 
-## Step 7：安裝基礎設施服務
+## Step.7：安裝基礎設施服務
 
-### 7-1：Ingress Controller (Nginx)
+### Step.7.1：Ingress Controller (Nginx)
 ```bash
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
 helm repo update
@@ -214,14 +214,14 @@ helm install ingress-nginx ingress-nginx/ingress-nginx \
   --set controller.service.type=NodePort
 ```
 
-### 7-2：Metrics Server
+### Step.7.2：Metrics Server
 ```bash
 kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 kubectl patch deployment metrics-server -n kube-system --type=json \
   -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
 ```
 
-### 7-3：Monitoring (Prometheus + Grafana)
+### Step.7.3：Monitoring (Prometheus + Grafana)
 ```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
@@ -231,7 +231,7 @@ helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   --set grafana.nodeSelector."node-role\.kubernetes\.io/infra"=""
 ```
 
-### 7-4：Logging (OpenSearch + Fluent-bit)
+### Step.7.4：Logging (OpenSearch + Fluent-bit)
 ```bash
 # OpenSearch
 helm repo add opensearch https://opensearch-project.github.io/helm-charts
@@ -249,7 +249,7 @@ helm install fluent-bit fluent/fluent-bit --namespace logging \
 
 ---
 
-## Step 8：部署測試應用 (Simple Web App)
+## Step.8：部署測試應用 (Simple Web App)
 
 在 Worker 節點部署一個簡單的 Nginx Web App 以驗證。
 

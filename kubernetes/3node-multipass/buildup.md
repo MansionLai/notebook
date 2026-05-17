@@ -29,45 +29,45 @@ Service CIDR: `10.96.0.0/12`（kubeadm 預設）
 ## 安裝架構總覽
 
 ```
-kubeadm 安裝分為 5 個 Phase：
+kubeadm 安裝分為 6 個步驟：
 
-Phase 0: VM 建立與網路設定
+Step.0: VM 建立與網路設定
   ├── Multipass launch (en0 bridge)
   └── 內部 Netplan 設定靜態 IP (ENS4)
 
-Phase 1: 所有節點預備（ALL nodes）
+Step.1: 所有節點預備（ALL nodes）
   ├── /etc/hosts 設定
   ├── 關閉 swap
   ├── 安裝 conntrack (Ubuntu 24 必備)
   ├── 載入 kernel modules + sysctl
   └── 安裝 CRI-O + kubeadm/kubelet/kubectl
 
-Phase 2: 初始化 Master
+Step.2: 初始化 Master
   ├── kubeadm init (advertise 192.168.50.201)
   ├── 設定 kubectl config
   └── 安裝 CNI (Cilium in Kube-proxy replacement mode)
 
-Phase 3: Worker 加入 Cluster
+Step.3: Worker 加入 Cluster
   └── kubeadm join (k8s-infra & k8s-worker)
 
-Phase 4: 基礎設施服務部署 (on Infra Node)
+Step.4: 基礎設施服務部署 (on Infra Node)
   ├── Ingress Controller / Metrics Server
   └── Prometheus / Grafana / Logging
 
-Phase 5: 驗證與應用部署 (on Worker Node)
+Step.5: 驗證與應用部署 (on Worker Node)
   └── 部署 Simple Web App (Nginx)
 ```
 
 ---
 
-## Phase 0 — VM 建立與網路設定
+## Step.0 — VM 建立與網路設定
 
-### Step 0-1：啟動 VM
+### Step.0.1：啟動 VM
 ```bash
 multipass launch 24.04 --name k8s-master --cpus 2 --memory 3G --disk 30G --network en0
 ```
 
-### Step 0-2：設定靜態 IP (符合 Spec)
+### Step.0.2：設定靜態 IP (符合 Spec)
 **原因：** Multipass 在 macOS 上無法直接在 launch 時指定橋接網卡的 IP。為了符合 `.201-203` 的規範，需進 VM 使用 Netplan 修改。
 
 ```bash
@@ -87,11 +87,11 @@ sudo netplan apply
 
 ---
 
-## Phase 1 — 所有節點預備
+## Step.1 — 所有節點預備
 
 > **執行對象：三台 VM**
 
-### Step 1-1：設定 /etc/hosts
+### Step.1.1：設定 /etc/hosts
 ```bash
 sudo tee -a /etc/hosts << 'EOF'
 192.168.50.201 k8s-master
@@ -100,7 +100,7 @@ sudo tee -a /etc/hosts << 'EOF'
 EOF
 ```
 
-### Step 1-2：安裝依賴與環境設定
+### Step.1.2：安裝依賴與環境設定
 ```bash
 # 關閉 Swap
 sudo swapoff -a && sudo sed -i '/\bswap\b/d' /etc/fstab
@@ -113,7 +113,7 @@ sudo modprobe overlay && sudo modprobe br_netfilter
 sudo sysctl --system
 ```
 
-### Step 1-3：安裝 CRI-O
+### Step.1.3：安裝 CRI-O
 **⚠️ 注意：** 官方 repository 路徑已更新。
 ```bash
 VERSION="v1.31"
@@ -122,9 +122,9 @@ VERSION="v1.31"
 
 ---
 
-## Phase 2 — 初始化 Master (Cilium)
+## Step.2 — 初始化 Master (Cilium)
 
-### Step 2-1：kubeadm init
+### Step.2.1：kubeadm init
 ```bash
 sudo kubeadm init \
   --apiserver-advertise-address=192.168.50.201 \
@@ -134,24 +134,24 @@ sudo kubeadm init \
   --skip-phases=addon/kube-proxy
 ```
 
-### Step 2-2：安裝 Cilium
+### Step.2.2：安裝 Cilium
 **重點：** 因為跳過了 kube-proxy，Cilium 安裝時必須指定 `k8sServiceHost=192.168.50.201`。
 
 ---
 
-## Phase 4 — 基礎設施部署
+## Step.4 — 基礎設施部署
 
-### 4-1：安裝 Prometheus/Grafana (on Infra node)
+### Step.4.1：安裝 Prometheus/Grafana (on Infra node)
 透過 `nodeSelector` 確保相關 Pod 運行在 `k8s-infra`。
 
-### 4-2：安裝 Logging (OpenSearch + Fluent-bit)
+### Step.4.2：安裝 Logging (OpenSearch + Fluent-bit)
 OpenSearch 運行於 `k8s-infra`，Fluent-bit 運行於所有節點。
 
 ---
 
-## Phase 5 — 驗證與應用部署
+## Step.5 — 驗證與應用部署
 
-### 5-1：部署 Web App (on Worker node)
+### Step.5.1：部署 Web App (on Worker node)
 部署一個具備 NodePort Service 的 Nginx App，驗證其排程至 `k8s-worker`。
 
 ---
@@ -162,3 +162,4 @@ OpenSearch 運行於 `k8s-infra`，Fluent-bit 運行於所有節點。
 - **實作靜態 IP**: 透過 Netplan 強制將橋接網卡改為 .201/.202/.203。
 - **Cilium 連線修正**: 補上 `k8sServiceHost` 參數。
 - **完整化範疇**: 補上 Prometheus/Grafana/Logging 與 Web App 測試，符合 spec.md。
+- **說辭對齊**: 統一使用 `Step.xxx` 命名規範。
