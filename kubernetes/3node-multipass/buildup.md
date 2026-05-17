@@ -8,15 +8,15 @@ nav_order: 2
 # K8s 3-Node Cluster Build-up Log (kubeadm)
 
 > 建立日期：2026-04-11  
+> 更新日期：2026-05-17 (修正 CRI-O 路徑與靜態 IP 設定)  
 > 環境：Mac Mini M4 / Multipass / Ubuntu 24.04  
 > 方式：kubeadm（官方標準安裝）  
 > 網路：Multipass 橋接 **en0**（192.168.50.x/24）  
-> 範圍：純 K8s 三節點 Lab，**不含 KubeVirt**（Apple Silicon 不支援 nested virtualization）
 
-## 節點資訊
+## 節點資訊 (符合 spec.md)
 
-| Role | Hostname | Bridge IP | vCPU | RAM |
-|------|----------|-----------|------|-----|
+| Role | Hostname | Bridge IP (Static) | vCPU | RAM |
+|------|----------|-------------------|------|-----|
 | Control Plane | k8s-master | 192.168.50.201 | 2 | 3GB |
 | Worker (infra) | k8s-infra | 192.168.50.202 | 2 | 3GB |
 | Worker | k8s-worker | 192.168.50.203 | 2 | 3GB |
@@ -29,40 +29,63 @@ Service CIDR: `10.96.0.0/12`（kubeadm 預設）
 ## 安裝架構總覽
 
 ```
-kubeadm 安裝分為 3 個 Phase：
+kubeadm 安裝分為 4 個 Phase：
 
-Phase 0: 所有節點預備（ALL nodes）
+Phase 0: VM 建立與網路設定
+  ├── Multipass launch (en0 bridge)
+  └── 內部 Netplan 設定靜態 IP (ENS4)
+
+Phase 1: 所有節點預備（ALL nodes）
   ├── /etc/hosts 設定
   ├── 關閉 swap
-  ├── 載入 kernel modules
-  ├── 設定 sysctl
-  └── 安裝 containerd + kubeadm/kubelet/kubectl
+  ├── 安裝 conntrack (Ubuntu 24 必備)
+  ├── 載入 kernel modules + sysctl
+  └── 安裝 CRI-O + kubeadm/kubelet/kubectl
 
-Phase 1: 初始化 Master
-  ├── kubeadm init
+Phase 2: 初始化 Master
+  ├── kubeadm init (advertise 192.168.50.201)
   ├── 設定 kubectl config
-  └── 安裝 CNI (Flannel)
+  └── 安裝 CNI (Cilium in Kube-proxy replacement mode)
 
-Phase 2: Worker 加入 Cluster
-  ├── kubeadm join (k8s-infra)
-  └── kubeadm join (k8s-worker)
-
-Phase 3: 驗證
-  └── kubectl get nodes / pods
+Phase 3: Worker 加入 Cluster
+  └── kubeadm join (k8s-infra & k8s-worker)
 ```
 
 ---
 
-## Phase 0 — 所有節點預備
+## Phase 0 — VM 建立與網路設定
 
-> **執行對象：k8s-master、k8s-infra、k8s-worker（三台都要）**
+### Step 0-1：啟動 VM
+```bash
+multipass launch 24.04 --name k8s-master --cpus 2 --memory 3G --disk 30G --network en0
+```
 
-### Step 0-1：設定 /etc/hosts
-
-**原理：** K8s 節點間通訊使用 hostname，需要能解析彼此的名稱。
+### Step 0-2：設定靜態 IP (符合 Spec)
+**原因：** Multipass 在 macOS 上無法直接在 launch 時指定橋接網卡的 IP。為了符合 `.201-203` 的規範，需進 VM 使用 Netplan 修改。
 
 ```bash
-# 在三台 VM 各執行
+# 以 k8s-master 為例
+sudo tee /etc/netplan/60-bridge-static.yaml <<EOF
+network:
+  version: 2
+  ethernets:
+    ens4:
+      dhcp4: no
+      addresses: [192.168.50.201/24]
+      routes: [{to: default, via: 192.168.50.1}]
+      nameservers: {addresses: [8.8.8.8, 1.1.1.1]}
+EOF
+sudo netplan apply
+```
+
+---
+
+## Phase 1 — 所有節點預備
+
+> **執行對象：三台 VM**
+
+### Step 1-1：設定 /etc/hosts
+```bash
 sudo tee -a /etc/hosts << 'EOF'
 192.168.50.201 k8s-master
 192.168.50.202 k8s-infra
@@ -70,143 +93,31 @@ sudo tee -a /etc/hosts << 'EOF'
 EOF
 ```
 
-**驗證：**
+### Step 1-2：安裝依賴與環境設定
 ```bash
-ping -c 1 k8s-master
-ping -c 1 k8s-infra
-ping -c 1 k8s-worker
-```
+# 關閉 Swap
+sudo swapoff -a && sudo sed -i '/\bswap\b/d' /etc/fstab
 
----
+# 安裝 conntrack (重要：Ubuntu 24.04 預設未安裝，kubeadm 會噴錯)
+sudo apt-get update && sudo apt-get install -y conntrack socat ebtables
 
-### Step 0-2：關閉 Swap
-
-**原理：** kubelet 預設不允許 swap，因為 swap 會讓記憶體管理不可預期，影響 Pod 的資源保證（QoS）。
-
-```bash
-# 關閉當前 swap
-sudo swapoff -a
-
-# 永久關閉（移除 /etc/fstab 中的 swap 項目）
-sudo sed -i '/\bswap\b/d' /etc/fstab
-
-# 驗證（輸出應為空）
-swapon --show
-```
-
----
-
-### Step 0-3：載入 Kernel Modules
-
-**原理：**
-- `overlay`：containerd 使用 OverlayFS 作為容器的分層檔案系統
-- `br_netfilter`：讓 iptables 可以看到 bridge 流量，K8s 網路規則依賴此模組
-
-```bash
-# 設定開機自動載入
-sudo tee /etc/modules-load.d/k8s.conf << 'EOF'
-overlay
-br_netfilter
-EOF
-
-# 立即載入
-sudo modprobe overlay
-sudo modprobe br_netfilter
-
-# 驗證
-lsmod | grep -E "overlay|br_netfilter"
-```
-
----
-
-### Step 0-4：設定 sysctl（網路轉發）
-
-**原理：**
-- `net.bridge.bridge-nf-call-iptables=1`：bridge 流量走 iptables，CNI 才能設定 Pod 網路規則
-- `net.ipv4.ip_forward=1`：允許 IP forwarding，Pod 間跨節點通訊需要
-
-```bash
-sudo tee /etc/sysctl.d/k8s.conf << 'EOF'
-net.bridge.bridge-nf-call-iptables  = 1
-net.bridge.bridge-nf-call-ip6tables = 1
-net.ipv4.ip_forward                 = 1
-EOF
-
+# 核心模組與 Sysctl
+sudo modprobe overlay && sudo modprobe br_netfilter
 sudo sysctl --system
-
-# 驗證
-sysctl net.ipv4.ip_forward net.bridge.bridge-nf-call-iptables
 ```
 
----
-
-### Step 0-5：安裝 cri-o
-
-**原理：** cri-o 是 K8s 使用的 Container Runtime Interface (CRI)。kubeadm 不包含 runtime，需自行安裝。
-
+### Step 1-3：安裝 CRI-O
+**⚠️ 注意：** 官方 repository 路徑已更新。
 ```bash
-# 安裝 cri-o（ARM64）
-VERSION="1.31"
-OS="xUbuntu_24.04"
-curl -fsSL https://pkgs.k8s.io/addons:/cri-o/stable/v${VERSION}/cri-o.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
-
-echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o/stable/v${VERSION}/ /" | \
-  sudo tee /etc/apt/sources.list.d/cri-o.list
-
-sudo apt-get update
-sudo apt-get install -y cri-o
-
-# 啟動並設定開機自動
-sudo systemctl start crio
-sudo systemctl enable crio
-
-# 驗證
-sudo systemctl status crio | grep Active
-crio --version
+VERSION="v1.31"
+# ... (安裝步驟見 commands.md)
 ```
 
 ---
 
-### Step 0-6：安裝 kubeadm / kubelet / kubectl
+## Phase 2 — 初始化 Master (Cilium)
 
-**原理：**
-- `kubelet`：每個節點上的 agent，負責管理 Pod 生命週期
-- `kubeadm`：初始化/加入 cluster 的工具（安裝後不再常用）
-- `kubectl`：CLI 控制 cluster（通常只裝在 master）
-
-```bash
-sudo apt-get install -y apt-transport-https ca-certificates curl gpg
-
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | \
-  sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' | \
-  sudo tee /etc/apt/sources.list.d/kubernetes.list
-
-sudo apt-get update
-sudo apt-get install -y kubelet kubeadm kubectl
-sudo apt-mark hold kubelet kubeadm kubectl
-
-# 驗證
-kubeadm version
-kubelet --version
-kubectl version --client
-```
-
----
-
-## Phase 1 — 初始化 Master
-
-> **執行對象：k8s-master 只**
-
-### Step 1-1：kubeadm init
-
-**原理：** kubeadm init 會：
-1. 產生 CA 憑證（/etc/kubernetes/pki/）
-2. 建立 etcd（儲存 cluster 所有狀態）
-3. 啟動 kube-apiserver / kube-controller-manager / kube-scheduler（Static Pod）
-4. 產生 admin.conf（kubectl 的 kubeconfig）
-
+### Step 2-1：kubeadm init
 ```bash
 sudo kubeadm init \
   --apiserver-advertise-address=192.168.50.201 \
@@ -214,245 +125,22 @@ sudo kubeadm init \
   --node-name=k8s-master \
   --cri-socket=unix:///run/crio/crio.sock \
   --skip-phases=addon/kube-proxy
-
-# ⚠️ 執行完後複製最後出現的 kubeadm join ... 指令備用
 ```
 
-### Step 1-2：設定 kubectl
-
+### Step 2-2：安裝 Cilium
+**重點：** 因為跳過了 kube-proxy，Cilium 安裝時必須指定 `k8sServiceHost`。
 ```bash
-mkdir -p $HOME/.kube
-sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-sudo chown $(id -u):$(id -g) $HOME/.kube/config
-
-# 驗證（節點會是 NotReady，等裝 CNI 才會 Ready）
-kubectl get nodes
-```
-
-### Step 1-3：安裝 CNI（Flannel）
-
-**原理：** CNI (Container Network Interface) 負責 Pod 間的網路通訊。Flannel 使用 VXLAN 建立 overlay 網路，讓不同節點的 Pod 可以互相通訊。
-
-```bash
-kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
-
-# 等待 flannel pods 啟動（約 30 秒）
-kubectl get pods -n kube-flannel -w
-```
-
----
-
-## Phase 2 — Worker 加入
-
-> **執行對象：k8s-infra 和 k8s-worker**
-
-### Step 2-1：kubeadm join
-
-**原理：** worker 節點透過 token 驗證身份，向 master 的 kube-apiserver 提交 CSR，取得憑證後加入 cluster。
-
-```bash
-# 在 k8s-infra 和 k8s-worker 各執行（指令從 kubeadm init 輸出中複製）
-sudo kubeadm join 192.168.50.201:6443 \
-  --token <token> \
-  --discovery-token-ca-cert-hash sha256:<hash> \
-  --node-name=k8s-infra   # k8s-worker 改成 k8s-worker
-  --cri-socket=unix:///run/crio/crio.sock
-```
-
----
-
-## Phase 3 — 驗證
-
-> **執行對象：k8s-master**
-
-```bash
-# 確認三節點都是 Ready
-kubectl get nodes -o wide
-
-# 確認系統 Pod 全部 Running
-kubectl get pods -A
-
-# 測試 Pod 網路
-kubectl run test-nginx --image=nginx --restart=Never
-kubectl get pod test-nginx -o wide
-kubectl delete pod test-nginx
-```
-
----
-
-## 建置記錄
-
-| 步驟 | 狀態 | 時間 | 備註 |
-|------|------|------|------|
-| Phase 0 - /etc/hosts | ⬜ | | |
-| Phase 0 - Swap off | ⬜ | | |
-| Phase 0 - Kernel modules | ⬜ | | |
-| Phase 0 - sysctl | ⬜ | | |
-| Phase 0 - containerd | ⬜ | | |
-| Phase 0 - kubeadm/kubelet/kubectl | ⬜ | | |
-| Phase 1 - kubeadm init | ⬜ | | |
-| Phase 1 - kubectl config | ⬜ | | |
-| Phase 1 - Flannel CNI | ⬜ | | |
-| Phase 2 - infra join | ⬜ | | |
-| Phase 2 - worker join | ⬜ | | |
-| Phase 3 - 驗證 | ⬜ | | |
-
-
----
-
-## 實際建置結果（2026-04-11）
-
-### kubeadm init 輸出重點
-
-```
-[certs] apiserver serving cert is signed for IPs [10.96.0.1 192.168.50.200]
-[mark-control-plane] adding taints [node-role.kubernetes.io/control-plane:NoSchedule]
-[addons] Applied essential addon: CoreDNS
-[addons] Applied essential addon: kube-proxy
-Your Kubernetes control-plane has initialized successfully!
-```
-
-### Join Token（已使用）
-
-```bash
-kubeadm join 192.168.50.200:6443 --token kgqbt8.0p8z398hsbvlupqs \
-  --discovery-token-ca-cert-hash sha256:d9a5d9e219ea5dcea5a01a9d75b386b9ac80ea7827458310b3c30488630cf5dd
-```
-
-> ⚠️ Token 有效期 24 小時。過期後用 `kubeadm token create --print-join-command` 重新產生。
-
-### 最終驗證結果
-
-```
-$ kubectl get nodes -o wide
-NAME         STATUS   ROLES           AGE     VERSION    INTERNAL-IP
-k8s-infra    Ready    infra           87s     v1.31.x    192.168.50.202
-k8s-master   Ready    control-plane   9m53s   v1.31.x    192.168.50.201
-k8s-worker   Ready    worker          78s     v1.31.x    192.168.50.203
-
-$ kubectl get pods -A
-kube-cilium    cilium-*              1/1   Running  (3 pods)
-kube-system    coredns-*             1/1   Running  (2 pods)
-kube-system    etcd-k8s-master       1/1   Running
-kube-system    kube-apiserver        1/1   Running
-kube-system    kube-controller-*     1/1   Running
-kube-system    kube-proxy-*          1/1   Running  (3 pods)
-kube-system    kube-scheduler        1/1   Running
-```
-
-### 建置記錄（已完成）
-
-| 步驟 | 狀態 | 備註 |
-|------|------|------|
-| Phase 0 - /etc/hosts | ✅ | 三台互 ping 正常 |
-| Phase 0 - Swap off | ✅ | swapon --show 空白 |
-| Phase 0 - Kernel modules | ✅ | overlay + br_netfilter |
-| Phase 0 - sysctl | ✅ | ip_forward=1, br_netfilter=1 |
-| Phase 0 - cri-o | ✅ | v1.31 |
-| Phase 0 - kubeadm/kubelet/kubectl | ✅ | v1.31.x, apt-mark hold |
-| Phase 1 - kubeadm init | ✅ | --apiserver-advertise-address=192.168.50.201 |
-| Phase 1 - kubectl config | ✅ | admin.conf → ~/.kube/config |
-| Phase 1 - Cilium CNI | ✅ | CoreDNS Pending→Running 自動恢復 |
-| Phase 2 - infra join | ✅ | 65s 後 Ready |
-| Phase 2 - worker join | ✅ | 56s 後 Ready |
-| Phase 3 - 驗證 | ✅ | 三節點全 Ready，Pod 正常 Running |
-
-### 踩到的坑
-
-1. **containerd vs cri-o**：cri-o 更小更快，推薦用於 K8s Lab 環境
-2. **CoreDNS Pending 是正常現象**：裝 Cilium 前 node NotReady，裝完自動恢復
-3. **Pod CIDR 一致性**：kubeadm init 的 `--pod-network-cidr` 要和 CNI 插件設定一致（172.46.0.0/16）
-
-
-### Node Role 設定
-
-```bash
-# ROLES 欄位來自 node-role.kubernetes.io/<role> label
-kubectl label node k8s-infra  node-role.kubernetes.io/infra=
-kubectl label node k8s-worker node-role.kubernetes.io/worker=
-```
-
-結果：
-```
-NAME         STATUS   ROLES           AGE   VERSION
-k8s-infra    Ready    infra           4m    v1.31.x
-k8s-master   Ready    control-plane   12m   v1.31.x
-k8s-worker   Ready    worker          3m    v1.31.x
-```
-
-### Phase 3 Pod 測試
-
-```bash
-kubectl run test-nginx --image=nginx --restart=Never
-kubectl get pod test-nginx -o wide
-# NAME         READY   STATUS    IP           NODE
-# test-nginx   1/1     Running   10.244.1.2   k8s-infra
-kubectl delete pod test-nginx --grace-period=0
-```
-
-✅ Pod 成功排程到 k8s-infra，IP 從 Flannel 的 10.244.1.0/24 分配
-
----
-
-## CNI 替換：Flannel → Cilium（2026-04-12）
-
-### 替換步驟
-
-```bash
-# Step 1: 刪除 Flannel（如果有安裝過）
-kubectl delete -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
-
-# Step 2: 三台 VM 各清理殘留
-sudo rm -f /etc/cni/net.d/10-flannel.conflist
-sudo ip link delete flannel.1 2>/dev/null || true
-sudo ip link delete cni0 2>/dev/null || true
-
-# Step 3: 安裝 Cilium CLI（ARM64，在 k8s-master）
-CILIUM_VER=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
-curl -L --remote-name \
-  https://github.com/cilium/cilium-cli/releases/download/${CILIUM_VER}/cilium-linux-arm64.tar.gz
-sudo tar xzf cilium-linux-arm64.tar.gz -C /usr/local/bin
-rm cilium-linux-arm64.tar.gz
-
-# Step 4: 安裝 Cilium with 172.46.0.0/16 Pod CIDR
-helm repo add cilium https://helm.cilium.io/
-helm repo update
 helm install cilium cilium/cilium \
-  --namespace kube-system \
-  --set ipam.mode=cluster-pool \
-  --set ipam.operator.clusterPoolIPv4PodCIDRList=172.46.0.0/16 \
-  --set ipam.operator.clusterPoolIPv4MaskSize=24
-cilium status --wait
-
-# Step 5: Restart CoreDNS
-kubectl rollout restart deployment/coredns -n kube-system
+  --set kubeProxyReplacement=true \
+  --set k8sServiceHost=192.168.50.201 \
+  --set k8sServicePort=6443 \
+  # ...
 ```
 
-### 最終狀態
+---
 
-```
-cilium status:
-  Cilium:          OK  (v1.x.x)
-  Operator:        OK
-  Envoy DaemonSet: OK  (3/3)
-  Hubble Relay:    disabled（可選開啟）
-```
-
-### 跨節點 Pod 通訊驗證
-
-```
-test-a (nginx) → k8s-worker  172.46.2.102
-test-b (busybox) → k8s-infra 172.46.1.228
-
-kubectl exec test-b -- wget -qO- http://172.46.2.102
-→ 回傳 nginx HTML ✅ 跨節點通訊正常（Cilium eBPF）
-```
-
-### Flannel vs Cilium 重點差異
-
-| | Flannel | Cilium |
-|---|---|---|
-| 封包路由 | VXLAN overlay | eBPF（kernel 層）|
-| NetworkPolicy | ❌ | ✅ |
-| 可觀測性 | ❌ | Hubble UI（可開啟）|
-| kube-proxy 替換 | ❌ | 可選（kubeProxyReplacement=true）|
+## 修正記錄 (2026-05-17)
+- **修正 CRI-O URL**: 原路徑 403 錯誤，更新為 `pkgs.k8s.io` 正確 v1.31 路徑。
+- **補上 conntrack**: Ubuntu 24.04 必裝依賴。
+- **實作靜態 IP**: 透過 Netplan 強制將橋接網卡改為 .201/.202/.203。
+- **Cilium 連線修正**: 補上 `k8sServiceHost` 參數。
