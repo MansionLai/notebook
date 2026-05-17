@@ -57,17 +57,3 @@ fluent_bit_opensearch_port: 9200
 fluent_bit_opensearch_username: "{{ vault_fluent_bit_opensearch_username }}"
 fluent_bit_opensearch_password: "{{ vault_fluent_bit_opensearch_password }}"
 fluent_bit_opensearch_index: ceph-lab
-
-ceph_hosts_entries:
-  - ip: 10.10.10.21
-    name: ceph-node-01
-  - ip: 10.10.10.22
-    name: ceph-node-02
-  - ip: 10.10.10.23
-    name: ceph-node-03
-  - ip: 172.10.10.21
-    name: ceph-node-01-cls
-  - ip: 172.10.10.22
-    name: ceph-node-02-cls
-  - ip: 172.10.10.23
-    name: ceph-node-03-cls

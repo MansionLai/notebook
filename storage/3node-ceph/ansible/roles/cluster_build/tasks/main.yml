@@ -56,6 +56,12 @@
 - name: Add OSD devices from inventory mapping
   ansible.builtin.command: ceph orch daemon add osd {{ item.hostname }}:{{ item.path }}
   loop: "{{ ceph_desired_osd_targets }}"
+  register: ceph_osd_add_result
+  failed_when:
+    - ceph_osd_add_result.rc != 0
+    - "'already' not in ceph_osd_add_result.stderr"
+    - "'exclusively.  Mounted filesystem?' not in ceph_osd_add_result.stderr"
+  changed_when: ceph_osd_add_result.rc == 0
 
 - name: Wait for Ceph cluster to reach 3 MONs and 6 OSDs
 - name: Check Ceph status until cluster is ready
@@ -123,6 +129,10 @@
     - ceph_room_bucket.rc != 0
     - "'already exists' not in ceph_room_bucket.stderr"
   changed_when: "'already exists' not in ceph_room_bucket.stderr"
+
+- name: Move datacenter buckets under default root
+  ansible.builtin.command: ceph osd crush move {{ item }} root=default
+  loop: "{{ ceph_location_mappings | map(attribute='datacenter') | unique | list }}"
 
 - name: Ensure rack buckets exist
   ansible.builtin.command: ceph osd crush add-bucket {{ item.rack }} rack

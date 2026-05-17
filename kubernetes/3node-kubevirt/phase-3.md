@@ -16,7 +16,7 @@ permalink: /kubernetes/3node-kubevirt/phase-3/
 
 ## Phase 3-1：安裝 Rook-Ceph Operator
 
-> 在 **k8s-master** 執行
+> 在 **mansion-kubevirt-master** 執行
 
 ### Step 3-1-1：部署 Rook-Ceph CRD 與 Operator
 
@@ -26,6 +26,10 @@ ROOK_VERSION=v1.17.0
 # 部署 CRD
 kubectl apply -f \
   https://raw.githubusercontent.com/rook/rook/${ROOK_VERSION}/deploy/examples/crds.yaml
+
+# 部署 common（namespace、RBAC、SA）
+kubectl apply -f \
+  https://raw.githubusercontent.com/rook/rook/${ROOK_VERSION}/deploy/examples/common.yaml
 
 # 部署 Operator
 kubectl apply -f \
@@ -188,3 +192,12 @@ kubectl get pvc test-rbd-pvc
 # 清除測試資源
 kubectl delete pvc test-rbd-pvc
 ```
+
+---
+
+## 踩坑記錄（Phase 3）
+
+| 問題 | 原因 | 解法 |
+|------|------|------|
+| `csi-rbdplugin-provisioner` / `csi-cephfsplugin-provisioner` 有 1 個 Pod 長期 Pending | provisioner 需要 2 副本且有 anti-affinity；但 cluster 只有 worker 可排程（master/infra 有 taint） | 為兩個 provisioner deployment 增加 toleration（control-plane/infra），讓第二副本可排到 infra 或 master |
+| monitoring PVC 掛載失敗：`driver name rook-ceph.rbd.csi.ceph.com not found` | `csi-rbdplugin` 沒有在掛載目標節點（特別是 infra）運行 | patch `csi-rbdplugin` DaemonSet toleration，確保在 infra/control-plane/worker 都有 rbd node plugin |

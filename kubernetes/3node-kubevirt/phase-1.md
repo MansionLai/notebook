@@ -16,15 +16,15 @@ permalink: /kubernetes/3node-kubevirt/phase-1/
 
 ```bash
 sudo tee -a /etc/hosts <<EOF
-10.10.10.11 k8s-master
-10.10.10.12 k8s-infra
-10.10.10.13 k8s-worker
+10.10.10.11 mansion-kubevirt-master
+10.10.10.12 mansion-kubevirt-infra
+10.10.10.13 mansion-kubevirt-worker
 EOF
 ```
 
 驗證：
 ```bash
-ping -c 1 k8s-master
+ping -c 1 mansion-kubevirt-master
 ```
 
 ---
@@ -102,7 +102,7 @@ sysctl net.ipv4.ip_forward
 > **目的：** 安裝容器執行環境（Container Runtime）。K8s 不直接管理容器，而是透過 CRI（Container Runtime Interface）標準介面與 runtime 溝通。
 > - CRI-O 是專為 K8s 設計的輕量級 CRI，只實作 K8s 需要的功能，比 containerd 更精簡
 > - 預設使用 **systemd cgroup**，與 K8s 推薦設定一致，不需額外修改設定檔
-> - 版本需與 K8s 版本一致（此處均為 v1.32）
+> - 版本需與 K8s 版本一致（此處均為 v1.31）
 
 ```bash
 sudo apt-get update
@@ -110,7 +110,7 @@ sudo apt-get install -y ca-certificates curl gnupg
 
 sudo install -m 0755 -d /etc/apt/keyrings
 
-# 加入 CRI-O 官方 repo（版本對應 K8s 1.32）
+# 加入 CRI-O 官方 repo（版本對應 K8s 1.31）
 KUBERNETES_VERSION=v1.31
 
 curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/stable:/${KUBERNETES_VERSION}/deb/Release.key | \
@@ -171,12 +171,12 @@ sudo apt-mark hold kubeadm kubelet kubectl
 ```bash
 kubeadm version --output short
 kubectl version --client --short 2>/dev/null
-# 預期：v1.32.x
+# 預期：v1.31.x
 ```
 
 ---
 
-### Step 1-8：初始化 Master（僅 k8s-master）
+### Step 1-8：初始化 Master（僅 mansion-kubevirt-master）
 
 > **目的：** 建立 K8s control plane。`kubeadm init` 會：
 > 1. 產生 TLS 憑證（CA、API Server、etcd 等）
@@ -184,12 +184,12 @@ kubectl version --client --short 2>/dev/null
 > 3. 產生 `admin.conf`（kubectl 的認證設定）
 > 4. 輸出 `kubeadm join` 指令（含 token 和 CA hash，供 worker/infra 使用）
 >
-> `--pod-network-cidr=10.244.0.0/16` 是給 Cilium 使用的 Pod IP 段（不與 VM subnet 衝突）。
+> `--pod-network-cidr=172.46.0.0/16` 是給 Cilium 使用的 Pod IP 段（不與 VM subnet 衝突）。
 
 ```bash
 sudo kubeadm init \
   --apiserver-advertise-address=10.10.10.11 \
-  --pod-network-cidr=10.244.0.0/16
+  --pod-network-cidr=172.46.0.0/16
 ```
 
 > ⏱ 需約 3-5 分鐘，等待完成
@@ -206,7 +206,7 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
 ---
 
-### Step 1-9：安裝 Cilium（在 k8s-master）
+### Step 1-9：安裝 Cilium（在 mansion-kubevirt-master）
 
 > **目的：** 安裝 CNI（Container Network Interface）網路插件。Cilium 基於 eBPF 技術，提供高效能 Pod 網路、NetworkPolicy、以及可選的 kube-proxy 替代模式。
 > 在安裝 CNI 之前，所有 Node 會維持 `NotReady` 狀態，因為 kubelet 無法設定 Pod 網路。
@@ -233,7 +233,7 @@ cilium status --wait
 驗證：
 ```bash
 kubectl get nodes
-# 預期：k8s-master  Ready  control-plane
+# 預期：mansion-kubevirt-master  Ready  control-plane
 ```
 
 ---
@@ -246,7 +246,7 @@ kubectl get nodes
 > 3. 下載叢集設定、取得 Node 憑證
 > 4. 啟動 kubelet，開始接受 Pod 排程
 
-在 **k8s-infra** 和 **k8s-worker** 各執行 Step 1-8 記錄的 join 指令：
+在 **mansion-kubevirt-infra** 和 **mansion-kubevirt-worker** 各執行 Step 1-8 記錄的 join 指令：
 
 ```bash
 sudo kubeadm join 10.10.10.11:6443 --token <TOKEN> \
@@ -255,33 +255,33 @@ sudo kubeadm join 10.10.10.11:6443 --token <TOKEN> \
 
 ---
 
-### Step 1-11：設定 Node Roles（在 k8s-master）
+### Step 1-11：設定 Node Roles（在 mansion-kubevirt-master）
 
 > **目的：** 為 node 加上 label，讓之後部署的工作負載可以用 `nodeSelector` 或 `affinity` 指定跑在哪台 node。
 > K8s 預設只有 `control-plane` label，其他角色需手動設定。
 
 ```bash
-kubectl label node k8s-infra  node-role.kubernetes.io/infra=
-kubectl label node k8s-worker node-role.kubernetes.io/worker=
-kubectl label node k8s-infra  role=infra
-kubectl label node k8s-worker role=worker
-kubectl label node k8s-master role=master
+kubectl label node mansion-kubevirt-infra  node-role.kubernetes.io/infra=
+kubectl label node mansion-kubevirt-worker node-role.kubernetes.io/worker=
+kubectl label node mansion-kubevirt-infra  role=infra
+kubectl label node mansion-kubevirt-worker role=worker
+kubectl label node mansion-kubevirt-master role=master
 
 # KubeVirt placement labels
-kubectl label node k8s-infra  kubevirt-management=true
-kubectl label node k8s-worker kubevirt-workload=true
+kubectl label node mansion-kubevirt-infra  kubevirt-management=true
+kubectl label node mansion-kubevirt-worker kubevirt-workload=true
 
 # Taint infra node to prevent general workload
-kubectl taint node k8s-infra node-role.kubernetes.io/infra=:NoSchedule
+kubectl taint node mansion-kubevirt-infra node-role.kubernetes.io/infra=:NoSchedule
 ```
 
 驗證：
 ```bash
 kubectl get nodes
 # 預期：
-# k8s-infra    Ready  infra
-# k8s-master   Ready  control-plane
-# k8s-worker   Ready  worker
+# mansion-kubevirt-infra    Ready  infra
+# mansion-kubevirt-master   Ready  control-plane
+# mansion-kubevirt-worker   Ready  worker
 ```
 
 ---
@@ -292,7 +292,7 @@ kubectl get nodes
 > 將 master 的 `admin.conf` 複製到本機，並把 server address 改為 Public IP（因為本機無法直接連 10.10.10.11）。
 
 ```bash
-# 在 k8s-master 查看 admin.conf
+# 在 mansion-kubevirt-master 查看 admin.conf
 cat ~/.kube/config
 ```
 
@@ -312,4 +312,3 @@ kubectl get nodes
 ```
 
 ---
-

@@ -28,7 +28,7 @@ AI agent 請盡可能使用azure mcp來操作azure, 非必要不要使用az comm
    - Installation guide
      - kubenetes version = v1.31
      - container runtime = cri-o
-     - cni = cilium
+     - cni = cilium (podCIRD=172.46.0.0/16)
      - 透過rook-ceph(v1.17)建立storageclass, volumesnapshotclass, 連線我自建的ceph cluster
      - 需要安裝prometheus & alertmanager (on infra node)
      - 需要安裝grafana dashboard串接prometheus (on infra node)
@@ -39,4 +39,27 @@ AI agent 請盡可能使用azure mcp來操作azure, 非必要不要使用az comm
 2. 3node-multipass
    - 使用 Mac Mini M4 本機，透過 Multipass 建立三台 Ubuntu 24.04 VM，橋接至 en0（192.168.50.x/24)
    - 搭建純 K8s 三節點 Lab，不包含 KubeVirt（Apple Silicon 無 nested virtualization 支援
-   - 專注於 K8s 核心元件與基礎設施服務的學習
+   - 專注於 K8s 核心元件與基礎設施服務建置的學習, step by step commands.
+   - VM Spec
+     - 使用local multipass創立三台vm (master, infra, worker)
+     - vm1 (k8s-master)
+       - 2vCPU + 3GB RAM + 30GB disk
+       - ip 192.168.50.201/24
+       - 負責K8s control plane
+     - vm2 (k8s-infra)
+       - 2vCPU + 3GB RAM + 30GB disk
+       - ip 192.168.50.202/24
+       - 負責K8s infra service (e.g. CoreDNS, Ingress Controller, prometheus, grafana, opensearch)
+     - vm3 (k8s-worker)
+       - 2vCPU + 3GB RAM + 30GB disk
+       - ip 192.168.50.203/24
+       - 負責App workload
+     - Installation guide
+       - kubenetes version = v1.31
+       - container runtime = cri-o
+       - cni = cilium
+       - 需要安裝prometheus & alertmanager (on infra node)
+       - 需要安裝grafana dashboard串接prometheus (on infra node)
+       - 需要安裝opensearch (on infra node)
+       - 每個node上都要安裝node exporter + fluent-bit(負責將pod log送給opensearch)
+       - 建立一個簡易的web-based app on worker node

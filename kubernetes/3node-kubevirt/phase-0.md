@@ -100,16 +100,22 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 
 每台 VM 重複以下步驟（共 3 次）：
 
-#### Basics Tab
+#### Basics Tab 通用設定
 
-| 欄位 | mansion_kubevirt_master | mansion_kubevirt_infra | mansion_kubevirt_worker |
-|------|-----------|-----------|-----------|
-| VM name | `mansion_kubevirt_master` | `mansion_kubevirt_infra` | `mansion_kubevirt_worker` |
-| Image | Ubuntu Server 22.04 LTS (Gen2) | 同左 | 同左 |
-| Size | Standard_D2s_v4 | Standard_D4s_v4 | Standard_D4s_v4 |
-| Auth type | SSH public key | 同左 | 同左 |
-| Username | `ubuntu` | 同左 | 同左 |
-| SSH key | 貼上你的 public key | 同左 | 同左 |
+| 欄位 | 設定 |
+|------|------|
+| Image | Ubuntu Server 22.04 LTS (Gen2) |
+| Auth type | SSH public key |
+| Username | `ubuntu` |
+| SSH key | 貼上你的 public key |
+
+**各節點規格：**
+
+| 節點 | VM name | Size |
+|------|---------|------|
+| Master | `mansion_kubevirt_master` | Standard_D2s_v4 (2C/8G) |
+| Infra | `mansion_kubevirt_infra` | Standard_D4s_v4 (4C/16G) |
+| Worker | `mansion_kubevirt_worker` | Standard_D4s_v4 (4C/16G) |
 
 #### Disks Tab
 - OS disk type: **Standard SSD (LRS)**（省費用）
@@ -148,7 +154,7 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 
 ### Step 0-6：Worker eth1 啟用 IP Forwarding
 
-1. Portal → k8s-worker → **Networking** → 點選第二張 NIC（`mansion_kubevirt_worker_nic2`）
+1. Portal → mansion_kubevirt_worker → **Networking** → 點選第二張 NIC（`mansion_kubevirt_worker_nic2`）
 2. → **IP configurations** → 頂部有 **IP forwarding** 選項 → 設為 **Enabled**
 3. 儲存
 
