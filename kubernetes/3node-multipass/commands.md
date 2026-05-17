@@ -8,7 +8,7 @@ nav_order: 3
 # Mac Mini K8s 三節點建置指令手冊
 
 > 建立日期：2026-04-11  
-> 更新日期：2026-05-17 (修正 CRI-O 路徑與靜態 IP 設定)  
+> 更新日期：2026-05-17 (修正 CRI-O 路徑、靜態 IP 設定、補足 web-app)  
 > 環境：macOS 15 · Multipass 1.15+ · Ubuntu 24.04 ARM64 · Kubernetes 1.31
 
 ---
@@ -149,6 +149,8 @@ sudo kubeadm join 192.168.50.201:6443 \
   --discovery-token-ca-cert-hash sha256:<HASH> \
   --node-name=k8s-infra \
   --cri-socket=unix:///run/crio/crio.sock
+
+# Worker 也一樣 (node-name 改為 k8s-worker)
 ```
 
 ---
@@ -179,4 +181,137 @@ cilium status --wait
 ```
 
 ---
-(其餘 Label 與 Infra 服務安裝部分保持不變...)
+
+## Step 6：節點 Label 與 Taint
+
+```bash
+# 標記 Infra 節點
+kubectl label node k8s-infra node-role.kubernetes.io/infra=""
+kubectl label node k8s-infra node-type=infra
+
+# 標記 Worker 節點
+kubectl label node k8s-worker node-role.kubernetes.io/worker=""
+kubectl label node k8s-worker node-type=worker
+
+# Master 加 Taint
+kubectl taint nodes k8s-master node-role.kubernetes.io/control-plane:NoSchedule --overwrite
+
+# 確認 Label
+kubectl get nodes --show-labels
+```
+
+---
+
+## Step 7：安裝基礎設施服務
+
+### 7-1：Ingress Controller (Nginx)
+```bash
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx --create-namespace \
+  --set controller.nodeSelector."node-role\.kubernetes\.io/infra"="" \
+  --set controller.service.type=NodePort
+```
+
+### 7-2：Metrics Server
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+kubectl patch deployment metrics-server -n kube-system --type=json \
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+```
+
+### 7-3：Monitoring (Prometheus + Grafana)
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --namespace monitoring --create-namespace \
+  --set prometheus.prometheusSpec.nodeSelector."node-role\.kubernetes\.io/infra"="" \
+  --set grafana.nodeSelector."node-role\.kubernetes\.io/infra"=""
+```
+
+### 7-4：Logging (OpenSearch + Fluent-bit)
+```bash
+# OpenSearch
+helm repo add opensearch https://opensearch-project.github.io/helm-charts
+helm install opensearch opensearch/opensearch --namespace logging --create-namespace \
+  --set nodeSelector."node-role\.kubernetes\.io/infra"="" \
+  --set replicas=1
+
+# Fluent-bit (Every node)
+helm repo add fluent https://fluent.github.io/helm-charts
+helm install fluent-bit fluent/fluent-bit --namespace logging \
+  --set config.outputs.opensearch.enabled=true \
+  --set config.outputs.opensearch.host=opensearch.logging.svc.cluster.local \
+  --set config.outputs.opensearch.port=9200
+```
+
+---
+
+## Step 8：部署測試應用 (Simple Web App)
+
+在 Worker 節點部署一個簡單的 Nginx Web App 以驗證。
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      nodeSelector:
+        node-type: worker
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-svc
+spec:
+  selector:
+    app: web-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  type: NodePort
+EOF
+
+# 驗證
+kubectl get pods -l app=web-app -o wide
+```
+
+---
+
+## 常用管理指令
+
+```bash
+multipass list                                   # 查看 VM 狀態
+multipass stop k8s-master k8s-infra k8s-worker   # 停止所有
+multipass start k8s-master k8s-infra k8s-worker  # 啟動所有
+kubectl get nodes -o wide                        # 確認節點
+kubectl top nodes                                # 資源監控 (需 Metrics Server)
+```
+
+---
+
+## 疑難排解
+
+- **CRI-O 沒啟動**：`sudo systemctl status crio`
+- **節點 NotReady**：`kubectl describe node <name>`，通常是 CNI (Cilium) 尚未 Ready。
+- **Cilium Timeout**：確認 `k8sServiceHost` 是否為 Master IP 192.168.50.201。
+- **Kubeadm Reset**：`sudo kubeadm reset -f --cri-socket unix:///run/crio/crio.sock`

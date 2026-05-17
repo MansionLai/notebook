@@ -36,7 +36,7 @@ graph TB
                     API <--> CM
                 end
                 KBM[kubelet]
-                CRM[containerd]
+                CRM[cri-o]
             end
 
             subgraph Infra["k8s-infra · 2C / 2.5GB · 192.168.50.202"]
@@ -46,7 +46,7 @@ graph TB
                 PROM[Prometheus]
                 GRAF[Grafana]
                 KBI[kubelet]
-                CRI[containerd]
+                CRI[cri-o]
             end
 
             subgraph Worker["k8s-worker · 2C / 2GB · 192.168.50.203"]
@@ -54,7 +54,7 @@ graph TB
                 WL2[App Pod 2]
                 WL3[App Pod 3]
                 KBW[kubelet]
-                CRW[containerd]
+                CRW[cri-o]
             end
         end
 

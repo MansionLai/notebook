@@ -8,18 +8,18 @@ nav_order: 2
 # K8s 3-Node Cluster Build-up Log (kubeadm)
 
 > 建立日期：2026-04-11  
-> 更新日期：2026-05-17 (修正 CRI-O 路徑與靜態 IP 設定)  
+> 更新日期：2026-05-17 (修正 CRI-O 路徑、靜態 IP 設定、補足 web-app)  
 > 環境：Mac Mini M4 / Multipass / Ubuntu 24.04  
 > 方式：kubeadm（官方標準安裝）  
 > 網路：Multipass 橋接 **en0**（192.168.50.x/24）  
 
 ## 節點資訊 (符合 spec.md)
 
-| Role | Hostname | Bridge IP (Static) | vCPU | RAM |
-|------|----------|-------------------|------|-----|
-| Control Plane | k8s-master | 192.168.50.201 | 2 | 3GB |
-| Worker (infra) | k8s-infra | 192.168.50.202 | 2 | 3GB |
-| Worker | k8s-worker | 192.168.50.203 | 2 | 3GB |
+| Role | Hostname | Bridge IP (Static) | vCPU | RAM | Disk |
+|------|----------|-------------------|------|-----|------|
+| Control Plane | k8s-master | 192.168.50.201 | 2 | 3GB | 30GB |
+| Worker (infra) | k8s-infra | 192.168.50.202 | 2 | 3GB | 30GB |
+| Worker | k8s-worker | 192.168.50.203 | 2 | 3GB | 40GB |
 
 Pod CIDR: `172.46.0.0/16`（Cilium 配置）  
 Service CIDR: `10.96.0.0/12`（kubeadm 預設）
@@ -29,7 +29,7 @@ Service CIDR: `10.96.0.0/12`（kubeadm 預設）
 ## 安裝架構總覽
 
 ```
-kubeadm 安裝分為 4 個 Phase：
+kubeadm 安裝分為 5 個 Phase：
 
 Phase 0: VM 建立與網路設定
   ├── Multipass launch (en0 bridge)
@@ -49,6 +49,13 @@ Phase 2: 初始化 Master
 
 Phase 3: Worker 加入 Cluster
   └── kubeadm join (k8s-infra & k8s-worker)
+
+Phase 4: 基礎設施服務部署 (on Infra Node)
+  ├── Ingress Controller / Metrics Server
+  └── Prometheus / Grafana / Logging
+
+Phase 5: 驗證與應用部署 (on Worker Node)
+  └── 部署 Simple Web App (Nginx)
 ```
 
 ---
@@ -128,14 +135,24 @@ sudo kubeadm init \
 ```
 
 ### Step 2-2：安裝 Cilium
-**重點：** 因為跳過了 kube-proxy，Cilium 安裝時必須指定 `k8sServiceHost`。
-```bash
-helm install cilium cilium/cilium \
-  --set kubeProxyReplacement=true \
-  --set k8sServiceHost=192.168.50.201 \
-  --set k8sServicePort=6443 \
-  # ...
-```
+**重點：** 因為跳過了 kube-proxy，Cilium 安裝時必須指定 `k8sServiceHost=192.168.50.201`。
+
+---
+
+## Phase 4 — 基礎設施部署
+
+### 4-1：安裝 Prometheus/Grafana (on Infra node)
+透過 `nodeSelector` 確保相關 Pod 運行在 `k8s-infra`。
+
+### 4-2：安裝 Logging (OpenSearch + Fluent-bit)
+OpenSearch 運行於 `k8s-infra`，Fluent-bit 運行於所有節點。
+
+---
+
+## Phase 5 — 驗證與應用部署
+
+### 5-1：部署 Web App (on Worker node)
+部署一個具備 NodePort Service 的 Nginx App，驗證其排程至 `k8s-worker`。
 
 ---
 
@@ -144,3 +161,4 @@ helm install cilium cilium/cilium \
 - **補上 conntrack**: Ubuntu 24.04 必裝依賴。
 - **實作靜態 IP**: 透過 Netplan 強制將橋接網卡改為 .201/.202/.203。
 - **Cilium 連線修正**: 補上 `k8sServiceHost` 參數。
+- **完整化範疇**: 補上 Prometheus/Grafana/Logging 與 Web App 測試，符合 spec.md。
