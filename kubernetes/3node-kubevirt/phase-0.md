@@ -100,16 +100,22 @@ permalink: /kubernetes/3node-kubevirt/phase-0/
 
 每台 VM 重複以下步驟（共 3 次）：
 
-#### Basics Tab
+#### Basics Tab 通用設定
 
-| 欄位 | mansion_kubevirt_master | mansion_kubevirt_infra | mansion_kubevirt_worker |
-|------|-----------|-----------|-----------|
-| VM name | `mansion_kubevirt_master` | `mansion_kubevirt_infra` | `mansion_kubevirt_worker` |
-| Image | Ubuntu Server 22.04 LTS (Gen2) | 同左 | 同左 |
-| Size | Standard_D2s_v4 | Standard_D4s_v4 | Standard_D4s_v4 |
-| Auth type | SSH public key | 同左 | 同左 |
-| Username | `ubuntu` | 同左 | 同左 |
-| SSH key | 貼上你的 public key | 同左 | 同左 |
+| 欄位 | 設定 |
+|------|------|
+| Image | Ubuntu Server 22.04 LTS (Gen2) |
+| Auth type | SSH public key |
+| Username | `ubuntu` |
+| SSH key | 貼上你的 public key |
+
+**各節點規格：**
+
+| 節點 | VM name | Size |
+|------|---------|------|
+| Master | `mansion_kubevirt_master` | Standard_D2s_v4 (2C/8G) |
+| Infra | `mansion_kubevirt_infra` | Standard_D4s_v4 (4C/16G) |
+| Worker | `mansion_kubevirt_worker` | Standard_D4s_v4 (4C/16G) |
 
 #### Disks Tab
 - OS disk type: **Standard SSD (LRS)**（省費用）
