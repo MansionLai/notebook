@@ -21,6 +21,9 @@
 - name: Set pool crush rule to rack failure domain rule
   ansible.builtin.command: ceph osd pool set {{ ceph_rbd_pool_name }} crush_rule {{ ceph_rbd_crush_rule_name }}
 
+- name: Disable pg_autoscale to prevent unwanted PG number changes
+  ansible.builtin.command: ceph osd pool set {{ ceph_rbd_pool_name }} pg_autoscale_mode off
+
 - name: Enable RBD application
   ansible.builtin.command: ceph osd pool application enable {{ ceph_rbd_pool_name }} rbd
   register: ceph_pool_app_enable
