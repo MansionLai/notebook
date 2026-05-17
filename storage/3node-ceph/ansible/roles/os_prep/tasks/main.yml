@@ -35,7 +35,7 @@
   when: ufw_binary.stat.exists
 
 - name: Disable ufw for lab workflow
-  ansible.builtin.command: ufw disable
+  ansible.builtin.command: ufw --force disable
   when:
     - ufw_binary.stat.exists
     - "'Status: active' in ufw_status.stdout"
@@ -64,9 +64,21 @@
   changed_when: false
   failed_when: false
 
-- name: Assert OSD devices are still empty
+- name: Wipe OSD device signatures when present
+  ansible.builtin.command: wipefs --all --force {{ item.item }}
+  loop: "{{ ceph_osd_blkid.results }}"
+  when: item.stdout != ""
+
+- name: Re-probe OSD device signatures after wipe
+  ansible.builtin.command: blkid {{ item }}
+  loop: "{{ ceph_osd_devices }}"
+  register: ceph_osd_blkid_after_wipe
+  changed_when: false
+  failed_when: false
+
+- name: Assert OSD devices are empty after wipe
   ansible.builtin.assert:
     that:
       - item.stdout == ""
     fail_msg: "Expected {{ item.item }} to be empty before Ceph OSD provisioning"
-  loop: "{{ ceph_osd_blkid.results }}"
+  loop: "{{ ceph_osd_blkid_after_wipe.results }}"

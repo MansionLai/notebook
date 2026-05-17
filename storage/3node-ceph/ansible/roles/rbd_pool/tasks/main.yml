@@ -9,6 +9,7 @@
     {{ ceph_rbd_pool_name }}
     {{ ceph_rbd_pool_pg_num }}
     {{ ceph_rbd_pool_pgp_num }}
+  register: ceph_pool_create
   when: ceph_rbd_pool_name not in ceph_pool_ls.stdout_lines
 
 - name: Set pool size
@@ -29,12 +30,13 @@
   changed_when: "'already enabled' not in ceph_pool_app_enable.stderr"
 
 - name: Initialize RBD pool
-  ansible.builtin.command: rbd pool init {{ ceph_rbd_pool_name }}
+  ansible.builtin.command: timeout 120 rbd pool init {{ ceph_rbd_pool_name }}
   register: ceph_rbd_pool_init
   failed_when:
     - ceph_rbd_pool_init.rc != 0
     - "'already initialized' not in ceph_rbd_pool_init.stderr"
   changed_when: "'already initialized' not in ceph_rbd_pool_init.stderr"
+  when: ceph_pool_create is defined and ceph_pool_create.changed
 
 - name: Read existing RBD images
   ansible.builtin.command: rbd ls {{ ceph_rbd_pool_name }}
