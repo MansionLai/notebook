@@ -17,11 +17,11 @@ nav_order: 2
 
 | Role | Hostname | Bridge IP | vCPU | RAM |
 |------|----------|-----------|------|-----|
-| Control Plane | k8s-master | 192.168.50.200 | 2 | 4GB |
-| Worker (infra) | k8s-infra | 192.168.50.201 | 2 | 4GB |
-| Worker | k8s-worker | 192.168.50.202 | 2 | 4GB |
+| Control Plane | k8s-master | 192.168.50.201 | 2 | 3GB |
+| Worker (infra) | k8s-infra | 192.168.50.202 | 2 | 3GB |
+| Worker | k8s-worker | 192.168.50.203 | 2 | 3GB |
 
-Pod CIDR: `10.244.0.0/16`（Flannel 預設）  
+Pod CIDR: `172.46.0.0/16`（Cilium 配置）  
 Service CIDR: `10.96.0.0/12`（kubeadm 預設）
 
 ---
@@ -64,9 +64,9 @@ Phase 3: 驗證
 ```bash
 # 在三台 VM 各執行
 sudo tee -a /etc/hosts << 'EOF'
-192.168.50.200 k8s-master
-192.168.50.201 k8s-infra
-192.168.50.202 k8s-worker
+192.168.50.201 k8s-master
+192.168.50.202 k8s-infra
+192.168.50.203 k8s-worker
 EOF
 ```
 
@@ -140,28 +140,29 @@ sysctl net.ipv4.ip_forward net.bridge.bridge-nf-call-iptables
 
 ---
 
-### Step 0-5：安裝 containerd
+### Step 0-5：安裝 cri-o
 
-**原理：** containerd 是 K8s 使用的 Container Runtime Interface (CRI)。kubeadm 不包含 runtime，需自行安裝。
+**原理：** cri-o 是 K8s 使用的 Container Runtime Interface (CRI)。kubeadm 不包含 runtime，需自行安裝。
 
 ```bash
-# 安裝 containerd
+# 安裝 cri-o（ARM64）
+VERSION="1.31"
+OS="xUbuntu_24.04"
+curl -fsSL https://pkgs.k8s.io/addons:/cri-o/stable/v${VERSION}/cri-o.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+
+echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o/stable/v${VERSION}/ /" | \
+  sudo tee /etc/apt/sources.list.d/cri-o.list
+
 sudo apt-get update
-sudo apt-get install -y containerd
+sudo apt-get install -y cri-o
 
-# 產生預設設定
-sudo mkdir -p /etc/containerd
-containerd config default | sudo tee /etc/containerd/config.toml
-
-# 啟用 SystemdCgroup（必須！kubelet 和 containerd 要用同一個 cgroup driver）
-sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-
-# 啟動
-sudo systemctl restart containerd
-sudo systemctl enable containerd
+# 啟動並設定開機自動
+sudo systemctl start crio
+sudo systemctl enable crio
 
 # 驗證
-sudo systemctl status containerd | grep Active
+sudo systemctl status crio | grep Active
+crio --version
 ```
 
 ---
@@ -176,10 +177,10 @@ sudo systemctl status containerd | grep Active
 ```bash
 sudo apt-get install -y apt-transport-https ca-certificates curl gpg
 
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | \
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | \
   sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | \
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' | \
   sudo tee /etc/apt/sources.list.d/kubernetes.list
 
 sudo apt-get update
@@ -208,9 +209,11 @@ kubectl version --client
 
 ```bash
 sudo kubeadm init \
-  --apiserver-advertise-address=192.168.50.200 \
-  --pod-network-cidr=10.244.0.0/16 \
-  --node-ip=192.168.50.200
+  --apiserver-advertise-address=192.168.50.201 \
+  --pod-network-cidr=172.46.0.0/16 \
+  --node-name=k8s-master \
+  --cri-socket=unix:///run/crio/crio.sock \
+  --skip-phases=addon/kube-proxy
 
 # ⚠️ 執行完後複製最後出現的 kubeadm join ... 指令備用
 ```
@@ -249,10 +252,11 @@ kubectl get pods -n kube-flannel -w
 
 ```bash
 # 在 k8s-infra 和 k8s-worker 各執行（指令從 kubeadm init 輸出中複製）
-sudo kubeadm join 192.168.50.200:6443 \
+sudo kubeadm join 192.168.50.201:6443 \
   --token <token> \
   --discovery-token-ca-cert-hash sha256:<hash> \
-  --node-ip=192.168.50.201   # infra 用 .201，worker 用 .202
+  --node-name=k8s-infra   # k8s-worker 改成 k8s-worker
+  --cri-socket=unix:///run/crio/crio.sock
 ```
 
 ---
@@ -322,18 +326,18 @@ kubeadm join 192.168.50.200:6443 --token kgqbt8.0p8z398hsbvlupqs \
 ```
 $ kubectl get nodes -o wide
 NAME         STATUS   ROLES           AGE     VERSION    INTERNAL-IP
-k8s-infra    Ready    <none>          87s     v1.32.13   192.168.50.201
-k8s-master   Ready    control-plane   9m53s   v1.32.13   192.168.50.200
-k8s-worker   Ready    <none>          78s     v1.32.13   192.168.50.202
+k8s-infra    Ready    infra           87s     v1.31.x    192.168.50.202
+k8s-master   Ready    control-plane   9m53s   v1.31.x    192.168.50.201
+k8s-worker   Ready    worker          78s     v1.31.x    192.168.50.203
 
 $ kubectl get pods -A
-kube-flannel   kube-flannel-ds-*   1/1   Running  (3 pods, 每節點一個)
-kube-system    coredns-*           1/1   Running  (2 pods)
-kube-system    etcd-k8s-master     1/1   Running
-kube-system    kube-apiserver      1/1   Running
-kube-system    kube-controller-*   1/1   Running
-kube-system    kube-proxy-*        1/1   Running  (3 pods, 每節點一個)
-kube-system    kube-scheduler      1/1   Running
+kube-cilium    cilium-*              1/1   Running  (3 pods)
+kube-system    coredns-*             1/1   Running  (2 pods)
+kube-system    etcd-k8s-master       1/1   Running
+kube-system    kube-apiserver        1/1   Running
+kube-system    kube-controller-*     1/1   Running
+kube-system    kube-proxy-*          1/1   Running  (3 pods)
+kube-system    kube-scheduler        1/1   Running
 ```
 
 ### 建置記錄（已完成）
@@ -344,20 +348,20 @@ kube-system    kube-scheduler      1/1   Running
 | Phase 0 - Swap off | ✅ | swapon --show 空白 |
 | Phase 0 - Kernel modules | ✅ | overlay + br_netfilter |
 | Phase 0 - sysctl | ✅ | ip_forward=1, br_netfilter=1 |
-| Phase 0 - containerd | ✅ | SystemdCgroup=true |
-| Phase 0 - kubeadm/kubelet/kubectl | ✅ | v1.32.13, apt-mark hold |
-| Phase 1 - kubeadm init | ✅ | --apiserver-advertise-address=192.168.50.200 |
+| Phase 0 - cri-o | ✅ | v1.31 |
+| Phase 0 - kubeadm/kubelet/kubectl | ✅ | v1.31.x, apt-mark hold |
+| Phase 1 - kubeadm init | ✅ | --apiserver-advertise-address=192.168.50.201 |
 | Phase 1 - kubectl config | ✅ | admin.conf → ~/.kube/config |
-| Phase 1 - Flannel CNI | ✅ | CoreDNS Pending→Running 自動恢復 |
+| Phase 1 - Cilium CNI | ✅ | CoreDNS Pending→Running 自動恢復 |
 | Phase 2 - infra join | ✅ | 65s 後 Ready |
 | Phase 2 - worker join | ✅ | 56s 後 Ready |
-| Phase 3 - 驗證 | ✅ | 三節點全 Ready，13 pods Running |
+| Phase 3 - 驗證 | ✅ | 三節點全 Ready，Pod 正常 Running |
 
 ### 踩到的坑
 
-1. **`--node-ip` 不是 kubeadm 參數**：是 kubelet 參數，不能傳給 `kubeadm init`，移除即可
-2. **CoreDNS Pending 是正常現象**：裝 Flannel 前 node NotReady，裝完自動恢復
-3. **cloud-init heredoc 問題**：YAML block scalar 內不能用 `<< EOF`（yaml-cpp 誤判），改用 `printf` 解決
+1. **containerd vs cri-o**：cri-o 更小更快，推薦用於 K8s Lab 環境
+2. **CoreDNS Pending 是正常現象**：裝 Cilium 前 node NotReady，裝完自動恢復
+3. **Pod CIDR 一致性**：kubeadm init 的 `--pod-network-cidr` 要和 CNI 插件設定一致（172.46.0.0/16）
 
 
 ### Node Role 設定
@@ -371,9 +375,9 @@ kubectl label node k8s-worker node-role.kubernetes.io/worker=
 結果：
 ```
 NAME         STATUS   ROLES           AGE   VERSION
-k8s-infra    Ready    infra           4m    v1.32.13
-k8s-master   Ready    control-plane   12m   v1.32.13
-k8s-worker   Ready    worker          3m    v1.32.13
+k8s-infra    Ready    infra           4m    v1.31.x
+k8s-master   Ready    control-plane   12m   v1.31.x
+k8s-worker   Ready    worker          3m    v1.31.x
 ```
 
 ### Phase 3 Pod 測試
@@ -395,7 +399,7 @@ kubectl delete pod test-nginx --grace-period=0
 ### 替換步驟
 
 ```bash
-# Step 1: 刪除 Flannel
+# Step 1: 刪除 Flannel（如果有安裝過）
 kubectl delete -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
 
 # Step 2: 三台 VM 各清理殘留
@@ -410,10 +414,14 @@ curl -L --remote-name \
 sudo tar xzf cilium-linux-arm64.tar.gz -C /usr/local/bin
 rm cilium-linux-arm64.tar.gz
 
-# Step 4: 安裝 Cilium
-cilium install \
-  --set ipam.mode=kubernetes \
-  --set kubeProxyReplacement=false
+# Step 4: 安裝 Cilium with 172.46.0.0/16 Pod CIDR
+helm repo add cilium https://helm.cilium.io/
+helm repo update
+helm install cilium cilium/cilium \
+  --namespace kube-system \
+  --set ipam.mode=cluster-pool \
+  --set ipam.operator.clusterPoolIPv4PodCIDRList=172.46.0.0/16 \
+  --set ipam.operator.clusterPoolIPv4MaskSize=24
 cilium status --wait
 
 # Step 5: Restart CoreDNS
@@ -424,7 +432,7 @@ kubectl rollout restart deployment/coredns -n kube-system
 
 ```
 cilium status:
-  Cilium:          OK  (v1.19.1)
+  Cilium:          OK  (v1.x.x)
   Operator:        OK
   Envoy DaemonSet: OK  (3/3)
   Hubble Relay:    disabled（可選開啟）
@@ -433,10 +441,10 @@ cilium status:
 ### 跨節點 Pod 通訊驗證
 
 ```
-test-a (nginx) → k8s-worker  10.244.2.102
-test-b (busybox) → k8s-infra 10.244.1.228
+test-a (nginx) → k8s-worker  172.46.2.102
+test-b (busybox) → k8s-infra 172.46.1.228
 
-kubectl exec test-b -- wget -qO- http://10.244.2.102
+kubectl exec test-b -- wget -qO- http://172.46.2.102
 → 回傳 nginx HTML ✅ 跨節點通訊正常（Cilium eBPF）
 ```
 

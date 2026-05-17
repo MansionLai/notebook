@@ -38,9 +38,9 @@ flowchart TD
 ```mermaid
 flowchart LR
     S([開始]) --> V1
-    V1["multipass launch ubuntu:24.04\n--name k8s-master\n--cpus 4 --memory 6G\n--disk 30G --network en0"]
-    V2["multipass launch ubuntu:24.04\n--name k8s-infra\n--cpus 2 --memory 4G\n--disk 30G --network en0"]
-    V3["multipass launch ubuntu:24.04\n--name k8s-worker\n--cpus 4 --memory 8G\n--disk 40G --network en0"]
+    V1["multipass launch ubuntu:24.04\n--name k8s-master\n--cpus 2 --memory 3G\n--disk 30G --network en0"]
+    V2["multipass launch ubuntu:24.04\n--name k8s-infra\n--cpus 2 --memory 3G\n--disk 30G --network en0"]
+    V3["multipass launch ubuntu:24.04\n--name k8s-worker\n--cpus 2 --memory 3G\n--disk 40G --network en0"]
     V1 --> V2 --> V3
     V3 --> CHK{3台 VM\n都有 192.168.50.x IP?}
     CHK -- Yes --> OK([Phase 1 完成])
@@ -56,12 +56,11 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    START([進入每台 VM\nmultipass shell k8s-xxx]) --> SW[關閉 swap\nswapoff -a]
+    S([進入每台 VM\nmultipass shell k8s-xxx]) --> SW[關閉 swap\nswapoff -a]
     SW --> MOD[載入核心模組\noverlay + br_netfilter]
     MOD --> SYSCTL[設定 sysctl\n啟用 ip_forward + bridge iptables]
-    SYSCTL --> CTR[安裝 containerd\napt install containerd]
-    CTR --> CTR2[設定 containerd\nSystemdCgroup = true]
-    CTR2 --> K8S[安裝 K8s 套件\nkubeadm + kubelet + kubectl]
+    SYSCTL --> CTR[安裝 cri-o\ncurl + apt install]
+    CTR --> K8S[安裝 K8s 套件\nkubeadm + kubelet + kubectl v1.31]
     K8S --> HOLD[apt-mark hold\n防止自動升級]
     HOLD --> DONE([此節點前置完成])
 ```
@@ -73,7 +72,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     S([進入 k8s-master]) --> IP[確認 Master IP\nhostname -I]
-    IP --> INIT["kubeadm init\n--apiserver-advertise-address=192.168.50.x\n--pod-network-cidr=10.244.0.0/16"]
+    IP --> INIT["kubeadm init\n--apiserver-advertise-address=192.168.50.201\n--pod-network-cidr=172.46.0.0/16\n--cri-socket=unix:///run/crio/crio.sock"]
     INIT --> CHK{init 成功?}
     CHK -- No --> LOG[查看錯誤\nkubeadm reset 後重試]
     LOG --> INIT
@@ -89,8 +88,8 @@ flowchart TD
 ```mermaid
 flowchart LR
     S([取得 join command]) --> J1
-    J1["在 k8s-infra 執行\nkubeadm join 192.168.50.x:6443\n--token xxx --discovery-token-ca-cert-hash sha256:xxx"]
-    J2["在 k8s-worker 執行\nkubeadm join 192.168.50.x:6443\n--token xxx --discovery-token-ca-cert-hash sha256:xxx"]
+    J1["在 k8s-infra 執行\nkubeadm join 192.168.50.201:6443\n--token xxx --discovery-token-ca-cert-hash sha256:xxx\n--cri-socket=unix:///run/crio/crio.sock"]
+    J2["在 k8s-worker 執行\nkubeadm join 192.168.50.201:6443\n--token xxx --discovery-token-ca-cert-hash sha256:xxx\n--cri-socket=unix:///run/crio/crio.sock"]
     J1 --> J2
     J2 --> CHK{"kubectl get nodes\n顯示 3 個 NotReady?"}
     CHK -- Yes --> DONE([Phase 4 完成\n等待 CNI 安裝])
@@ -132,11 +131,13 @@ flowchart LR
 ```mermaid
 flowchart TD
     S([安裝 Helm]) --> H1[helm repo add ingress-nginx]
-    H1 --> H2["helm install ingress-nginx\ningress-nginx/ingress-nginx\n--set nodeSelector.node-role=infra"]
+    H1 --> H2["helm install ingress-nginx\ningress-nginx/ingress-nginx\n--set nodeSelector node-role/infra"]
     H2 --> H3[kubectl apply -f metrics-server.yaml]
     H3 --> H4[helm repo add prometheus-community]
-    H4 --> H5["helm install kube-prometheus-stack\n--set grafana.nodeSelector.node-role=infra\n--set prometheus.nodeSelector.node-role=infra"]
-    H5 --> CHK{所有 Pod Running?}
+    H4 --> H5["helm install kube-prometheus-stack\nPrometheus + Grafana + Node-Exporter"]
+    H5 --> H6["helm install opensearch\nOpenSearch 日誌"]
+    H6 --> H7["helm install fluent-bit\nFluent-bit 日誌收集"]
+    H7 --> CHK{所有 Pod Running?}
     CHK -- Yes --> DONE([🎉 Cluster 完整建置完成])
     CHK -- No --> LOG[kubectl get pods -A\n找出失敗的 Pod]
 ```

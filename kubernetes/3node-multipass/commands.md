@@ -9,7 +9,7 @@ nav_order: 3
 
 > 建立日期：2026-04-11  
 > 分類：commands  
-> 環境：macOS 15 · Multipass 1.15 · Ubuntu 24.04 ARM64 · Kubernetes 1.32
+> 環境：macOS 15 · Multipass 1.15 · Ubuntu 24.04 ARM64 · Kubernetes 1.31
 
 ---
 
@@ -33,7 +33,7 @@ ifconfig en0 | grep "inet "
 multipass launch ubuntu:24.04 \
   --name k8s-master \
   --cpus 2 \
-  --memory 2.5G \
+  --memory 3G \
   --disk 30G \
   --network en0
 
@@ -41,7 +41,7 @@ multipass launch ubuntu:24.04 \
 multipass launch ubuntu:24.04 \
   --name k8s-infra \
   --cpus 2 \
-  --memory 2.5G \
+  --memory 3G \
   --disk 30G \
   --network en0
 
@@ -49,7 +49,7 @@ multipass launch ubuntu:24.04 \
 multipass launch ubuntu:24.04 \
   --name k8s-worker \
   --cpus 2 \
-  --memory 2G \
+  --memory 3G \
   --disk 40G \
   --network en0
 
@@ -92,21 +92,30 @@ net.ipv4.ip_forward                 = 1
 EOF
 sudo sysctl --system
 
-# 安裝 containerd
-sudo apt-get update && sudo apt-get install -y containerd
+# 安裝 cri-o（ARM64）
+VERSION="1.31"
+OS="xUbuntu_24.04"
+curl -fsSL https://pkgs.k8s.io/addons:/cri-o/stable/v${VERSION}/cri-o.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
 
-# 設定 containerd（啟用 SystemdCgroup）
-sudo mkdir -p /etc/containerd
-containerd config default | sudo tee /etc/containerd/config.toml
-sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-sudo systemctl restart containerd
-sudo systemctl enable containerd
+echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o/stable/v${VERSION}/ /" | \
+  sudo tee /etc/apt/sources.list.d/cri-o.list
+
+sudo apt-get update
+sudo apt-get install -y cri-o
+
+# 啟動並設定開機自動
+sudo systemctl start crio
+sudo systemctl enable crio
+
+# 驗證
+sudo systemctl status crio | grep Active
+crio --version
 
 # 安裝 kubeadm / kubelet / kubectl
 sudo apt-get install -y apt-transport-https ca-certificates curl gpg
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | \
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | \
   sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' | \
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' | \
   sudo tee /etc/apt/sources.list.d/kubernetes.list
 sudo apt-get update
 sudo apt-get install -y kubeadm kubelet kubectl
@@ -135,9 +144,10 @@ ip addr show ens4 | grep "inet "
 
 # 初始化 Cluster（替換 <MASTER_IP> 為上面取得的 192.168.50.x）
 sudo kubeadm init \
-  --apiserver-advertise-address=<MASTER_IP> \
+  --apiserver-advertise-address=192.168.50.201 \
   --pod-network-cidr=172.46.0.0/16 \
   --node-name=k8s-master \
+  --cri-socket=unix:///run/crio/crio.sock \
   --skip-phases=addon/kube-proxy
 
 # 設定 kubectl
@@ -161,10 +171,12 @@ multipass shell k8s-infra
 ```bash
 # ── 在 k8s-infra / k8s-worker 內部 ───────────────────
 # 貼上 Step 3 的 join command，加上 --node-name 參數
-sudo kubeadm join <MASTER_IP>:6443 \
+sudo kubeadm join 192.168.50.201:6443 \
   --token <TOKEN> \
   --discovery-token-ca-cert-hash sha256:<HASH> \
-  --node-name=k8s-infra   # k8s-worker 改成 k8s-worker
+  --node-name=k8s-infra \
+  --cri-socket=unix:///run/crio/crio.sock
+  # k8s-worker 改成 --node-name=k8s-worker
 ```
 
 ```bash
@@ -187,7 +199,7 @@ curl -L --fail --remote-name-all \
 sudo tar xzvfC cilium-linux-arm64.tar.gz /usr/local/bin
 rm cilium-linux-arm64.tar.gz
 
-# 透過 Helm 安裝 Cilium（使用自訂 Pod CIDR）
+# 透過 Helm 安裝 Cilium（使用 172.46.0.0/16 Pod CIDR）
 helm repo add cilium https://helm.cilium.io/
 helm repo update
 helm install cilium cilium/cilium \
@@ -227,7 +239,7 @@ kubectl get nodes --show-labels
 
 ---
 
-## Step 7：安裝 Helm 與基礎設施服務
+## Step 7：安裝基礎設施服務（Prometheus + Grafana + OpenSearch + Fluent-bit）
 
 ```bash
 # 安裝 Helm（在 Mac 執行）
@@ -238,29 +250,81 @@ multipass transfer k8s-master:/home/ubuntu/.kube/config ~/.kube/config-macmini
 export KUBECONFIG=~/.kube/config-macmini
 ```
 
+### 7-1：Ingress Controller（nginx）
+
 ```bash
-# ── Ingress Controller（nginx）────────────────────────
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
 helm repo update
 helm install ingress-nginx ingress-nginx/ingress-nginx \
   --namespace ingress-nginx --create-namespace \
-  --set controller.nodeSelector."node-type"=infra \
+  --set controller.nodeSelector."node-role\.kubernetes\.io/infra"="" \
   --set controller.service.type=NodePort
+```
 
-# ── Metrics Server ────────────────────────────────────
+### 7-2：Metrics Server
+
+```bash
 kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 # ARM64 需加啟動參數
 kubectl patch deployment metrics-server -n kube-system \
   --type=json \
   -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+```
 
-# ── kube-prometheus-stack（Prometheus + Grafana）──────
+### 7-3：kube-prometheus-stack（Prometheus + Grafana）
+
+```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   --namespace monitoring --create-namespace \
-  --set prometheus.prometheusSpec.nodeSelector."node-type"=infra \
-  --set grafana.nodeSelector."node-type"=infra
+  --set prometheus.prometheusSpec.nodeSelector."node-role\.kubernetes\.io/infra"="" \
+  --set grafana.nodeSelector."node-role\.kubernetes\.io/infra"=""
+```
+
+### 7-4：Node Exporter
+
+```bash
+helm install node-exporter prometheus-community/prometheus-node-exporter \
+  --namespace monitoring
+```
+
+### 7-5：OpenSearch
+
+```bash
+helm repo add opensearch https://opensearch-project.github.io/helm-charts
+helm repo update
+
+helm install opensearch opensearch/opensearch \
+  --namespace logging --create-namespace \
+  --set nodeSelector."node-role\.kubernetes\.io/infra"="" \
+  --set replicas=1 \
+  --set resources.requests.memory="512Mi" \
+  --set resources.limits.memory="1Gi"
+```
+
+### 7-6：Fluent-bit
+
+```bash
+helm repo add fluent https://fluent.github.io/helm-charts
+helm repo update
+
+helm install fluent-bit fluent/fluent-bit \
+  --namespace logging \
+  --set config.outputs.opensearch.enabled=true \
+  --set config.outputs.opensearch.host=opensearch.logging.svc.cluster.local \
+  --set config.outputs.opensearch.port=9200
+```
+
+### 驗證所有服務
+
+```bash
+# 確認所有 Pod Running
+kubectl get pods -A
+
+# Grafana 存取（Port Forward）
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
+# 瀏覽器開 http://localhost:3000（預設帳密 admin / prom-operator）
 ```
 
 ---
