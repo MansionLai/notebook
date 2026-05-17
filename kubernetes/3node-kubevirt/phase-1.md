@@ -184,12 +184,12 @@ kubectl version --client --short 2>/dev/null
 > 3. 產生 `admin.conf`（kubectl 的認證設定）
 > 4. 輸出 `kubeadm join` 指令（含 token 和 CA hash，供 worker/infra 使用）
 >
-> `--pod-network-cidr=10.244.0.0/16` 是給 Cilium 使用的 Pod IP 段（不與 VM subnet 衝突）。
+> `--pod-network-cidr=172.46.0.0/16` 是給 Cilium 使用的 Pod IP 段（不與 VM subnet 衝突）。
 
 ```bash
 sudo kubeadm init \
   --apiserver-advertise-address=10.10.10.11 \
-  --pod-network-cidr=10.244.0.0/16
+  --pod-network-cidr=172.46.0.0/16
 ```
 
 > ⏱ 需約 3-5 分鐘，等待完成
