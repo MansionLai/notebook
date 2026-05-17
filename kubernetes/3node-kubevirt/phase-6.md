@@ -207,3 +207,4 @@ ping 8.8.8.8               # ❌ Azure NAT GW 不支援 ICMP（正常）
 | Worker vmbr0 MAC 不對 | vmbr0 bridge 預設 MAC ≠ eth1 registered MAC → Azure 不回 ARP | netplan 設 `macaddress: 7c:1e:52:4d:3b:a4` on vmbr0 |
 | VM outbound 無法連外 | 10.10.100.0/24 subnet 未設定 NAT Gateway | Azure Portal → 建立 NAT Gateway + 關聯 subnet |
 | ping 8.8.8.8 不通（VM 內） | Azure NAT Gateway 不支援 ICMP | 正常，改用 curl/TCP 驗證 |
+| VMI 卡在 `Scheduled/CrashLoopBackOff`，事件含 `failed to configure vmi network ... pod link (...) is missing` | virt-handler 在設定 secondary network（Multus bridge）時找不到預期 pod link，常見於重建後網路狀態不同步 | 先確認 `kube-multus-ds` 與 `multi-networkpolicy-ds-amd64` 在 worker 正常，再重建 VM/VMI（`kubectl delete vm ub24-01 -n vmworkloads && 重新 apply`）並重新檢查 worker `vmbr0` policy routing |

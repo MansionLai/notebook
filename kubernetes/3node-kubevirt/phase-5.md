@@ -256,6 +256,7 @@ virtctl version --client
 | `kubeadm init` 失敗 — sandbox image 不一致 | CRI-O 預設已對應正確 pause image，通常不會出現此問題 | 若出現，檢查 `/etc/crio/crio.conf` 的 `pause_image` |
 | CoreDNS Pending | 未安裝 CNI | 先裝 Cilium，CoreDNS 才會 Running |
 | virt-api/controller 一直排程到 worker | Infra 節點未標記或無 toleration | 在 KubeVirt CR 的 customizeComponents 加 toleration + nodeSelector (kubevirt-management=true) |
+| virt-api Pending（`didn't match Pod's node affinity/selector`） | KubeVirt 內建 affinity 要求 control-plane/master，但自訂又加了 `kubevirt-management=true`；若只有 infra 有此 label，條件交集為空 | 補上 `kubectl label node mansion-kubevirt-master kubevirt-management=true`，或改為不與內建 affinity 衝突的 selector |
 | Worker bridge 模式流量被丟棄 | Azure NIC MAC filtering | Portal → NIC (eth1) → Enable IP Forwarding |
 
 ---

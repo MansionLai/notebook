@@ -361,3 +361,34 @@ kubectl exec -n monitoring opensearch-cluster-master-0 -- \
 ```
 
 ---
+
+## 踩坑記錄（Phase 4）
+
+| 問題 | 原因 | 解法 |
+|------|------|------|
+| Prometheus / OpenSearch 卡在 `Init` 或 `MountDevice failed`，訊息含 `driver name rook-ceph.rbd.csi.ceph.com not found` | Ceph RBD node plugin 沒有在 infra 節點註冊（`csi-rbdplugin` 未覆蓋到 infra/control-plane） | patch `rook-ceph/csi-rbdplugin` DaemonSet 加上 infra/control-plane toleration，確認 3 節點都有 `csi-rbdplugin` 後再重建 stateful pod |
+| OpenSearch 啟動探針短時間 `connection refused` | JVM/插件初始化需要時間，啟動期較長 | 先確認 PVC 已 Bound 與 CSI 正常，再用 condition wait 等待 pod Ready，避免用固定 sleep 判斷失敗 |
+
+### 參考修復指令
+
+```bash
+# 讓 rbd node plugin 能跑在 infra/control-plane
+kubectl patch daemonset csi-rbdplugin -n rook-ceph --type merge -p '{
+  "spec": {
+    "template": {
+      "spec": {
+        "tolerations": [
+          {"key":"node-role.kubernetes.io/control-plane","operator":"Exists","effect":"NoSchedule"},
+          {"key":"node-role.kubernetes.io/infra","operator":"Exists","effect":"NoSchedule"}
+        ]
+      }
+    }
+  }
+}'
+
+# 重建 Stateful Pod
+kubectl delete pod -n monitoring prometheus-kube-prometheus-stack-prometheus-0 --force --grace-period=0
+kubectl delete pod -n monitoring opensearch-cluster-master-0 --force --grace-period=0
+```
+
+---
