@@ -1,5 +1,0 @@
----
-ceph_location:
-  datacenter: dc1
-  room: room1
-  rack: rack1
