@@ -1,0 +1,17 @@
+# Ceph 3-node cluster inventory
+# MON nodes also serve as admin nodes (can execute ceph commands)
+
+[ceph_mon]
+ceph-node-01 ansible_host=20.222.22.46 ceph_public_ip=10.10.10.21
+ceph-node-02 ansible_host=20.210.236.64 ceph_public_ip=10.10.10.22
+ceph-node-03 ansible_host=20.46.183.80 ceph_public_ip=10.10.10.23
+
+[ceph_osd]
+ceph-node-01 ansible_host=20.222.22.46 ceph_public_ip=10.10.10.21 ceph_cluster_ip=172.10.10.21
+ceph-node-02 ansible_host=20.210.236.64 ceph_public_ip=10.10.10.22 ceph_cluster_ip=172.10.10.22
+ceph-node-03 ansible_host=20.46.183.80 ceph_public_ip=10.10.10.23 ceph_cluster_ip=172.10.10.23
+
+# Convenience group: all nodes for common setup
+[ceph_nodes:children]
+ceph_mon
+ceph_osd

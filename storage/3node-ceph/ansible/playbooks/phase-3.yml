@@ -1,5 +1,5 @@
 - name: Phase 3 | Ceph cluster bootstrap
-  hosts: ceph_admin
+  hosts: ceph_mon
   gather_facts: true
   become: true
   roles:

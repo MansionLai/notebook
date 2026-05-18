@@ -21,32 +21,32 @@
   ansible.builtin.stat:
     path: /usr/bin/ceph
   register: ceph_cli_binary
-  when: inventory_hostname == groups['ceph_admin'][0]
+  when: inventory_hostname == groups['ceph_mon'][0]
 
 - name: Add Ceph repository on admin node
   ansible.builtin.command: /usr/local/bin/cephadm add-repo --version {{ ceph_version }}
   when:
-    - inventory_hostname == groups['ceph_admin'][0]
+    - inventory_hostname == groups['ceph_mon'][0]
     - not ceph_cli_binary.stat.exists
 
 - name: Install ceph-common on admin node
   ansible.builtin.command: /usr/local/bin/cephadm install ceph-common
   when:
-    - inventory_hostname == groups['ceph_admin'][0]
+    - inventory_hostname == groups['ceph_mon'][0]
     - not ceph_cli_binary.stat.exists
 
 - name: Check ceph CLI version on admin node
   ansible.builtin.command: ceph --version
   register: ceph_cli_version
   changed_when: false
-  when: inventory_hostname == groups['ceph_admin'][0]
+  when: inventory_hostname == groups['ceph_mon'][0]
 
 - name: Enforce ceph version on admin node
   ansible.builtin.assert:
     that:
       - "'ceph version {{ ceph_version }}' in ceph_cli_version.stdout"
     fail_msg: "Installed ceph version does not match required {{ ceph_version }}."
-  when: inventory_hostname == groups['ceph_admin'][0]
+  when: inventory_hostname == groups['ceph_mon'][0]
 
 - name: Disable swap immediately
   ansible.builtin.command: swapoff -a
@@ -80,21 +80,21 @@
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0700"
-  when: inventory_hostname == groups['ceph_admin'][0]
+  when: inventory_hostname == groups['ceph_mon'][0]
 
 - name: Generate cephadm SSH keypair on admin node
   ansible.builtin.command: ssh-keygen -t rsa -b 4096 -N "" -f /home/{{ ansible_user }}/.ssh/id_rsa
   args:
     creates: /home/{{ ansible_user }}/.ssh/id_rsa
   become_user: "{{ ansible_user }}"
-  when: inventory_hostname == groups['ceph_admin'][0]
+  when: inventory_hostname == groups['ceph_mon'][0]
 
 - name: Read admin public key
   ansible.builtin.slurp:
     src: /home/{{ ansible_user }}/.ssh/id_rsa.pub
   register: ceph_admin_pubkey
   run_once: true
-  delegate_to: "{{ groups['ceph_admin'][0] }}"
+  delegate_to: "{{ groups['ceph_mon'][0] }}"
 
 - name: Authorize admin key on all Ceph nodes
   ansible.posix.authorized_key:
@@ -109,10 +109,10 @@
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0600"
-  when: inventory_hostname == groups['ceph_admin'][0]
+  when: inventory_hostname == groups['ceph_mon'][0]
 
 - name: Verify passwordless SSH from admin node
   ansible.builtin.command: ssh -i /home/{{ ansible_user }}/.ssh/id_rsa -l {{ ansible_user }} -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {{ item }} hostname
   loop: "{{ groups['ceph_nodes'] }}"
   changed_when: false
-  when: inventory_hostname == groups['ceph_admin'][0]
+  when: inventory_hostname == groups['ceph_mon'][0]

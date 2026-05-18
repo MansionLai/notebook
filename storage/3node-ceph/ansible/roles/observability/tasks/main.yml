@@ -61,7 +61,7 @@
     owner: root
     group: root
     mode: "0644"
-  when: inventory_hostname in groups['ceph_admin']
+  when: inventory_hostname in groups['ceph_mon']
 
 - name: Install node exporter
   ansible.builtin.apt:
@@ -87,7 +87,7 @@
     owner: root
     group: root
     mode: "0755"
-  when: inventory_hostname in groups['ceph_admin']
+  when: inventory_hostname in groups['ceph_mon']
 
 - name: Render Prometheus agent config
   ansible.builtin.template:
@@ -96,7 +96,7 @@
     owner: root
     group: root
     mode: "0644"
-  when: inventory_hostname in groups['ceph_admin']
+  when: inventory_hostname in groups['ceph_mon']
 
 - name: Install Prometheus agent systemd unit
   ansible.builtin.template:
@@ -105,7 +105,7 @@
     owner: root
     group: root
     mode: "0644"
-  when: inventory_hostname in groups['ceph_admin']
+  when: inventory_hostname in groups['ceph_mon']
 
 - name: Reload systemd
   ansible.builtin.systemd:
@@ -116,11 +116,11 @@
     name: prometheus-agent
     enabled: true
     state: started
-  when: inventory_hostname in groups['ceph_admin']
+  when: inventory_hostname in groups['ceph_mon']
 
 - name: Start ceph-exporter
   ansible.builtin.service:
     name: ceph-exporter
     enabled: true
     state: started
-  when: inventory_hostname in groups['ceph_admin']
+  when: inventory_hostname in groups['ceph_mon']
