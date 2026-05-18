@@ -42,7 +42,7 @@ ansible-playbook playbooks/phase-2.yml
 - 安裝 `docker.io`、`lvm2`、Python 相關先決條件
 - 啟動並設為開機自動啟動 Docker
 - 下載 `cephadm`
-- 在 `ceph-node-01` 安裝 `ceph-common`
+- 在 **所有 `ceph_mon` 節點**（`ceph-node-01`、`ceph-node-02`、`ceph-node-03`）安裝 `ceph-common`，讓三台節點都能執行 `ceph` CLI
 - 關閉 swap 並註解 `/etc/fstab` 內的 swap entry
 - 寫入 Ceph lab 用 sysctl 設定
 - 在 `ceph-node-01` 建立 cephadm SSH key
@@ -66,7 +66,7 @@ cd storage/3node-ceph/ansible
 ansible ceph_nodes -m command -a "docker --version"
 ansible ceph_nodes -m command -a "systemctl is-active docker"
 ansible ceph_nodes -m command -a "/usr/local/bin/cephadm version"
-ansible ceph_admin -m command -a "ceph --version"
+ansible ceph_mon -m command -a "ceph --version"
 ansible ceph_nodes -m command -a "free -h"
 
 ssh ubuntu@<ceph-node-01-public-ip> "ssh -o BatchMode=yes ceph-node-02 hostname"
@@ -76,7 +76,7 @@ ssh ubuntu@<ceph-node-01-public-ip> "ssh -o BatchMode=yes ceph-node-03 hostname"
 預期結果：
 
 - 三台都有 Docker 與 cephadm
-- `ceph-node-01` 有 `ceph` CLI
+- **三台 `ceph_mon` 節點都有 `ceph` CLI**（`ceph-node-01`、`ceph-node-02`、`ceph-node-03`）
 - `Swap` 顯示為 0
 - `ceph-node-01` 可無密碼 SSH 到其他兩台
 
