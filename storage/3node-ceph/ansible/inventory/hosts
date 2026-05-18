@@ -7,9 +7,16 @@ ceph-node-02 ansible_host=20.210.236.64 ceph_public_ip=10.10.10.22
 ceph-node-03 ansible_host=20.46.183.80 ceph_public_ip=10.10.10.23
 
 [ceph_osd]
-ceph-node-01 ansible_host=20.222.22.46 ceph_public_ip=10.10.10.21 ceph_cluster_ip=172.10.10.21
-ceph-node-02 ansible_host=20.210.236.64 ceph_public_ip=10.10.10.22 ceph_cluster_ip=172.10.10.22
-ceph-node-03 ansible_host=20.46.183.80 ceph_public_ip=10.10.10.23 ceph_cluster_ip=172.10.10.23
+ceph-node-01 ansible_host=20.222.22.46 ceph_public_ip=10.10.10.21 ceph_cluster_ip=172.10.10.21 rack=rack1
+ceph-node-02 ansible_host=20.210.236.64 ceph_public_ip=10.10.10.22 ceph_cluster_ip=172.10.10.22 rack=rack2
+ceph-node-03 ansible_host=20.46.183.80 ceph_public_ip=10.10.10.23 ceph_cluster_ip=172.10.10.23 rack=rack3
+
+[ceph_osd:vars]
+datacenter=dc1
+room=room1
+ceph_osd_devices:
+  - /dev/disk/azure/scsi1/lun0
+  - /dev/disk/azure/scsi1/lun1
 
 # Convenience group: all nodes for common setup
 [ceph_nodes:children]
