@@ -1,0 +1,5 @@
+---
+# OSD device list (common for all OSD nodes)
+ceph_osd_devices:
+  - /dev/disk/azure/scsi1/lun0
+  - /dev/disk/azure/scsi1/lun1
