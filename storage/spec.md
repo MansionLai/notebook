@@ -22,7 +22,7 @@ AI agent 請盡可能使用azure mcp來操作azure, 非必要不要使用az comm
          - datacenter: dc1
          - room: room1
          - rack: rack1
-     - Infra node
+     - ceph node 2
        - Standard_D4s_v4 (4C/16G)
        - os ip: 10.10.10.22/24
        - ceph cluster ip: 172.10.10.22/24
@@ -31,7 +31,7 @@ AI agent 請盡可能使用azure mcp來操作azure, 非必要不要使用az comm
          - datacenter: dc1
          - room: room1
          - rack: rack2
-     - Worker node
+     - ceph node 3
        - Standard_D4s_v4 (4C/16G)
        - os ip: 10.10.10.23/24
        - ceph cluster ip: 172.10.10.23/24
