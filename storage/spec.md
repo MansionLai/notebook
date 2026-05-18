@@ -9,6 +9,8 @@ AI agent 請盡可能使用azure mcp來操作azure, 非必要不要使用az comm
      - 如果是需要跟其他resource共用的物件, 請放在mansion-shared-resource下
    - VM Spec
      - 透過azure cloud建立三台 ubuntu 22.04 vm, 每台都有 MON + MGR + OSD
+     - all node都要可以執行ceph command (e.g. ceph -s)
+     - container runtime先使用docker (未來可能會替換成podman)
      - os public ip segment = 10.10.10.0/24 (希望跟我另個kubernetes專案中的三台vm是在同個segment下且互通)
      - cluster private network = 172.10.10.0/24 (僅需ceph vm可以互通即可)
      - 用以學習ceph installation + ceph trouble shooting
