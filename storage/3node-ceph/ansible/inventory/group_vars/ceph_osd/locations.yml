@@ -1,0 +1,17 @@
+---
+# CRUSH map location hierarchy for OSD nodes
+# Format: hostname -> {datacenter, room, rack}
+
+ceph_osd_locations:
+  ceph-node-01:
+    datacenter: dc1
+    room: room1
+    rack: rack1
+  ceph-node-02:
+    datacenter: dc1
+    room: room1
+    rack: rack2
+  ceph-node-03:
+    datacenter: dc1
+    room: room1
+    rack: rack3

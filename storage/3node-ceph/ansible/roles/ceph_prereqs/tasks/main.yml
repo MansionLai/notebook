@@ -21,32 +21,32 @@
   ansible.builtin.stat:
     path: /usr/bin/ceph
   register: ceph_cli_binary
-  when: inventory_hostname == groups['ceph_mon'][0]
+  when: inventory_hostname in groups['ceph_mon']
 
-- name: Add Ceph repository on admin node
+- name: Add Ceph repository on all ceph_mon nodes
   ansible.builtin.command: /usr/local/bin/cephadm add-repo --version {{ ceph_version }}
   when:
-    - inventory_hostname == groups['ceph_mon'][0]
+    - inventory_hostname in groups['ceph_mon']
     - not ceph_cli_binary.stat.exists
 
-- name: Install ceph-common on admin node
+- name: Install ceph-common on all ceph_mon nodes
   ansible.builtin.command: /usr/local/bin/cephadm install ceph-common
   when:
-    - inventory_hostname == groups['ceph_mon'][0]
+    - inventory_hostname in groups['ceph_mon']
     - not ceph_cli_binary.stat.exists
 
-- name: Check ceph CLI version on admin node
+- name: Check ceph CLI version on all ceph_mon nodes
   ansible.builtin.command: ceph --version
   register: ceph_cli_version
   changed_when: false
-  when: inventory_hostname == groups['ceph_mon'][0]
+  when: inventory_hostname in groups['ceph_mon']
 
-- name: Enforce ceph version on admin node
+- name: Enforce ceph version on all ceph_mon nodes
   ansible.builtin.assert:
     that:
       - "'ceph version {{ ceph_version }}' in ceph_cli_version.stdout"
     fail_msg: "Installed ceph version does not match required {{ ceph_version }}."
-  when: inventory_hostname == groups['ceph_mon'][0]
+  when: inventory_hostname in groups['ceph_mon']
 
 - name: Disable swap immediately
   ansible.builtin.command: swapoff -a
