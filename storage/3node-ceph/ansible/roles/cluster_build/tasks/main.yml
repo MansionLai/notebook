@@ -6,6 +6,8 @@
   ansible.builtin.stat:
     path: /etc/ceph/ceph.conf
   register: ceph_cluster_bootstrapped
+  run_once: true
+  delegate_to: "{{ groups['ceph_mon'][0] }}"
 
 - name: Bootstrap Ceph cluster on first MON node
   ansible.builtin.command: >
@@ -33,7 +35,6 @@
     flat: yes
   run_once: true
   delegate_to: "{{ groups['ceph_mon'][0] }}"
-  when: not ceph_cluster_bootstrapped.stat.exists
 
 - name: Copy ceph.conf to all MON nodes
   ansible.builtin.copy:
@@ -42,9 +43,7 @@
     owner: root
     group: root
     mode: "0644"
-  when:
-    - inventory_hostname in groups['ceph_mon']
-    - not ceph_cluster_bootstrapped.stat.exists
+  when: inventory_hostname in groups['ceph_mon']
 
 - name: Distribute admin keyring to all MON nodes for CLI access
   ansible.builtin.fetch:
@@ -53,7 +52,6 @@
     flat: yes
   run_once: true
   delegate_to: "{{ groups['ceph_mon'][0] }}"
-  when: not ceph_cluster_bootstrapped.stat.exists
 
 - name: Copy admin keyring to all MON nodes
   ansible.builtin.copy:
@@ -62,9 +60,7 @@
     owner: root
     group: root
     mode: "0600"
-  when:
-    - inventory_hostname in groups['ceph_mon']
-    - not ceph_cluster_bootstrapped.stat.exists
+  when: inventory_hostname in groups['ceph_mon']
 
 # =================================================================
 # SECTION 3: Cluster Orchestration (Only on first MON node)
@@ -302,7 +298,7 @@
 - name: Enforce Ceph daemon version
   ansible.builtin.assert:
     that:
-      - "'ceph version {{ ceph_version }}' in ceph_versions_json.stdout"
+      - ceph_versions_json.stdout is search('ceph version ' ~ ceph_version)
     fail_msg: "Ceph daemon versions do not match required {{ ceph_version }}."
   run_once: true
   delegate_to: "{{ groups['ceph_mon'][0] }}"

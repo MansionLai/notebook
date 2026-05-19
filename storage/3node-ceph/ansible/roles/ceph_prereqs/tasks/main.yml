@@ -44,7 +44,7 @@
 - name: Enforce ceph version on all ceph_mon nodes
   ansible.builtin.assert:
     that:
-      - "'ceph version {{ ceph_version }}' in ceph_cli_version.stdout"
+      - ceph_cli_version.stdout is search('ceph version ' ~ ceph_version)
     fail_msg: "Installed ceph version does not match required {{ ceph_version }}."
   when: inventory_hostname in groups['ceph_mon']
 
