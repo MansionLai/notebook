@@ -46,13 +46,13 @@ ansible-playbook playbooks/phase-5.yml
 
 ## 這個 Phase 的 role 會做什麼
 
-- 在 `ceph-node-01` 安裝並啟用 `ceph-exporter`
-- 在三台節點安裝並啟用 `prometheus-node-exporter`
-- 在三台節點安裝並設定 `fluent-bit`
-- 在 `ceph-node-01` 部署 Prometheus agent（remote_write 模式）
-  - 抓取 node-exporter + ceph-exporter metrics
-  - 轉送到 `vault_prometheus_agent_remote_write_url`
-- fluent-bit 將 `/var/log/syslog`、`/var/log/kern.log`、`/var/log/ceph/*.log` 送到 OpenSearch
+- **在三個 Ceph 節點上安裝 `prometheus-node-exporter`**，抓取 OS-level metrics（CPU、Memory、Disk、Network）
+- **在 `ceph-node-01` 安裝並啟用 `ceph-exporter`**，抓取 Ceph cluster metrics
+- **在三個節點安裝並設定 `fluent-bit`**，收集 syslog、kernel log 與 Ceph daemon logs
+- **在 `ceph-node-01` 部署 Prometheus agent**（remote_write 模式）
+  - 聚合 node-exporter + ceph-exporter 的 metrics
+  - 轉送到既有 Kubernetes 環境的 Prometheus（`vault_prometheus_agent_remote_write_url`）
+- fluent-bit 將日誌送到既有 Kubernetes 環境的 OpenSearch（`vault_fluent_bit_opensearch_*` 憑證）
 
 對應檔案：
 
@@ -66,25 +66,31 @@ storage/3node-ceph/ansible/roles/observability/
 ## 驗證方式
 
 ```bash
-# exporters
-ssh ubuntu@<ceph-node-01-public-ip> "sudo systemctl status ceph-exporter --no-pager"
+# exporters on all three nodes
 ssh ubuntu@<ceph-node-01-public-ip> "sudo systemctl status prometheus-node-exporter --no-pager"
 ssh ubuntu@<ceph-node-02-public-ip> "sudo systemctl status prometheus-node-exporter --no-pager"
 ssh ubuntu@<ceph-node-03-public-ip> "sudo systemctl status prometheus-node-exporter --no-pager"
 
-# prometheus agent + fluent-bit
+# ceph-exporter (ceph-node-01 only)
+ssh ubuntu@<ceph-node-01-public-ip> "sudo systemctl status ceph-exporter --no-pager"
+
+# prometheus agent + fluent-bit (ceph-node-01 only)
 ssh ubuntu@<ceph-node-01-public-ip> "sudo systemctl status prometheus-agent --no-pager"
 ssh ubuntu@<ceph-node-01-public-ip> "sudo systemctl status fluent-bit --no-pager"
 
-# OpenSearch document check (from your OpenSearch endpoint)
-curl -u "<user>:<password>" "https://<opensearch-host>:9200/_cat/indices?v" | grep ceph-lab
+# Verify fluent-bit can connect to OpenSearch (from any node or ceph-node-01)
+curl -u "<vault_fluent_bit_opensearch_username>:<vault_fluent_bit_opensearch_password>" \
+  "https://<vault_fluent_bit_opensearch_host>:9200/_cat/indices?v" | grep ceph
+
+# Check Prometheus has scraped metrics (verify remote_write URL is reachable)
+ssh ubuntu@<ceph-node-01-public-ip> "sudo curl -s http://localhost:9090/api/v1/query?query=node_cpu_seconds_total | jq '.data.result | length'"
 ```
 
----
+預期結果：
 
-## Troubleshooting
-
-- `Please set prometheus/opensearch endpoint variables`：先補齊 `inventory/group_vars` 內的 endpoint 參數
-- `ceph-exporter` 無法啟動：確認 `ceph-node-01` 上已有 `ceph` CLI 與 `/etc/ceph` 設定
-- `prometheus-agent` 無資料：確認 remote_write URL 與認證是否正確
-- OpenSearch 無資料：確認 fluent-bit 可連線到 OpenSearch 端點與帳密權限
+- 三個 `prometheus-node-exporter` 都 active
+- `ceph-exporter` active（ceph-node-01）
+- `prometheus-agent` active（ceph-node-01）
+- `fluent-bit` active（ceph-node-01）
+- OpenSearch 內出現 ceph-lab 相關 index
+- Prometheus 能查詢到 node metrics

@@ -36,15 +36,19 @@ ansible-playbook playbooks/phase-3.yml
 ## 這個 Phase 的 role 會做什麼
 
 - 若尚未 bootstrap，於 `ceph-node-01` 執行 `cephadm bootstrap`
-- 設定 `public_network` 與 `cluster_network`
-- 將 `ceph-node-02`、`ceph-node-03` 加入 orchestrator
+  - 使用 public NIC (`10.10.10.21`) 作為 bootstrap 節點
+  - 配置 `public_network = 10.10.10.0/24`
+  - 配置 `cluster_network = 172.10.10.0/24`
+- 將 `ceph-node-02`、`ceph-node-03` 加入 orchestrator（使用各自的 cluster 網卡地址）
 - 套用 3-node MON placement
 - 套用 3-node MGR placement
 - 針對 inventory / host vars 內定義的 `ceph_osd_devices` 加入 OSD
+- 設定 CRUSH map 的 failure domain 為 `rack`（使用 locations.yml 內定義的 datacenter/room/rack）
 - 等待 cluster 達到：
   - 3 MON
   - 6 OSD up
   - 6 OSD in
+  - All PGs active+clean
 
 對應檔案：
 
@@ -65,15 +69,22 @@ ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph orch host ls"
 ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph mon stat"
 ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph orch ps --daemon-type mgr"
 ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph osd tree"
+ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph config get mon public_network"
+ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph config get mon cluster_network"
+ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph crush rule dump replicated_rule"
 ```
 
 預期結果：
 
-- 3 hosts 都在 orchestrator
+- 3 hosts 都在 orchestrator（含 cluster IP 地址 172.10.10.x）
 - MON quorum 為 3
 - MGR active + standbys 正常
 - `osd: 6 osds: 6 up, 6 in`
+- `public_network = 10.10.10.0/24`
+- `cluster_network = 172.10.10.0/24`
+- CRUSH rule 內 failure domain 為 `rack`
 - Dashboard 預設在 `https://ceph-node-01:8443/`
+- All PGs 進入 `active+clean` 狀態
 
 ---
 

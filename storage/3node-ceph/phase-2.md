@@ -69,8 +69,13 @@ ansible ceph_nodes -m command -a "/usr/local/bin/cephadm version"
 ansible ceph_mon -m command -a "ceph --version"
 ansible ceph_nodes -m command -a "free -h"
 
+# Verify passwordless SSH
 ssh ubuntu@<ceph-node-01-public-ip> "ssh -o BatchMode=yes ceph-node-02 hostname"
 ssh ubuntu@<ceph-node-01-public-ip> "ssh -o BatchMode=yes ceph-node-03 hostname"
+
+# Network connectivity verification (before cluster bootstrap)
+ssh ubuntu@<ceph-node-01-public-ip> "ping -c 2 172.10.10.22"
+ssh ubuntu@<ceph-node-01-public-ip> "ping -c 2 172.10.10.23"
 ```
 
 預期結果：
@@ -79,6 +84,7 @@ ssh ubuntu@<ceph-node-01-public-ip> "ssh -o BatchMode=yes ceph-node-03 hostname"
 - **三台 `ceph_mon` 節點都有 `ceph` CLI**（`ceph-node-01`、`ceph-node-02`、`ceph-node-03`）
 - `Swap` 顯示為 0
 - `ceph-node-01` 可無密碼 SSH 到其他兩台
+- **ceph-node-01 可 ping 通 cluster segment 另外兩個節點**（172.10.10.22、172.10.10.23）
 
 ---
 

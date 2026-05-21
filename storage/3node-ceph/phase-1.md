@@ -44,6 +44,9 @@ ansible-playbook playbooks/phase-1.yml
 - 將 hostname 設為 `ceph-node-01` ~ `ceph-node-03`
 - 以 template 管理 `/etc/hosts`
 - 驗證每台節點都有對應的 public / cluster IP
+  - **Public NIC 預期在 `10.10.10.0/24` segment** (`.21`, `.22`, `.23`)
+  - **Cluster NIC 預期在 `172.10.10.0/24` segment** (`.21`, `.22`, `.23`)
+- 驗證雙網卡可互通（ping 測試）
 - 驗證 inventory 內定義的 `ceph_osd_devices` 存在且仍為空白 OSD 磁碟
 - 確保 `chrony` 啟用
 - 在 lab 環境關閉 `ufw`
@@ -70,13 +73,28 @@ ansible ceph_nodes -m command -a "ip addr show"
 ansible ceph_nodes -m command -a "lsblk"
 ansible ceph_nodes -m command -a "chronyc tracking"
 ansible ceph_nodes -m command -a "ufw status"
+
+# Network validation - Public segment (10.10.10.0/24)
+ansible ceph_nodes -m command -a "ip route show | grep 10.10.10"
+ansible ceph_nodes -m command -a "ping -c 1 10.10.10.21"
+ansible ceph_nodes -m command -a "ping -c 1 10.10.10.22"
+ansible ceph_nodes -m command -a "ping -c 1 10.10.10.23"
+
+# Network validation - Cluster segment (172.10.10.0/24)
+ansible ceph_nodes -m command -a "ip route show | grep 172.10.10"
+ansible ceph_nodes -m command -a "ping -c 1 172.10.10.21"
+ansible ceph_nodes -m command -a "ping -c 1 172.10.10.22"
+ansible ceph_nodes -m command -a "ping -c 1 172.10.10.23"
 ```
 
 預期結果：
 
 - 三台節點 hostname 正確
 - `/etc/hosts` 含 public / cluster 對照
-- `10.10.10.x` 與 `172.10.10.x` 都存在於對應節點
+- `10.10.10.21`、`10.10.10.22`、`10.10.10.23` 都存在於對應節點的 public NIC
+- `172.10.10.21`、`172.10.10.22`、`172.10.10.23` 都存在於對應節點的 cluster NIC
+- 三個節點可互相 ping 對方的 public IP（10.10.10.x ↔ 10.10.10.x）
+- 三個節點可互相 ping 對方的 cluster IP（172.10.10.x ↔ 172.10.10.x）
 - `ceph_osd_devices` 內指定的裝置存在且還沒被 Ceph 使用
 - `chrony` 正常
 - `ufw` 為 inactive 或 disabled

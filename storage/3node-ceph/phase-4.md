@@ -40,13 +40,13 @@ ansible-playbook playbooks/phase-4.yml
 
 ## 這個 Phase 的 role 會做什麼
 
-- Cluster 層級操作會由 `ceph_mon[0]` 執行一次（避免三台 MON 重複執行同一組 pool 指令）
-- 建立 `k8s_rbd_pool`
-- 設定 `size=3`、`min_size=1`
+- **所有池/集群層級操作由 `ceph_mon[0]` 單次執行**（透過 `run_once: true` + `delegate_to` 避免重複）
+- 建立 `k8s_rbd_pool`（name、pg_num/pgp_num 取自 `all.yml`）
+- 設定 `size=3`、`min_size=1`（符合 3-node 環境與 spec 要求）
 - 啟用 `rbd` application
 - 執行 `rbd pool init`
-- 建立 `test-image`
-- 驗證 pool detail、image info 與 PG 狀態
+- 建立 `test-image`（用於驗證 RBD 功能）
+- 驗證 pool detail、image info 與 PG 狀態達到 `active+clean`
 
 對應檔案：
 
