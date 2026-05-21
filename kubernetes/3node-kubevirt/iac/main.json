@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.43.1.21952",
-      "templateHash": "7920249328784067252"
+      "version": "0.43.8.12551",
+      "templateHash": "7920248477108607962"
     }
   },
   "parameters": {
@@ -32,16 +32,9 @@
     },
     "k8sSubnetName": {
       "type": "string",
-      "defaultValue": "mansion_kubevirt_node_subnet",
+      "defaultValue": "shared-node-subnet",
       "metadata": {
-        "description": "Name of the new K8s node subnet."
-      }
-    },
-    "k8sSubnetPrefix": {
-      "type": "string",
-      "defaultValue": "10.10.11.0/24",
-      "metadata": {
-        "description": "CIDR for the K8s node subnet."
+        "description": "Name of the existing shared node subnet (in mansion-shared-vnet)."
       }
     },
     "kubevirtSubnetName": {
@@ -140,21 +133,21 @@
     },
     "masterPrivateIp": {
       "type": "string",
-      "defaultValue": "10.10.11.11",
+      "defaultValue": "10.10.10.11",
       "metadata": {
         "description": "Master private IP."
       }
     },
     "infraPrivateIp": {
       "type": "string",
-      "defaultValue": "10.10.11.12",
+      "defaultValue": "10.10.10.12",
       "metadata": {
         "description": "Infra private IP."
       }
     },
     "workerPrivateIp": {
       "type": "string",
-      "defaultValue": "10.10.11.13",
+      "defaultValue": "10.10.10.13",
       "metadata": {
         "description": "Worker private IP."
       }
@@ -229,91 +222,10 @@
       }
     }
   },
+  "variables": {
+    "k8sSubnetId": "[format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/virtualNetworks/{2}/subnets/{3}', subscription().subscriptionId, parameters('sharedVnetResourceGroup'), parameters('sharedVnetName'), parameters('k8sSubnetName'))]"
+  },
   "resources": [
-    {
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "k8sSubnet",
-      "resourceGroup": "[parameters('sharedVnetResourceGroup')]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "vnetName": {
-            "value": "[parameters('sharedVnetName')]"
-          },
-          "subnetName": {
-            "value": "[parameters('k8sSubnetName')]"
-          },
-          "subnetPrefix": {
-            "value": "[parameters('k8sSubnetPrefix')]"
-          },
-          "nsgId": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'nsg'), '2025-04-01').outputs.networkSecurityGroupId.value]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.43.1.21952",
-              "templateHash": "15690136500695920981"
-            }
-          },
-          "parameters": {
-            "vnetName": {
-              "type": "string",
-              "metadata": {
-                "description": "Name of the VNet."
-              }
-            },
-            "subnetName": {
-              "type": "string",
-              "metadata": {
-                "description": "Name of the subnet."
-              }
-            },
-            "subnetPrefix": {
-              "type": "string",
-              "metadata": {
-                "description": "Address prefix for the subnet."
-              }
-            },
-            "nsgId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "NSG resource ID (optional)."
-              }
-            }
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Network/virtualNetworks/subnets",
-              "apiVersion": "2023-11-01",
-              "name": "[format('{0}/{1}', parameters('vnetName'), parameters('subnetName'))]",
-              "properties": {
-                "addressPrefix": "[parameters('subnetPrefix')]",
-                "networkSecurityGroup": "[if(empty(parameters('nsgId')), null(), createObject('id', parameters('nsgId')))]"
-              }
-            }
-          ],
-          "outputs": {
-            "subnetId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetName'))]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', 'nsg')]"
-      ]
-    },
     {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -344,8 +256,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.1.21952",
-              "templateHash": "15690136500695920981"
+              "version": "0.43.8.12551",
+              "templateHash": "6335255871287761357"
             }
           },
           "parameters": {
@@ -424,8 +336,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.1.21952",
-              "templateHash": "6815076849986187992"
+              "version": "0.43.8.12551",
+              "templateHash": "8798510470311822311"
             }
           },
           "parameters": {
@@ -544,7 +456,7 @@
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'nsg'), '2025-04-01').outputs.networkSecurityGroupId.value]"
           },
           "subnetId": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'k8sSubnet'), '2025-04-01').outputs.subnetId.value]"
+            "value": "[variables('k8sSubnetId')]"
           },
           "nicName": {
             "value": "[parameters('masterNicName')]"
@@ -562,8 +474,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.1.21952",
-              "templateHash": "6598497995239372237"
+              "version": "0.43.8.12551",
+              "templateHash": "10862357907568312609"
             }
           },
           "parameters": {
@@ -722,7 +634,6 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'k8sSubnet')]",
         "[resourceId('Microsoft.Resources/deployments', 'nsg')]"
       ]
     },
@@ -743,7 +654,7 @@
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'nsg'), '2025-04-01').outputs.networkSecurityGroupId.value]"
           },
           "subnetId": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'k8sSubnet'), '2025-04-01').outputs.subnetId.value]"
+            "value": "[variables('k8sSubnetId')]"
           },
           "nicName": {
             "value": "[parameters('infraNicName')]"
@@ -761,8 +672,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.1.21952",
-              "templateHash": "6598497995239372237"
+              "version": "0.43.8.12551",
+              "templateHash": "10862357907568312609"
             }
           },
           "parameters": {
@@ -921,7 +832,6 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'k8sSubnet')]",
         "[resourceId('Microsoft.Resources/deployments', 'nsg')]"
       ]
     },
@@ -942,7 +852,7 @@
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'nsg'), '2025-04-01').outputs.networkSecurityGroupId.value]"
           },
           "subnetId": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'k8sSubnet'), '2025-04-01').outputs.subnetId.value]"
+            "value": "[variables('k8sSubnetId')]"
           },
           "nicName": {
             "value": "[parameters('workerNicName')]"
@@ -972,8 +882,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.1.21952",
-              "templateHash": "6598497995239372237"
+              "version": "0.43.8.12551",
+              "templateHash": "10862357907568312609"
             }
           },
           "parameters": {
@@ -1132,7 +1042,6 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'k8sSubnet')]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'kubevirtSubnet')]",
         "[resourceId('Microsoft.Resources/deployments', 'nsg')]"
       ]
@@ -1186,8 +1095,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.1.21952",
-              "templateHash": "8364632687878137059"
+              "version": "0.43.8.12551",
+              "templateHash": "5280020249780183170"
             }
           },
           "parameters": {
@@ -1378,8 +1287,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.1.21952",
-              "templateHash": "8364632687878137059"
+              "version": "0.43.8.12551",
+              "templateHash": "5280020249780183170"
             }
           },
           "parameters": {
@@ -1571,8 +1480,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.1.21952",
-              "templateHash": "8364632687878137059"
+              "version": "0.43.8.12551",
+              "templateHash": "5280020249780183170"
             }
           },
           "parameters": {
@@ -1722,7 +1631,7 @@
     },
     "k8sSubnetId": {
       "type": "string",
-      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('sharedVnetResourceGroup')), 'Microsoft.Resources/deployments', 'k8sSubnet'), '2025-04-01').outputs.subnetId.value]"
+      "value": "[variables('k8sSubnetId')]"
     },
     "kubevirtSubnetId": {
       "type": "string",
