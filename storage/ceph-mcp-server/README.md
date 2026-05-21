@@ -57,10 +57,12 @@ curl -k -u admin:password https://10.10.10.21:8443/api/v1/health
 ```bash
 cd ~/Documents/copilot/notebook/storage/ceph-mcp-server
 
-# Clone 官方 repo
+# Clone 官方 repo 到 src/ 子目錄
 git clone https://github.com/rajmohanram/ceph-mcp-server.git src
 cd src
 ```
+
+> ⚠️ **注意**：`src/` 目錄已被 `.gitignore` 忽略，不會被推送到 notebook repo。這是刻意設計，避免外部項目代碼混入版本控制。
 
 ### 2️⃣ 使用 uv 安裝依賴
 
@@ -370,7 +372,57 @@ uv run ruff check src/ tests/ && uv run mypy src/ && uv run pytest
 
 ---
 
-## 相關資源
+## Git 管理
+
+### ✅ 被 Git 追蹤的檔案（會 Push 到 notebook repo）
+
+- `README.md` - 安裝指南
+- `QUICKSTART.md` - 快速參考
+- `COPILOT_INTEGRATION.md` - Copilot 整合方法
+- `troubleshooting.md` - 故障排除指南
+- `.env.example` - 環境變數範本（不含密碼）
+- `mcp.json.example` - Copilot 配置範本
+- `index.md` - 文檔導覽
+
+### ❌ 被 .gitignore 忽略的檔案（不會 Push）
+
+- `src/` - Ceph MCP Server 源代碼（來自外部 repo）
+- `.env` - 實際環境設定（含敏感資訊）
+
+### 為什麼這樣設計？
+
+1. **安全性**：`.env` 含有 Ceph 密碼，不應提交到版本控制
+2. **獨立性**：`src/` 是外部項目，由其官方 repo 維護，無需在 notebook 中追蹤
+3. **依賴管理**：notebook repo 只提供配置與文檔，MCP Server 本身保持獨立
+4. **易維護**：使用者可自行選擇 MCP Server 的版本，無需跟著 notebook 更新
+
+### 驗證 .gitignore 設定
+
+```bash
+# 查看 .gitignore 中的相關規則
+cat ~/Documents/copilot/notebook/.gitignore | grep ceph-mcp
+
+# 預期輸出：
+# /storage/ceph-mcp-server/src/
+# /storage/ceph-mcp-server/.env
+```
+
+### 確認 src/ 不會被追蹤
+
+```bash
+cd ~/Documents/copilot/notebook/storage/ceph-mcp-server
+
+# Clone 源代碼
+git clone https://github.com/rajmohanram/ceph-mcp-server.git src
+
+# 檢查 git status
+cd ~/Documents/copilot/notebook
+git status
+
+# 預期：src/ 目錄不在 status 輸出中
+```
+
+
 
 - [Ceph MCP Server 官方 Repo](https://github.com/rajmohanram/ceph-mcp-server)
 - [Model Context Protocol 文件](https://modelcontextprotocol.io/)

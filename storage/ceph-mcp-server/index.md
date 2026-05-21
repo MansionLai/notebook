@@ -64,12 +64,16 @@ permalink: /storage/ceph-mcp-server/
    ↓
 2. 按照 QUICKSTART.md → 完成安裝
    ↓
-3. 驗證 .env 設定 → 測試 Ceph 連線
+3. git clone 到 src/ → 下載 ceph-mcp-server 源代碼
    ↓
-4. 啟動 MCP Server → 確認運行正常
+4. 驗證 .env 設定 → 測試 Ceph 連線
    ↓
-5. 參考 COPILOT_INTEGRATION.md → 整合 Copilot
+5. 啟動 MCP Server → 確認運行正常
+   ↓
+6. 參考 COPILOT_INTEGRATION.md → 整合 Copilot
 ```
+
+> 💡 **提示**：`src/` 資料夾已在 `.gitignore` 中，不會被 push 到 notebook repo。
 
 ### 遇到問題
 

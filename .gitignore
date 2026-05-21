@@ -15,3 +15,7 @@
 # merged from storage/.gitignore files
 /storage/3node-ceph/iac/*.json
 /storage/3node-ceph/ansible/.ansible-venv/
+
+# Ceph MCP Server - ignore cloned external repo
+/storage/ceph-mcp-server/src/
+/storage/ceph-mcp-server/.env

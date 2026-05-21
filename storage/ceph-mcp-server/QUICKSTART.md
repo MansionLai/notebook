@@ -6,7 +6,8 @@
 # 1. 進入資料夾
 cd ~/Documents/copilot/notebook/storage/ceph-mcp-server
 
-# 2. Clone 源代碼
+# 2. Clone 源代碼到 src/ 目錄
+# ⚠️ src/ 已在 .gitignore 中，不會被 push 到 notebook repo
 git clone https://github.com/rajmohanram/ceph-mcp-server.git src
 cd src
 
@@ -15,13 +16,18 @@ uv sync
 
 # 4. 回到上級目錄，設定環境
 cd ..
-cp src/.env.example .env
+cp src/.env.example .env  # .env 也已被 .gitignore 忽略
 nano .env  # 填寫 CEPH_MANAGER_URL、CEPH_USERNAME、CEPH_PASSWORD
 
 # 5. 驗證連線
 source .env
 curl -k -u $CEPH_USERNAME:$CEPH_PASSWORD $CEPH_MANAGER_URL/api/v1/health
 ```
+
+**✅ 設計說明**：
+- ✔️ `src/` 裡的 Ceph MCP Server 源代碼 **不會** push 到 notebook repo
+- ✔️ `.env` 裡的密碼 **不會** 被追蹤或 push
+- ✔️ 只有文檔與設定範本被追蹤
 
 ## 🚀 啟動 MCP Server
 
