@@ -32,7 +32,7 @@ Copilot: (自動呼叫 MCP Server) → ceph -s → 解析結果 → 回報完整
 - Mac mini 已安裝 Python ≥3.11
 - `uv` 套件管理工具
 - Ceph 集群已部署並運行（Phase 3 已完成）
-- Ceph Manager API 可從 Mac mini 訪問（公網 IP: `10.10.10.21:8443`）
+- Ceph Manager API 可從 Mac mini 訪問（公網 IP: `20.89.53.16:8443`）
 - 有效的 Ceph 使用者帳號與密碼
 
 ### 驗證前置條件
@@ -44,8 +44,8 @@ python3 --version  # 需要 ≥3.11
 # 檢查 uv 已安裝
 uv --version
 
-# 測試 Ceph 連線（替換為實際 IP）
-curl -k -u admin:password https://10.10.10.21:8443/api/v1/health
+# 測試 Ceph Manager 可達性（替換為實際 IP）
+curl -k https://20.89.53.16:8443/
 ```
 
 ---
@@ -93,17 +93,20 @@ nano .env
 ```bash
 cd ~/Documents/copilot/notebook/storage/ceph-mcp-server
 
-# 直接測試連線（需要先設定 .env）
+# 直接測試認證（需要先設定 .env）
 source .env
-curl -k -u $CEPH_USERNAME:$CEPH_PASSWORD $CEPH_MANAGER_URL/api/v1/health
+curl -s -k -X POST \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/vnd.ceph.api.v1.0+json" \
+  -d "{\"username\":\"$CEPH_USERNAME\",\"password\":\"$CEPH_PASSWORD\"}" \
+  "$CEPH_MANAGER_URL/api/auth"
 ```
 
 預期看到類似：
 
 ```json
 {
-  "health": "HEALTH_OK",
-  "timechecks": {...}
+  "token": "eyJ..."
 }
 ```
 
@@ -112,8 +115,9 @@ curl -k -u $CEPH_USERNAME:$CEPH_PASSWORD $CEPH_MANAGER_URL/api/v1/health
 ```bash
 cd ~/Documents/copilot/notebook/storage/ceph-mcp-server/src
 
-# 以開發模式運行
-uv run python -m ceph_mcp.server
+# 以 local(stdio) 方式運行（與 Copilot 實際執行模式一致）
+set -a && source ../.env && set +a
+uv run ceph-mcp-server
 ```
 
 預期看到：
@@ -135,7 +139,7 @@ Server is ready for connections
 ```bash
 # Ceph Manager API 端點
 # 格式: https://<public-ip>:8443
-CEPH_MANAGER_URL=https://10.10.10.21:8443
+CEPH_MANAGER_URL=https://20.89.53.16:8443
 
 # Ceph 使用者名稱
 CEPH_USERNAME=admin
@@ -174,34 +178,26 @@ ansible-vault view inventory/group_vars/encrypted.yml | grep vault_ceph_dashboar
 
 ## GitHub Copilot 整合
 
-### 方式 1：MCP Server 配置（推薦）
+### 方式 1：Local (stdio) 配置（推薦）
 
-若 Copilot CLI 支援 MCP 配置，編輯 `~/.copilot/mcp.json` 或相應設定檔：
+使用 Copilot CLI 直接新增 local server（不走 SSE）：
 
-```json
-{
-  "mcpServers": {
-    "ceph": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--with-editable",
-        "/Users/mansionlai/Documents/copilot/notebook/storage/ceph-mcp-server/src",
-        "python",
-        "-m",
-        "ceph_mcp.server"
-      ],
-      "env": {
-        "CEPH_MANAGER_URL": "https://10.10.10.21:8443",
-        "CEPH_USERNAME": "admin",
-        "CEPH_PASSWORD": "${CEPH_PASSWORD}",
-        "CEPH_SSL_VERIFY": "false",
-        "LOG_LEVEL": "INFO"
-      }
-    }
-  }
-}
+```bash
+# 建議先移除舊的 ceph-mcp 設定
+copilot mcp remove ceph-mcp
+
+# 新增 local(stdio) ceph-mcp
+copilot mcp add ceph-mcp -- bash -lc \
+  'cd /Users/mansionlai/Documents/copilot/notebook/storage/ceph-mcp-server/src && \
+   set -a && source ../.env && set +a && \
+   uv run ceph-mcp-server'
+
+# 驗證
+copilot mcp list
+copilot mcp get ceph-mcp
 ```
+
+預期看到 `ceph-mcp (local)`。
 
 ### 方式 2：自定義腳本包裝
 
@@ -218,7 +214,7 @@ cd "$CEPH_MCP_HOME/src"
 source "$CEPH_MCP_HOME/.env"
 
 # 啟動 MCP Server
-uv run python -m ceph_mcp.server
+uv run ceph-mcp-server
 ```
 
 賦予執行權限：
@@ -308,7 +304,7 @@ cd ~/Documents/copilot/notebook/storage/ceph-mcp-server/src
 uv pip install -e .
 
 # 運行開發伺服器
-LOG_LEVEL=DEBUG uv run python -m ceph_mcp.server
+LOG_LEVEL=DEBUG uv run ceph-mcp-server
 ```
 
 ### 執行測試
@@ -381,7 +377,7 @@ uv run ruff check src/ tests/ && uv run mypy src/ && uv run pytest
 - `COPILOT_INTEGRATION.md` - Copilot 整合方法
 - `troubleshooting.md` - 故障排除指南
 - `.env.example` - 環境變數範本（不含密碼）
-- `mcp.json.example` - Copilot 配置範本
+- `mcp.json.example` - Copilot local(stdio) 配置範本
 - `index.md` - 文檔導覽
 
 ### ❌ 被 .gitignore 忽略的檔案（不會 Push）

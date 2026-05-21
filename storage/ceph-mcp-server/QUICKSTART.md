@@ -19,9 +19,13 @@ cd ..
 cp src/.env.example .env  # .env 也已被 .gitignore 忽略
 nano .env  # 填寫 CEPH_MANAGER_URL、CEPH_USERNAME、CEPH_PASSWORD
 
-# 5. 驗證連線
+# 5. 驗證認證
 source .env
-curl -k -u $CEPH_USERNAME:$CEPH_PASSWORD $CEPH_MANAGER_URL/api/v1/health
+curl -s -k -X POST \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/vnd.ceph.api.v1.0+json" \
+  -d "{\"username\":\"$CEPH_USERNAME\",\"password\":\"$CEPH_PASSWORD\"}" \
+  "$CEPH_MANAGER_URL/api/auth"
 ```
 
 **✅ 設計說明**：
@@ -32,9 +36,14 @@ curl -k -u $CEPH_USERNAME:$CEPH_PASSWORD $CEPH_MANAGER_URL/api/v1/health
 ## 🚀 啟動 MCP Server
 
 ```bash
-cd ~/Documents/copilot/notebook/storage/ceph-mcp-server/src
-source ../.env
-uv run python -m ceph_mcp.server
+copilot mcp remove ceph-mcp
+copilot mcp add ceph-mcp -- bash -lc \
+  'cd /Users/mansionlai/Documents/copilot/notebook/storage/ceph-mcp-server/src && \
+   set -a && source ../.env && set +a && \
+   uv run ceph-mcp-server'
+
+copilot mcp list
+copilot mcp get ceph-mcp
 ```
 
 ## 🔧 常用命令
@@ -44,7 +53,7 @@ uv run python -m ceph_mcp.server
 ```bash
 cd ~/Documents/copilot/notebook/storage/ceph-mcp-server/src
 source ../.env
-LOG_LEVEL=DEBUG uv run python -m ceph_mcp.server
+LOG_LEVEL=DEBUG uv run ceph-mcp-server
 ```
 
 ### 執行測試
@@ -75,7 +84,7 @@ uv run mypy src/
 | 問題 | 快速修復 |
 |------|--------|
 | `Connection refused` | 檢查 `curl -k $CEPH_MANAGER_URL` 是否可達 |
-| `Unauthorized 401` | 驗證 `.env` 中的密碼：`curl -k -u admin:$CEPH_PASSWORD $CEPH_MANAGER_URL/api/v1/health` |
+| `Unauthorized 401` | 驗證 `.env` 中密碼，重取 token：`curl -s -k -X POST -H "Content-Type: application/json" -H "Accept: application/vnd.ceph.api.v1.0+json" -d "{\"username\":\"$CEPH_USERNAME\",\"password\":\"$CEPH_PASSWORD\"}" "$CEPH_MANAGER_URL/api/auth"` |
 | `SSL verification failed` | 確認 `.env` 中 `CEPH_SSL_VERIFY=false` |
 | `Python version error` | 更新 Python：`brew install python@3.13` |
 | `Module not found` | 重新同步：`uv sync --fresh` |
@@ -98,14 +107,20 @@ uv --version
 
 # Step 3: 測試 Ceph 連線
 source .env
-curl -k -u $CEPH_USERNAME:$CEPH_PASSWORD \
-  $CEPH_MANAGER_URL/api/v1/health
+curl -s -k -X POST \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/vnd.ceph.api.v1.0+json" \
+  -d "{\"username\":\"$CEPH_USERNAME\",\"password\":\"$CEPH_PASSWORD\"}" \
+  "$CEPH_MANAGER_URL/api/auth"
 
-# Step 4: 啟動 MCP Server
-cd ~/Documents/copilot/notebook/storage/ceph-mcp-server/src
-uv run python -m ceph_mcp.server
+# Step 4: 配置 Copilot local(stdio) MCP
+copilot mcp add ceph-mcp -- bash -lc \
+  'cd /Users/mansionlai/Documents/copilot/notebook/storage/ceph-mcp-server/src && \
+   set -a && source ../.env && set +a && \
+   uv run ceph-mcp-server'
+copilot mcp list
 
-# 預期看到: "Server is ready for connections"
+# 預期看到: ceph-mcp (local)
 ```
 
 ## 🔑 關鍵文件位置

@@ -1,23 +1,13 @@
 {
   "mcpServers": {
-    "ceph": {
-      "command": "uv",
+    "ceph-mcp": {
+      "type": "local",
+      "command": "bash",
       "args": [
-        "run",
-        "--with-editable",
-        "/Users/mansionlai/Documents/copilot/notebook/storage/ceph-mcp-server/src",
-        "python",
-        "-m",
-        "ceph_mcp.server"
+        "-lc",
+        "cd /Users/mansionlai/Documents/copilot/notebook/storage/ceph-mcp-server/src && set -a && source ../.env && set +a && uv run ceph-mcp-server"
       ],
-      "env": {
-        "CEPH_MANAGER_URL": "https://10.10.10.21:8443",
-        "CEPH_USERNAME": "admin",
-        "CEPH_PASSWORD": "${VAULT_CEPH_PASSWORD}",
-        "CEPH_SSL_VERIFY": "false",
-        "LOG_LEVEL": "INFO",
-        "MAX_REQUESTS_PER_MINUTE": "60"
-      }
+      "tools": ["*"]
     }
   }
 }

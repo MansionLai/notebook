@@ -30,7 +30,7 @@ permalink: /storage/ceph-mcp-server/
 ### 進階內容
 
 3. **[COPILOT_INTEGRATION.md](COPILOT_INTEGRATION.md)** 🔧 **整合 Copilot**
-   - 4 種整合方式（JSON、Shell、Docker、Systemd）
+   - 推薦 local(stdio) 整合方式（不使用 SSE）
    - 環境變數管理
    - 安全最佳實踐
    - 測試與調試
@@ -52,8 +52,8 @@ permalink: /storage/ceph-mcp-server/
    - API 限流選項
 
 6. **mcp.json.example** ⚙️ **Copilot MCP 配置**
-   - JSON 格式配置範本
-   - 可直接複製到 `~/.copilot/mcp.json`
+   - JSON 格式配置範本（local/stdio）
+   - 可直接參考 `~/.copilot/mcp-config.json`
 
 ## 🎯 推薦工作流程
 
@@ -94,7 +94,7 @@ permalink: /storage/ceph-mcp-server/
 - [ ] Python ≥3.11 已安裝
 - [ ] `uv` 套件管理工具已安裝
 - [ ] Ceph 集群已完成 Phase 3 部署
-- [ ] Ceph Manager API 可從 Mac mini 訪問（10.10.10.21:8443）
+- [ ] Ceph Manager API 可從 Mac mini 訪問（例：20.89.53.16:8443）
 - [ ] 有效的 Ceph 使用者帳號與密碼
 - [ ] 本資料夾已初始化（clone 源代碼到 `src/` 目錄）
 
@@ -105,7 +105,7 @@ permalink: /storage/ceph-mcp-server/
 | 本文檔資料夾 | `~/Documents/copilot/notebook/storage/ceph-mcp-server/` |
 | MCP Server 源代碼 | `~/Documents/copilot/notebook/storage/ceph-mcp-server/src/` |
 | 環境設定檔 | `~/Documents/copilot/notebook/storage/ceph-mcp-server/.env` |
-| Copilot 配置 | `~/.copilot/mcp.json` 或 `~/.config/copilot/mcp.json` |
+| Copilot 配置 | `~/.copilot/mcp-config.json` |
 
 ## 💡 有用的命令
 
@@ -113,17 +113,23 @@ permalink: /storage/ceph-mcp-server/
 # 查看目錄結構
 tree ~/Documents/copilot/notebook/storage/ceph-mcp-server/
 
-# 啟動 MCP Server
-cd ~/Documents/copilot/notebook/storage/ceph-mcp-server/src
-source ../.env
-uv run python -m ceph_mcp.server
+# 設定 local(stdio) MCP
+copilot mcp add ceph-mcp -- bash -lc \
+  'cd /Users/mansionlai/Documents/copilot/notebook/storage/ceph-mcp-server/src && \
+   set -a && source ../.env && set +a && \
+   uv run ceph-mcp-server'
 
-# 測試 Ceph 連線
+# 測試 Ceph 認證
 source .env
-curl -k -u $CEPH_USERNAME:$CEPH_PASSWORD $CEPH_MANAGER_URL/api/v1/health
+curl -s -k -X POST \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/vnd.ceph.api.v1.0+json" \
+  -d "{\"username\":\"$CEPH_USERNAME\",\"password\":\"$CEPH_PASSWORD\"}" \
+  "$CEPH_MANAGER_URL/api/auth"
 
-# 檢查日誌
-LOG_LEVEL=DEBUG uv run python -m ceph_mcp.server 2>&1 | head -50
+# 檢查 MCP 設定
+copilot mcp list
+copilot mcp get ceph-mcp
 ```
 
 ## 🔗 相關資源
@@ -147,4 +153,3 @@ LOG_LEVEL=DEBUG uv run python -m ceph_mcp.server 2>&1 | head -50
 **版本**: v0.1.0
 
 **狀態**: ✅ Ready for Lab Use
-
