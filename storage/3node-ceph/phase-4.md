@@ -40,6 +40,7 @@ ansible-playbook playbooks/phase-4.yml
 
 ## 這個 Phase 的 role 會做什麼
 
+- Cluster 層級操作會由 `ceph_mon[0]` 執行一次（避免三台 MON 重複執行同一組 pool 指令）
 - 建立 `k8s_rbd_pool`
 - 設定 `size=3`、`min_size=1`
 - 啟用 `rbd` application
