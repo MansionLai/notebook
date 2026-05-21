@@ -9,6 +9,8 @@ permalink: /storage/ceph-mcp-server/
 
 目標：在 **Mac mini** 上，讓 Copilot CLI 以 **local (stdio)** 方式新增 Ceph MCP Server（不使用 SSE）。
 
+> **✅ 已修正：** FastMCP 現已配置使用 stdio transport，支持 Copilot CLI 的 local 模式。server.py 已從 `streamable-http` 改為 `stdio`，確保通過 stdin/stdout 以 JSON-RPC 協議通信。
+
 ## 1) 一次性安裝
 
 ```bash
