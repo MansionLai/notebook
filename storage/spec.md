@@ -1,59 +1,40 @@
-AI agent 運行在我的mac mini上, 並且協助我一起維護 notebook repo, agent focus on ceph folder.
-AI agent 所有修改都從 main 切出 ai/ceph branch進行修正, 確認沒問題後再merge回main branch
+# Storage Folder Spec (Master)
 
-1. 3node-ceph
-   - 透過azure cloud建立vm
-     - resource group name = mansion_ceph_resource
-     - 所有相關的resource name都幫我加上mansion-ceph- prefix作為識別
-     - 如果是需要跟其他resource共用的物件, 請放在mansion-shared-resource下
-   - VM Spec
-     - 透過azure cloud建立三台 ubuntu 22.04 vm, 每台都有 MON + MGR + OSD
-     - all node都要可以執行ceph command (e.g. ceph -s)
-     - container runtime先使用docker (未來可能會替換成podman)
-     - os public ip segment = 10.10.10.0/24 (希望跟我另個kubernetes專案中的三台vm是在同個segment下且互通)
-     - cluster private network = 172.10.10.0/24 (僅需ceph vm可以互通即可)
-     - 用以學習ceph installation + ceph trouble shooting
-     - azure vm的user name = ubuntu, 不使用密碼ssh登入, 直接使用我mac mini上的 ssh key.
-     - ceph node 1
-       - Standard_D4s_v4 (4C/16G)
-       - os ip: 10.10.10.21/24
-       - ceph cluster ip: 172.10.10.21/24
-       - 1 * 64G os disk + 2 * 64G osd disk
-       - localtion label:
-         - datacenter: dc1
-         - room: room1
-         - rack: rack1
-     - ceph node 2
-       - Standard_D4s_v4 (4C/16G)
-       - os ip: 10.10.10.22/24
-       - ceph cluster ip: 172.10.10.22/24
-       - 1 * 64G os disk + 2 * 64G osd disk
-       - localtion label:
-         - datacenter: dc1
-         - room: room1
-         - rack: rack2
-     - ceph node 3
-       - Standard_D4s_v4 (4C/16G)
-       - os ip: 10.10.10.23/24
-       - ceph cluster ip: 172.10.10.23/24
-       - 1 * 64G os disk + 2 * 64G osd disk
-       - localtion label:
-         - datacenter: dc1
-         - room: room1
-         - rack: rack3
-   - Installation guide
-     - ceph version = v19.2.2
-     - 建立rbd pool, name=k8s_rbd_pool (size=3, min_size=1, pg_num=128, pgp_num=128)
-     - 調整crush map, 依照ceph node location label, 並調整failure domain=rack
-     - 需要安裝ceph-exporter + ceph-node-exporter將metrics推送到另個kubernetes專案中建立的prometheus
-     - 需要安裝fluent-bit將log推送到個kubernetes專案中建立的opensearch
-     - 將安裝方式寫成markdown file方便閱讀
-   - ansible 
-     - 產生 ansible playbook將ceph cluster安裝過程自動化
-     - 將不同安裝phase拆成不同的role
-     - host var定義在 inventory yaml內
-     - group_vars內有兩份檔案
-       - all.yml 儲存明碼的variable
-       - encrypted.yml 儲存使用ansible vault加密過後的variable, 將secret性質的variable放在這份檔案
+最後更新：2026-05-22
 
-2. ceph-cross-dc-migration
+## 1. Scope
+
+這份 `storage/spec.md` 是總覽規格，聚焦三個專案：
+
+1. `3node-ceph`
+2. `ceph-cross-dc-migration`
+3. `ceph-mcp-server`
+
+各專案詳細規格已拆到子資料夾內各自的 `spec.md`。
+
+## 2. Working Rules
+
+1. AI agent 在 Mac mini 上協作維護 notebook repo，主要 focus 在 `storage/` 與 Ceph 相關內容。
+2. 變更流程：由 `main` 切出 `ai/ceph` 分支進行修正，確認後再合併回 `main`。
+3. 文件優先：所有架構、流程與自動化調整，需先反映在對應專案 spec。
+
+## 3. Project Map
+
+| Project | Purpose | Detail Spec |
+|---|---|---|
+| `3node-ceph` | Azure 上 3 節點 Ceph lab（安裝、自動化、觀測） | `storage/3node-ceph/spec.md` |
+| `ceph-cross-dc-migration` | Ceph 跨資料中心遷移設計與 runbook | `storage/ceph-cross-dc-migration/spec.md` |
+| `ceph-mcp-server` | Copilot CLI 使用 local(stdio) 連接 Ceph MCP Server | `storage/ceph-mcp-server/spec.md` |
+
+## 4. Current Environment Snapshot
+
+以目前可驗證狀態為準：
+
+1. Ceph cluster health: `HEALTH_OK`
+2. OSD 數量：`6`（osd.0 ~ osd.5）
+
+## 5. Maintenance Principle
+
+1. 共通規範放在本檔（Master）。
+2. 專案需求、參數、步驟、驗收條件放在各專案 `spec.md`。
+3. 專案調整時，先改子 spec；若影響共通規範，再同步更新本檔。
