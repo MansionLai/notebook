@@ -1,3 +1,10 @@
+---
+title: Ceph MCP Server Spec
+parent: Storage
+nav_exclude: true
+permalink: /storage/ceph-mcp-server/spec/
+---
+
 # ceph-mcp-server Spec
 
 最後更新：2026-05-22
