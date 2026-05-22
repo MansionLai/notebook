@@ -1,5 +1,9 @@
 # 📓 Notebook
 
+> [!IMPORTANT]
+> **AI Agents**: This repository follows a spec-driven development process. 
+> Please read the relevant **spec.md** (such as [storage/spec.md](./storage/spec.md) or [kubernetes/spec.md](./kubernetes/spec.md)) to understand the project's vision, architecture, and roadmap before assisting.
+
 個人學習筆記，以 Markdown 格式記錄各種技術主題。
 
 ## 📁 目錄結構
