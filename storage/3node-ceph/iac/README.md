@@ -41,5 +41,6 @@ The operator is expected to supply or override critical values in the parameter 
 - Ensure the KubeVirt lab (`mansion-shared-vnet` and `shared-node-subnet`) is deployed first before running this Ceph deployment.
 - Always run `az deployment group what-if --resource-group mansion_ceph_resource --template-file main.bicep --parameters main.bicepparam` before performing a `create`/`deploy` to validate changes.
 - The default Jammy 22.04 image in `main.bicepparam` was confirmed available in `japaneast`.
+- NSG inbound rules include `AllowSSH` (22/tcp) and `AllowMCP8000` (8000/tcp); both are restricted by `allowedSourceCidr` (do not broaden to `0.0.0.0/0`).
 
 Concise, focused, and intentionally minimal: this README explains intent, file layout, and operator expectations for Phase 0 Ceph IaC.

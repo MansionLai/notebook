@@ -51,6 +51,7 @@ permalink: /storage/3node-ceph/phase-0/
 | SSH public key | 由使用者提供 |
 | NSG | `mansion-ceph-nsg` |
 | NSG allowed source | 使用者的固定 Public IP 或 CIDR |
+| MCP API port | `8000/tcp`（僅允許 `allowedSourceCidr` 來源） |
 
 > **共用 VNet 說明：** `mansion-shared-vnet` 與 `shared-node-subnet` 為既存資源，由 KubeVirt lab 的 Phase 0 負責建立。Ceph lab 部署前必須確認這兩個資源可被目前訂閱存取。Ceph Phase 0 會在 `mansion_ceph_resource` 內建立 Ceph VM/NIC/NSG，並在共用 VNet 中建立/管理 `mansion-ceph-cluster-subnet`。
 
@@ -140,4 +141,4 @@ az deployment group create \
 - ✅ 每台有 3 顆磁碟（1 OS + 2 OSD）
 - ✅ Public IPs 可從外部存取
 - ✅ 雙網路互通（10.10.10.2x + 172.10.10.2x）
-- ✅ NSG 允許 SSH 與 Ceph ports
+- ✅ NSG 允許 SSH（22/tcp）與 MCP API（8000/tcp），且來源仍受 `allowedSourceCidr` 限制

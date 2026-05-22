@@ -30,6 +30,19 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2023-11-0
         }
       }
       {
+        name: 'AllowMCP8000'
+        properties: {
+          priority: 210
+          access: 'Allow'
+          direction: 'Inbound'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '8000'
+          sourceAddressPrefix: allowedSourceCidr
+          destinationAddressPrefix: '*'
+        }
+      }
+      {
         name: 'AllowSharedNodeSubnetTraffic'
         properties: {
           priority: 1000
