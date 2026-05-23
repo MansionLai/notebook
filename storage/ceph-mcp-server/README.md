@@ -264,9 +264,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=root
-WorkingDirectory=/root/ceph-mcp-server/app
-EnvironmentFile=/root/ceph-mcp-server/.env
+User=ubuntu
+WorkingDirectory=/home/ubuntu/ceph-mcp-server/app
+EnvironmentFile=/home/ubuntu/ceph-mcp-server/.env
 ExecStart=/usr/bin/env bash -lc 'uv run ceph-mcp-server'
 Restart=always
 RestartSec=3
@@ -275,6 +275,8 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 ```
+
+**注意**：改成 `User=ubuntu`、`WorkingDirectory=/home/ubuntu/ceph-mcp-server/app`、`EnvironmentFile=/home/ubuntu/ceph-mcp-server/.env`（根據你實際的 username 和路徑調整）
 
 啟用並啟動：
 
