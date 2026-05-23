@@ -127,11 +127,72 @@ sudo lsof -iTCP:8000 -sTCP:LISTEN -n -P || true
 - **`8000` 通常不是 Ceph 預設埠**，但仍要實查是否被其他服務占用。
 - 若 `8000` 已被占用，改成其他埠（例如 `18000`），並同步更新後續指令中的 URL。
 
+## 4) 診斷 Ceph Dashboard 帳戶（MON node）
+
+**重要：在確認密碼是否正確前，請先診斷 Ceph dashboard 帳戶是否存在。**
+
+在 **ceph-node-01** 上執行以下命令（需要 `sudo`）：
+
+```bash
+# 1. 確認 dashboard 模組已啟動
+sudo ceph mgr module ls | grep dashboard
+
+# 2. 列出所有 dashboard 帳戶
+sudo ceph dashboard ac-user-list
+
+# 3. 檢視 admin 帳戶詳細資訊
+sudo ceph dashboard ac-user-show admin
+
+# 4. 檢查 dashboard service 是否運行
+sudo ceph orch ps --daemon-type mgr | grep mgr
+
+# 5. 查看 MGR 日誌以了解問題
+sudo ceph log last 50 mgr
+```
+
+### 預期輸出
+
+若帳戶正確設置，應看到：
+
+```bash
+$ sudo ceph dashboard ac-user-list
+admin
+
+$ sudo ceph dashboard ac-user-show admin
+{"username": "admin", "roles": ["administrator"], ...}
+```
+
+若帳戶不存在或密碼不對，可以重新設置：
+
+```bash
+# 重置 admin 密碼（替換 your-new-password）
+sudo ceph dashboard ac-user-set-password admin your-new-password
+
+# 確認密碼已更新
+sudo ceph dashboard ac-user-show admin
+```
+
+### 常見問題排查
+
+| 錯誤 | 可能原因 | 解決方案 |
+|---|---|---|
+| `Permission denied` | 沒有 sudo 權限 | 改用 `sudo` 執行 |
+| `Command not found` | Ceph 工具未安裝 | 確認 Phase 2 已完成，`ceph-common` 已安裝 |
+| Dashboard 帳戶不存在 | Phase 3 bootstrap 失敗或跳過 | 重新運行 Phase 3 Ansible playbook |
+| 密碼錯誤 | Ansible vault 密碼與實際設置不同步 | 使用上面的命令重置密碼 |
+
 ## 4) 驗證 Ceph 認證（MON node）
 
 ```bash
 cd ~/ceph-mcp-server
 source .env
+
+# 打印變數確認
+echo "CEPH_MANAGER_URL=$CEPH_MANAGER_URL"
+echo "CEPH_USERNAME=$CEPH_USERNAME"
+echo "CEPH_PASSWORD=***" # 不打印實際密碼
+
+# 測試連線和認證
 curl -s -k -X POST \
   -H "Content-Type: application/json" \
   -H "Accept: application/vnd.ceph.api.v1.0+json" \
@@ -139,7 +200,46 @@ curl -s -k -X POST \
   "$CEPH_MANAGER_URL/api/auth"
 ```
 
-看到 `token` 代表認證成功。
+**成功的回應**應該看到 `token` 值：
+
+```json
+{
+  "token": "eyJhbGc...",
+  "username": "admin",
+  "roles": ["administrator"],
+  ...
+}
+```
+
+**若看到 `invalid_credentials` 錯誤**，請檢查：
+
+1. **Dashboard 帳戶是否存在** - 在 ceph-node-01 上執行：
+   ```bash
+   sudo ceph dashboard ac-user-list
+   sudo ceph dashboard ac-user-show admin
+   ```
+
+2. **密碼是否正確** - 比較三個來源：
+   - 從 `ansible-vault view inventory/group_vars/all/encrypted.yml` 看到的密碼
+   - `.env` 文件中設置的密碼（確保無多餘空格）
+   - Ceph 中實際儲存的密碼
+
+3. **如果都不匹配，重置密碼**（在 ceph-node-01 上）：
+   ```bash
+   # 設置新密碼
+   sudo ceph dashboard ac-user-set-password admin newpassword123
+   
+   # 確認已更新
+   sudo ceph dashboard ac-user-show admin
+   
+   # 然後更新 .env 並重新測試
+   ```
+
+4. **Dashboard 服務是否正常運行**：
+   ```bash
+   # 在 ceph-node-01 檢查
+   sudo ceph orch ps --daemon-type mgr
+   ```
 
 ## 5) 在 MON node 啟動 MCP（systemd）
 
