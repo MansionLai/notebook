@@ -11,6 +11,25 @@ permalink: /storage/ceph-mcp-server/
 
 > 本文件以 upstream `https://github.com/rajmohanram/ceph-mcp-server.git` 為準。
 
+## 0) 先安裝 `uv` 包管理工具（MON node）
+
+上游專案使用 `uv` 來管理 Python 依賴。請先安裝：
+
+```bash
+# Ubuntu/Debian 推薦做法
+sudo apt-get update
+sudo apt-get install -y python3-pip
+pip install uv
+
+# 或直接下載安裝
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 驗證安裝成功
+uv --version
+```
+
+若 `uv` 安裝成功，應該看到版本號（例如 `uv 0.4.x`）。
+
 ## 1) 在 MON node 安裝上游專案
 
 ```bash
