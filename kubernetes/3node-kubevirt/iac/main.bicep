@@ -63,10 +63,9 @@ param imageSku string = '22_04-lts-gen2'
 @description('Ubuntu image version.')
 param imageVersion string = 'latest'
 
-// Reference existing shared-node-subnet by constructing its ID
+// Reference the shared node subnet, and create the VM overlay subnet in the shared VNet.
 var k8sSubnetId = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${sharedVnetResourceGroup}/providers/Microsoft.Network/virtualNetworks/${sharedVnetName}/subnets/${k8sSubnetName}'
 
-// Create KubeVirt subnet in shared VNet using module
 module kubevirtSubnetModule './modules/subnet.bicep' = {
   scope: resourceGroup(sharedVnetResourceGroup)
   name: 'kubevirtSubnet'

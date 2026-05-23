@@ -37,7 +37,7 @@ permalink: /kubernetes/3node-kubevirt/iac/
 
 ## 共用 VNet 設計
 
-此 Bicep 模板部署 `mansion_kubevirt_vnet`（`10.10.0.0/16` + `172.10.0.0/16`）：
+此 Bicep 模板部署 `mansion_kubevirt_vnet`（`10.10.0.0/16` + `172.10.0.0/16`），並在重建時建立 `mansion_kubevirt_vm_subnet` 供 worker 第二張 NIC 使用：
 
 | 子網 | CIDR | 用途 |
 |------|------|------|
@@ -45,7 +45,7 @@ permalink: /kubernetes/3node-kubevirt/iac/
 | `mansion_kubevirt_vm_subnet` | `10.10.100.0/24` | KubeVirt VM overlay（Worker eth1 專用） |
 | `mansion_kubevirt_ceph_subnet` | `172.10.10.0/24` | 保留在 VNet inline subnets，避免 ARM PUT 在 KubeVirt 重部署時刪除此子網 |
 
-> **ARM PUT 語義說明**：ARM 對 VNet 的 PUT 語義會取代整個 subnets 集合。`mansion_kubevirt_ceph_subnet` 宣告在 `modules/network.bicep` inline subnets 中，確保每次重部署都保留此子網。
+> **ARM PUT 語義說明**：ARM 對 VNet 的 PUT 語義會取代整個 subnets 集合。`mansion_kubevirt_ceph_subnet` 仍需在 `modules/network.bicep` inline subnets 中保留；`mansion_kubevirt_vm_subnet` 則由 `main.bicep` 在重建時建立。
 
 ## FAQ
 
