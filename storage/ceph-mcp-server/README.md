@@ -131,26 +131,19 @@ sudo lsof -iTCP:8000 -sTCP:LISTEN -n -P || true
 
 **重要：在確認密碼是否正確前，請先診斷 Ceph dashboard 帳戶是否存在。**
 
-在 **ceph-node-01** 上執行以下命令（需要 `sudo`）。使用 **Ceph 19.x 正確的命令格式**：
+在 **ceph-node-01** 上執行以下命令（需要 `sudo`）。Ceph 19.x 使用 **`ac-user-*`** 命令格式：
 
 ```bash
-# 1. 確認 dashboard 模組已啟動
-sudo ceph mgr module ls | grep -i dashboard
+# 1. 列出所有 dashboard 帳戶
+sudo ceph dashboard ac-user-list
 
-# 2. 列出所有 dashboard 帳戶（Ceph 19.x 格式）
-sudo ceph dashboard user-list
+# 2. 檢視 admin 帳戶詳細資訊
+sudo ceph dashboard ac-user-show admin
 
-# 3. 檢視 admin 帳戶詳細資訊
-sudo ceph dashboard user-show admin
-sudo ceph dashboard user-info admin
-
-# 4. 檢查 dashboard service 是否運行
+# 3. 檢查 dashboard service 是否運行
 sudo ceph orch ps --daemon-type mgr
 
-# 5. 查看完整的 dashboard 命令列表
-sudo ceph dashboard --help
-
-# 6. 查看 MGR 日誌以了解問題
+# 4. 查看 MGR 日誌以了解問題
 sudo ceph log last 50 mgr
 ```
 
@@ -159,37 +152,40 @@ sudo ceph log last 50 mgr
 若帳戶正確設置，應看到：
 
 ```bash
-$ sudo ceph dashboard user-list
+$ sudo ceph dashboard ac-user-list
 admin
 
-$ sudo ceph dashboard user-show admin
+$ sudo ceph dashboard ac-user-show admin
 # 會顯示帳戶信息
 ```
 
 ### 若帳戶不存在或密碼不對
 
-可以重新設置或建立帳戶：
+可以重新設置或建立帳戶（密碼從 stdin 讀取）：
 
 ```bash
-# 重置 admin 密碼（替換 your-new-password）
-sudo ceph dashboard user-set-password admin your-new-password
+# 方法 1：設置 admin 帳戶密碼
+echo "your-new-password" | sudo ceph dashboard ac-user-set-password admin
 
-# 若帳戶不存在，建立新帳戶
-sudo ceph dashboard user-create admin administrator
+# 方法 2：若帳戶不存在，建立新帳戶
+echo "your-new-password" | sudo ceph dashboard ac-user-create admin administrator
+
+# 方法 3：使用 --force-password 強制設置
+echo "your-new-password" | sudo ceph dashboard ac-user-set-password admin --force-password
 
 # 確認帳戶已設置
-sudo ceph dashboard user-show admin
+sudo ceph dashboard ac-user-show admin
 ```
 
 ### 常見問題排查（Ceph 19.x）
 
 | 錯誤 | 可能原因 | 解決方案 |
 |---|---|---|
-| `no valid command found` | 命令格式錯誤（如 `ac-user-list` 應為 `user-list`） | 使用 Ceph 19.x 正確格式：`sudo ceph dashboard user-list` |
+| `no valid command found` | 命令格式錯誤（如 `user-list` 應為 `ac-user-list`） | 使用正確格式：`sudo ceph dashboard ac-user-list` |
 | `Permission denied` | 沒有 sudo 權限 | 改用 `sudo` 執行 |
 | `Command not found` | Ceph 工具未安裝 | 確認 Phase 2 已完成，`ceph-common` 已安裝 |
-| Dashboard 帳戶不存在 | Phase 3 bootstrap 失敗或跳過 | 使用 `sudo ceph dashboard user-create admin administrator` 建立 |
-| 密碼錯誤 | Ansible vault 密碼與實際設置不同步 | 使用 `sudo ceph dashboard user-set-password admin <new-password>` 重置 |
+| Dashboard 帳戶不存在 | 帳戶未被建立 | 使用 `echo "password" \| sudo ceph dashboard ac-user-create admin administrator` 建立 |
+| 密碼錯誤 | Ansible vault 密碼與實際設置不同步 | 使用上面的命令重置密碼 |
 
 ## 4) 驗證 Ceph 認證（MON node）
 
