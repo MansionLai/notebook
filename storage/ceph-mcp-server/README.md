@@ -67,23 +67,52 @@ uv sync
 
 ## 2) 建立 `.env`（MON node）
 
+### 獲取 Ceph Dashboard 密碼
+
+Ceph 密碼存放在 **Mac mini 的 Ansible vault** 中。需要先在 Mac mini 解密獲取：
+
 ```bash
-cd ~/ceph-mcp-server
-cp app/.env.example .env
-nano .env
+# Mac mini 上執行
+cd storage/3node-ceph/ansible
+ansible-vault view inventory/group_vars/all/encrypted.yml
+
+# 找到 `vault_ceph_dashboard_password` 的值，例如：
+# vault_ceph_dashboard_password: your-ceph-admin-password
 ```
 
-至少填這些值：
+或透過以下方法直接查看（如果有 vault 密碼）：
 
 ```bash
+# 方法 1：直接查詢 vault 密鑰
+cat storage/3node-ceph/ansible/.vault-pass  # 取得 vault 密碼
+
+# 方法 2：透過 Ansible 命令查詢（無需互動）
+cd storage/3node-ceph/ansible
+ansible localhost -m debug -a "var=vault_ceph_dashboard_password" -e @inventory/group_vars/all/encrypted.yml
+```
+
+### 填寫 `.env` 文件
+
+```bash
+cd ~/ceph-mcp-server
+cat > .env <<'EOF'
 CEPH_MANAGER_URL=https://<your-ceph-mgr-ip>:8443
 CEPH_USERNAME=admin
-CEPH_PASSWORD=<your-password>
+CEPH_PASSWORD=<從上面獲得的密碼>
 CEPH_SSL_VERIFY=false
 MCP_SERVER_VERSION=0.1.0
 SERVER_HOST=0.0.0.0
 SERVER_PORT=8000
+EOF
+
+# 驗證
+cat .env
 ```
+
+備註：
+- `CEPH_USERNAME` 預設是 `admin`
+- `CEPH_MANAGER_URL` 是 Ceph 的 Dashboard URL（通常 `https://ceph-node-01:8443`）
+- `CEPH_PASSWORD` 是從 Ansible vault 取得的 dashboard admin 密碼
 
 ## 3) 先檢查 `8000/tcp` 是否碰撞
 
