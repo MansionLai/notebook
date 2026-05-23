@@ -1,3 +1,10 @@
+---
+title: Spec
+parent: Ceph Cross-DC Migration
+nav_order: 10
+permalink: /storage/ceph-cross-dc-migration/spec/
+---
+
 # ceph-cross-dc-migration Spec
 
 最後更新：2026-05-22

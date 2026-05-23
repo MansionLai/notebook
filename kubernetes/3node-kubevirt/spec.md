@@ -1,3 +1,11 @@
+---
+title: Spec
+parent: 3-Node KubeVirt (Azure)
+grand_parent: Kubernetes
+nav_order: 10
+permalink: /kubernetes/3node-kubevirt/spec/
+---
+
 # 3node-kubevirt Spec
 
 ## 1) Scope & Goal

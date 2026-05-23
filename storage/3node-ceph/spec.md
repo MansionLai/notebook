@@ -1,3 +1,11 @@
+---
+title: Spec
+parent: 3-Node Ceph (Azure)
+grand_parent: Storage
+nav_order: 10
+permalink: /storage/3node-ceph/spec/
+---
+
 # 3node-ceph Spec
 
 最後更新：2026-05-22

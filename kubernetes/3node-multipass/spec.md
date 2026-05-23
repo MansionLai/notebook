@@ -1,3 +1,11 @@
+---
+title: Spec
+parent: 3-Node Multipass (Mac)
+grand_parent: Kubernetes
+nav_order: 10
+permalink: /kubernetes/3node-multipass/spec/
+---
+
 # 3node-multipass Spec
 
 ## 1) Scope & Goal
