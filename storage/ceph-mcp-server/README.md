@@ -267,7 +267,7 @@ curl -s -k -X POST \
 
 ## 5) 在 MON node 啟動 MCP（systemd）
 
-建立 service：
+建立 service（使用 `Environment=` 而非 `EnvironmentFile=` 避免解析問題）：
 
 ```bash
 sudo tee /etc/systemd/system/ceph-mcp.service >/dev/null <<'EOF'
@@ -280,7 +280,15 @@ Wants=network-online.target
 Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/ceph-mcp-server/app
-EnvironmentFile=/home/ubuntu/ceph-mcp-server/.env
+
+Environment="CEPH_MANAGER_URL=https://localhost:8443"
+Environment="CEPH_USERNAME=admin"
+Environment="CEPH_PASSWORD=ceph-dashboard-password"
+Environment="CEPH_SSL_VERIFY=false"
+Environment="SERVER_HOST=0.0.0.0"
+Environment="SERVER_PORT=8000"
+Environment="MCP_SERVER_VERSION=0.1.0"
+
 ExecStart=/usr/bin/env bash -lc 'uv run ceph-mcp-server'
 Restart=always
 RestartSec=3
@@ -290,7 +298,7 @@ WantedBy=multi-user.target
 EOF
 ```
 
-**注意**：改成 `User=ubuntu`、`WorkingDirectory=/home/ubuntu/ceph-mcp-server/app`、`EnvironmentFile=/home/ubuntu/ceph-mcp-server/.env`（根據你實際的 username 和路徑調整）
+> **注意**：為避免 systemd 的 `EnvironmentFile=` 解析問題，使用 `Environment=` 直接設置環境變數。如需修改密碼或 URL，請編輯此 service 文件中的 `Environment=` 行。
 
 啟用並啟動：
 
@@ -298,6 +306,13 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable --now ceph-mcp
 sudo systemctl status ceph-mcp --no-pager
+```
+
+預期輸出：
+```
+Active: active (running) since ...
+...
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 ```
 
 ## 6) MON node 開放來源（僅允許 Mac mini 公網 IP）
