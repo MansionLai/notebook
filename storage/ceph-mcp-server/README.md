@@ -23,12 +23,37 @@ pip install uv
 
 # 或直接下載安裝
 curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 驗證安裝成功
-uv --version
 ```
 
-若 `uv` 安裝成功，應該看到版本號（例如 `uv 0.4.x`）。
+**重要：配置 PATH**
+
+`uv` 會被安裝到 `~/.local/bin`，需要確保它在 PATH 中：
+
+```bash
+# 檢查 PATH 是否包含 ~/.local/bin
+echo $PATH | grep -q ".local/bin" && echo "✓ PATH is OK" || echo "✗ Need to add to PATH"
+
+# 若不包含，則添加到 shell profile
+# 選擇適合的選項（擇一執行）：
+
+# Option A: 臨時生效（當前 session）
+export PATH="$HOME/.local/bin:$PATH"
+
+# Option B: 永久生效（推薦）- Ubuntu/bash 用戶
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+
+# Option C: 永久生效 - zsh 用戶
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+驗證安裝成功：
+
+```bash
+uv --version
+# 應該看到版本號（例如 uv 0.11.x）
+```
 
 ## 1) 在 MON node 安裝上游專案
 
