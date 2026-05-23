@@ -65,6 +65,17 @@ cd app
 uv sync
 ```
 
+**重要修正**（Ceph MCP Server 版本相容性）：
+
+```bash
+# 修正 settings.py：mcp_server_version 應為字串，不是 semver
+sed -i 's/mcp_server_version: semver/mcp_server_version: str/' src/ceph_mcp/config/settings.py
+
+# 驗證修改
+grep "mcp_server_version" src/ceph_mcp/config/settings.py
+# 預期輸出：    mcp_server_version: str
+```
+
 ## 2) 建立 `.env`（MON node）
 
 ### 獲取 Ceph Dashboard 密碼
@@ -93,10 +104,12 @@ ansible localhost -m debug -a "var=vault_ceph_dashboard_password" -e @inventory/
 
 ### 填寫 `.env` 文件
 
+**重要**：`.env` 應該放在 `app/` 目錄，因為 pydantic-settings 會從執行目錄尋找 `.env`。
+
 ```bash
-cd ~/ceph-mcp-server
+cd ~/ceph-mcp-server/app
 cat > .env <<'EOF'
-CEPH_MANAGER_URL=https://<your-ceph-mgr-ip>:8443
+CEPH_MANAGER_URL=https://ceph-node-01:8443
 CEPH_USERNAME=admin
 CEPH_PASSWORD=<從上面獲得的密碼>
 CEPH_SSL_VERIFY=false
@@ -113,6 +126,7 @@ cat .env
 - `CEPH_USERNAME` 預設是 `admin`
 - `CEPH_MANAGER_URL` 是 Ceph 的 Dashboard URL（通常 `https://ceph-node-01:8443`）
 - `CEPH_PASSWORD` 是從 Ansible vault 取得的 dashboard admin 密碼
+- `MCP_SERVER_VERSION` 必須是簡單的版本字串（如 `0.1.0`），不能帶引號
 
 ## 3) 先檢查 `8000/tcp` 是否碰撞
 
