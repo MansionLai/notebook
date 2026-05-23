@@ -1,3 +1,10 @@
+---
+title: Deployment Summary
+parent: 3-Node KubeVirt (Azure)
+nav_order: 1
+permalink: /kubernetes/3node-kubevirt/deployment-summary/
+---
+
 # Kubernetes 3-Node KubeVirt Cluster on Azure
 
 ## ✅ Deployment Status: COMPLETE

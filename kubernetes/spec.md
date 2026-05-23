@@ -1,3 +1,10 @@
+---
+title: Domain Spec
+parent: Kubernetes
+nav_order: 0
+permalink: /kubernetes/spec/
+---
+
 # Kubernetes Domain Spec (總綱)
 
 本檔是 `kubernetes/` 底下所有小主題的**總規格入口**。  

@@ -1,3 +1,10 @@
+---
+title: Folder Spec
+parent: Storage
+nav_order: 0
+permalink: /storage/spec/
+---
+
 # Storage Folder Spec (Master)
 
 最後更新：2026-05-22
