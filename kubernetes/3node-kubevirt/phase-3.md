@@ -58,16 +58,18 @@ CEPH_CLUSTER_ID="<fsid>"       # ceph fsid
 CEPH_ADMIN_KEY="<admin_key>"   # ceph auth get-key client.admin
 ```
 
-### Step 3-2-2：建立 rook-ceph namespace 與 secret
+### Step 3-2-2：建立 ceph-external-cluster namespace 與 secret
 
 ```bash
-kubectl create namespace rook-ceph
+kubectl create namespace ceph-external-cluster
 
 kubectl create secret generic rook-ceph-mon \
   --from-literal=ceph-username=client.admin \
   --from-literal=ceph-secret="${CEPH_ADMIN_KEY}" \
-  -n rook-ceph
+  -n ceph-external-cluster
 ```
+
+> `rook-ceph` namespace 繼續保留給 operator；External Cluster CR 與對應 secret 放在 `ceph-external-cluster`。
 
 ### Step 3-2-3：部署 CephCluster（External 模式）
 
@@ -77,7 +79,7 @@ apiVersion: ceph.rook.io/v1
 kind: CephCluster
 metadata:
   name: rook-ceph-external
-  namespace: rook-ceph
+  namespace: ceph-external-cluster
 spec:
   external:
     enable: true
@@ -96,11 +98,15 @@ kubectl apply -f /tmp/ceph-external-cluster.yaml
 ### Step 3-2-4：驗證 External Cluster 連線
 
 ```bash
-kubectl get cephcluster -n rook-ceph
+kubectl get cephcluster -n ceph-external-cluster
 # 預期：rook-ceph-external  Connected  ...  True
 
-kubectl get pods -n rook-ceph
-# 預期：rook-ceph-operator Running；無 OSD/MON pods（外部模式不部署本地 OSD）
+# operator 仍在 rook-ceph
+kubectl get pods -n rook-ceph -l app=rook-ceph-operator
+# 預期：rook-ceph-operator Running
+
+# external cluster 相關 pod 在 ceph-external-cluster（外部模式不部署本地 OSD/MON）
+kubectl get pods -n ceph-external-cluster
 ```
 
 ---
@@ -121,16 +127,16 @@ metadata:
     storageclass.kubernetes.io/is-default-class: "true"
 provisioner: rook-ceph.rbd.csi.ceph.com
 parameters:
-  clusterID: rook-ceph
+  clusterID: ceph-external-cluster
   pool: kubernetes              # 替換為你的 RBD pool 名稱
   imageFormat: "2"
   imageFeatures: layering
   csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
-  csi.storage.k8s.io/provisioner-secret-namespace: rook-ceph
+  csi.storage.k8s.io/provisioner-secret-namespace: ceph-external-cluster
   csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
-  csi.storage.k8s.io/controller-expand-secret-namespace: rook-ceph
+  csi.storage.k8s.io/controller-expand-secret-namespace: ceph-external-cluster
   csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
-  csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph
+  csi.storage.k8s.io/node-stage-secret-namespace: ceph-external-cluster
 reclaimPolicy: Delete
 allowVolumeExpansion: true
 ```
@@ -153,9 +159,9 @@ metadata:
   name: ceph-rbd-snapclass
 driver: rook-ceph.rbd.csi.ceph.com
 parameters:
-  clusterID: rook-ceph
+  clusterID: ceph-external-cluster
   csi.storage.k8s.io/snapshotter-secret-name: rook-csi-rbd-provisioner
-  csi.storage.k8s.io/snapshotter-secret-namespace: rook-ceph
+  csi.storage.k8s.io/snapshotter-secret-namespace: ceph-external-cluster
 deletionPolicy: Delete
 ```
 
