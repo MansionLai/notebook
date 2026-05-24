@@ -164,7 +164,7 @@ metadata:
 provisioner: rook-ceph.rbd.csi.ceph.com
 parameters:
   clusterID: ceph-external-cluster
-  pool: kubernetes              # 替換為你的 RBD pool 名稱
+  pool: k8s_rbd_pool            # 替換為你的 RBD pool 名稱
   imageFormat: "2"
   imageFeatures: layering
   csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
