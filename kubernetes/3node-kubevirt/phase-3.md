@@ -53,9 +53,15 @@ kubectl get pods -n rook-ceph -l app=rook-ceph-operator
 
 ```bash
 # 替換為你的 Ceph cluster 資訊
-CEPH_MON_ENDPOINTS="<mon1_ip>:6789,<mon2_ip>:6789,<mon3_ip>:6789"
-CEPH_CLUSTER_ID="<fsid>"       # ceph fsid
+# 注意：這裡要用 rook 需要的 mon data 格式（monID=ip:port），不是單純逗號分隔 endpoint
+CEPH_MON_DATA="a=<mon1_ip>:6789,b=<mon2_ip>:6789,c=<mon3_ip>:6789"
+CEPH_CLUSTER_FSID="<fsid>"     # ceph fsid
 CEPH_ADMIN_KEY="<admin_key>"   # ceph auth get-key client.admin
+
+# 建議從外部 Ceph cluster 取出（若不存在先 ceph auth get-or-create）
+CEPH_HEALTHCHECKER_KEY="<healthchecker_key>"       # ceph auth get-key client.healthchecker
+CEPH_CSI_RBD_NODE_KEY="<csi_rbd_node_key>"         # ceph auth get-key client.csi-rbd-node
+CEPH_CSI_RBD_PROVISIONER_KEY="<csi_rbd_prov_key>"  # ceph auth get-key client.csi-rbd-provisioner
 ```
 
 ### Step 3-2-2：建立 ceph-external-cluster namespace 與 secret
@@ -63,9 +69,42 @@ CEPH_ADMIN_KEY="<admin_key>"   # ceph auth get-key client.admin
 ```bash
 kubectl create namespace ceph-external-cluster
 
+# rook external cluster: monitor endpoints configmap
+kubectl create configmap rook-ceph-mon-endpoints \
+  --from-literal=data="${CEPH_MON_DATA}" \
+  --from-literal=maxMonId="2" \
+  --from-literal=mapping="{}" \
+  -n ceph-external-cluster
+
+# rook external cluster: mon secret（fsid + admin/user key）
 kubectl create secret generic rook-ceph-mon \
+  --type="kubernetes.io/rook" \
+  --from-literal=cluster-name=ceph-external-cluster \
+  --from-literal=fsid="${CEPH_CLUSTER_FSID}" \
+  --from-literal=admin-secret=admin-secret \
+  --from-literal=mon-secret=mon-secret \
   --from-literal=ceph-username=client.admin \
   --from-literal=ceph-secret="${CEPH_ADMIN_KEY}" \
+  -n ceph-external-cluster
+
+# operator creds（external mode 需要）
+kubectl create secret generic rook-ceph-operator-creds \
+  --type="kubernetes.io/rook" \
+  --from-literal=userID=client.healthchecker \
+  --from-literal=userKey="${CEPH_HEALTHCHECKER_KEY}" \
+  -n ceph-external-cluster
+
+# CSI RBD secrets（供 StorageClass 使用）
+kubectl create secret generic rook-csi-rbd-node \
+  --type="kubernetes.io/rook" \
+  --from-literal=userID=client.csi-rbd-node \
+  --from-literal=userKey="${CEPH_CSI_RBD_NODE_KEY}" \
+  -n ceph-external-cluster
+
+kubectl create secret generic rook-csi-rbd-provisioner \
+  --type="kubernetes.io/rook" \
+  --from-literal=userID=client.csi-rbd-provisioner \
+  --from-literal=userKey="${CEPH_CSI_RBD_PROVISIONER_KEY}" \
   -n ceph-external-cluster
 ```
 
@@ -105,8 +144,10 @@ kubectl get cephcluster -n ceph-external-cluster
 kubectl get pods -n rook-ceph -l app=rook-ceph-operator
 # 預期：rook-ceph-operator Running
 
-# external cluster 相關 pod 在 ceph-external-cluster（外部模式不部署本地 OSD/MON）
-kubectl get pods -n ceph-external-cluster
+# 確認 external cluster 依賴資源已存在
+kubectl get configmap rook-ceph-mon-endpoints -n ceph-external-cluster
+kubectl get secret rook-ceph-mon rook-ceph-operator-creds rook-csi-rbd-node rook-csi-rbd-provisioner \
+  -n ceph-external-cluster
 ```
 
 ---
