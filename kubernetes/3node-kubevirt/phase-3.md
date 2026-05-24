@@ -187,6 +187,24 @@ kubectl get sc
 
 ## Phase 3-4：建立 VolumeSnapshotClass
 
+### Step 3-4-0：安裝 Snapshot CRD 與 Controller（若尚未安裝）
+
+```bash
+# 安裝 VolumeSnapshot CRDs
+kubectl apply -k "github.com/kubernetes-csi/external-snapshotter/client/config/crd?ref=v6.3.3"
+
+# 安裝 snapshot-controller
+kubectl apply -k "github.com/kubernetes-csi/external-snapshotter/deploy/kubernetes/snapshot-controller?ref=v6.3.3"
+
+# 驗證
+kubectl get crd | grep volumesnapshot
+kubectl -n kube-system get deploy snapshot-controller
+```
+
+### Step 3-4-1：建立 VolumeSnapshotClass
+
+> 若出現 `no matches for kind "VolumeSnapshotClass"`，表示前一步 CRD 尚未安裝完成或尚未就緒。
+
 ```yaml
 # /tmp/ceph-rbd-snapclass.yaml
 apiVersion: snapshot.storage.k8s.io/v1
