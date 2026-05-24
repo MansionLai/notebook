@@ -58,10 +58,10 @@ CEPH_MON_DATA="a=<mon1_ip>:6789,b=<mon2_ip>:6789,c=<mon3_ip>:6789"
 CEPH_CLUSTER_FSID="<fsid>"     # ceph fsid
 CEPH_ADMIN_KEY="<admin_key>"   # ceph auth get-key client.admin
 
-# 建議從外部 Ceph cluster 取出（若不存在先 ceph auth get-or-create）
-CEPH_HEALTHCHECKER_KEY="<healthchecker_key>"       # ceph auth get-key client.healthchecker
-CEPH_CSI_RBD_NODE_KEY="<csi_rbd_node_key>"         # ceph auth get-key client.csi-rbd-node
-CEPH_CSI_RBD_PROVISIONER_KEY="<csi_rbd_prov_key>"  # ceph auth get-key client.csi-rbd-provisioner
+# 直接共用 admin key（client.admin）
+CEPH_HEALTHCHECKER_KEY="${CEPH_ADMIN_KEY}"
+CEPH_CSI_RBD_NODE_KEY="${CEPH_ADMIN_KEY}"
+CEPH_CSI_RBD_PROVISIONER_KEY="${CEPH_ADMIN_KEY}"
 ```
 
 ### Step 3-2-2：建立 ceph-external-cluster namespace 與 secret
@@ -90,20 +90,20 @@ kubectl create secret generic rook-ceph-mon \
 # operator creds（external mode 需要）
 kubectl create secret generic rook-ceph-operator-creds \
   --type="kubernetes.io/rook" \
-  --from-literal=userID=client.healthchecker \
+  --from-literal=userID=client.admin \
   --from-literal=userKey="${CEPH_HEALTHCHECKER_KEY}" \
   -n ceph-external-cluster
 
 # CSI RBD secrets（供 StorageClass 使用）
 kubectl create secret generic rook-csi-rbd-node \
   --type="kubernetes.io/rook" \
-  --from-literal=userID=client.csi-rbd-node \
+  --from-literal=userID=client.admin \
   --from-literal=userKey="${CEPH_CSI_RBD_NODE_KEY}" \
   -n ceph-external-cluster
 
 kubectl create secret generic rook-csi-rbd-provisioner \
   --type="kubernetes.io/rook" \
-  --from-literal=userID=client.csi-rbd-provisioner \
+  --from-literal=userID=client.admin \
   --from-literal=userKey="${CEPH_CSI_RBD_PROVISIONER_KEY}" \
   -n ceph-external-cluster
 ```
