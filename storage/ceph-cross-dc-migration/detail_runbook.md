@@ -12,37 +12,6 @@ permalink: /storage/ceph-cross-dc-migration/detail_runbook/
 
 ## High-Level Flow
 
-### 完整流程（Traditional Path）
-
-```mermaid
-flowchart LR
-    subgraph CEPH["Ceph cluster"]
-        direction LR
-        A[備份設定與健康檢查] --> B[新增 dc2 MON 節點]
-        E[移除 dc1 MON 節點]
-        F[最終健康確認]
-    end
-
-    subgraph K8S["K8s cluster"]
-        direction LR
-        C[手動更新 Rook MON endpoints] --> D[驗證 ConfigMap]
-        H[驗證 client I/O]
-        G["（可選）清理 dc1<br/>endpoints"]
-    end
-
-    B --> C
-    D --> H
-    H --> G
-    G --> E
-    E --> F
-
-    style CEPH fill:#e6ffed,stroke:#2f855a,stroke-width:1.5px
-    style K8S fill:#e8f1ff,stroke:#3b82f6,stroke-width:1.5px
-    style G fill:#fef5e7,stroke:#d68910,stroke-width:1.5px,stroke-dasharray: 5 5
-```
-
-### 快速路徑（Fast Track - Rook Operator Auto-Sync）
-
 ```mermaid
 flowchart LR
     subgraph CEPH["Ceph cluster"]
@@ -68,9 +37,7 @@ flowchart LR
     style C fill:#fff4e6,stroke:#ed8936,stroke-width:2px
 ```
 
-**預期耗時對比**：
-- 完整流程：15-20 分鐘
-- 快速路徑：8-10 分鐘
+**預期耗時**：8-10 分鐘
 
 ---
 
@@ -186,9 +153,11 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 
 本節詳述 MON migration 的完整執行步驟，包含 Ceph 端 add-before-remove 與 client endpoint 提前切到 dc2-only 的 coordination checkpoints。
 
-### 🚀 快速路徑（Fast Track）- Rook Operator 自動同步環境
+### 🔄 Change Flow
 
-**若您的 Rook operator 版本 ≥ v1.14 且自動同步功能運作正常**，可使用以下簡化流程：
+本 runbook 推薦使用以下流程進行 MON migration。此流程依賴 Rook operator v1.14+ 的自動同步功能，無需手動編輯 ConfigMaps。
+
+#### 執行步驟
 
 1. **Step 0**：執行前置檢查
 2. **Step 1**：Ceph 端 add-before-remove（`ceph mon add ...`）
@@ -198,13 +167,17 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 6. **Step 6**：跳過（Rook operator 會自動清理 ConfigMaps）
 7. **Step 7**：Ceph 端 remove dc1 MON 節點（`ceph mon rm ...`）
 
-**預期總耗時**：8-10 分鐘（vs 原 15-20 分鐘）
+**預期總耗時**：8-10 分鐘
 
-> **何時需要完整步驟？**
-> - Rook operator 未自動更新 ConfigMaps（logs 無相關記錄）或版本 < v1.14
+> **環境需求**：
+> - Rook operator 版本 ≥ v1.14
+> - auto-sync 功能已啟用（預設為啟用）
+> 
+> **若需完整手動控制**：
+> - 若 Rook operator 未自動更新 ConfigMaps（logs 無相關記錄）或版本 < v1.14
 > - 需要精細控制 client endpoint 切換時序
 > - 環境複雜或有多個 Kubernetes cluster 連線至同一 Ceph cluster
-> - 若需要手動介入，執行 Step 6（Optional Troubleshooting）
+> - 此時可執行 Step 6（Optional Troubleshooting）進行手動介入
 
 ---
 
