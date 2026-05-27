@@ -12,6 +12,8 @@ permalink: /storage/ceph-cross-dc-migration/detail_runbook/
 
 ## High-Level Flow
 
+### 完整流程（Traditional Path）
+
 ```mermaid
 flowchart LR
     subgraph CEPH["Ceph cluster"]
@@ -23,18 +25,51 @@ flowchart LR
 
     subgraph K8S["K8s cluster"]
         direction LR
-        C[更新 Rook MON endpoints] --> D[驗證 client I/O]
+        C[手動更新 Rook MON endpoints] --> D[驗證 ConfigMap]
+        H[驗證 client I/O]
         G[清理 dc1 endpoints]
     end
 
     B --> C
-    D --> G
+    D --> H
+    H --> G
     G --> E
     E --> F
 
     style CEPH fill:#e6ffed,stroke:#2f855a,stroke-width:1.5px
     style K8S fill:#e8f1ff,stroke:#3b82f6,stroke-width:1.5px
 ```
+
+### 快速路徑（Fast Track - Rook Operator Auto-Sync）
+
+```mermaid
+flowchart LR
+    subgraph CEPH["Ceph cluster"]
+        direction LR
+        A[備份設定與健康檢查] --> B[新增 dc2 MON 節點]
+        E[移除 dc1 MON 節點]
+        F[最終健康確認]
+    end
+
+    subgraph K8S["K8s cluster"]
+        direction LR
+        C["⏳ 等待 Rook Operator<br/>自動同步 ConfigMap"] -.1-2分鐘.-> D[驗證 csi-rbdplugin logs]
+        H[驗證 VM I/O 正常]
+    end
+
+    B --> C
+    D --> H
+    H --> E
+    E --> F
+
+    style CEPH fill:#e6ffed,stroke:#2f855a,stroke-width:1.5px
+    style K8S fill:#e8f1ff,stroke:#3b82f6,stroke-width:1.5px
+    style C fill:#fff4e6,stroke:#ed8936,stroke-width:2px
+```
+
+**預期耗時對比**：
+- 完整流程：15-20 分鐘
+- 快速路徑：8-10 分鐘
 
 ---
 
