@@ -55,6 +55,7 @@ flowchart LR
 3. **Client Endpoint Coordination**
    - Rook-Ceph external mode 透過 `rook-ceph-mon-endpoints` ConfigMap 與 Secret 傳遞 MON 地址
    - `rook-ceph-config` / `mon_host` 必須反映新 MON endpoint 集合
+   - **Rook Operator Auto-Sync** (v1.14+): 當 Ceph cluster 的 MON 拓撲變更時，Rook operator 會自動更新 ConfigMaps，**無需手動編輯**
    - 切換策略：**先加後減，再提早切到 dc2-only**（先讓 client 吃到 dc1 + dc2，再於 Ceph 側移除前先清理 dc1 endpoints）
    - 兩者（`rook-ceph-mon-endpoints` 與 `rook-ceph-config` / `mon_host`）都應先完成 dc2-only 收斂，再執行 Ceph cluster 的 dc1 MON 移除
    - ceph-csi / librbd 通常能透過 Ceph 的 monmap gossip 學到新 MON；ConfigMap 變更則主要影響 pod 啟動或 reconnect 時讀取到的 `ceph.conf`
@@ -148,6 +149,26 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 ## 3. Detailed MON Migration Runbook
 
 本節詳述 MON migration 的完整執行步驟，包含 Ceph 端 add-before-remove 與 client endpoint 提前切到 dc2-only 的 coordination checkpoints。
+
+### 🚀 快速路徑（Fast Track）- Rook Operator 自動同步環境
+
+**若您的 Rook operator 版本 ≥ v1.14 且自動同步功能運作正常**，可使用以下簡化流程：
+
+1. **Step 0**：執行前置檢查
+2. **Step 1**：Ceph 端 add-before-remove（`ceph mon add ...`）
+3. **Step 2-3**：跳過手動 ConfigMap 編輯，等待 Rook operator 自動同步（1-2 分鐘）
+4. **Step 4**：驗證 csi-rbdplugin logs 確認已連線至新 MON endpoints
+5. **Step 5**：關鍵驗證 — 檢查 VM I/O 持續正常（fio 或應用層檢查）
+6. **Step 6-7**：Ceph 端 remove dc1 MON 節點
+
+**預期總耗時**：8-10 分鐘（vs 原 15-20 分鐘）
+
+> **何時需要完整步驟？**
+> - Rook operator 未自動更新 ConfigMaps（logs 無相關記錄）
+> - 需要精細控制 client endpoint 切換時序
+> - 環境複雜或有多個 Kubernetes cluster 連線至同一 Ceph cluster
+
+---
 
 ### Step 0: Pre-Migration Backup and Validation
 
@@ -295,7 +316,15 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 
 **目標**：更新 Rook external mode ConfigMap，同時包含 dc1 + dc2 MON endpoints
 
-> **Reconciliation risk note**: 在 Rook external mode 中，`rook-ceph-mon-endpoints` 與後續的 `rook-ceph-config` 可能會被 external-cluster import 的上游狀態重新調諧。若 `kubectl edit` 後變更很快被覆寫，請先確認 edits 是否能持久保留；若無法保留，應先更新 upstream 的 external-cluster import 來源，再繼續後續步驟。
+> **⚠️ Rook Operator Auto-Sync Note** (v1.14+): 
+> 在最新 Rook operator 中，當 Ceph cluster 中 MON 拓撲變更時，`rook-ceph-mon-endpoints` 與 `rook-ceph-config` 的 `mon_host` 會**自動同步更新**。
+> 
+> - **若 Rook operator 自動同步正常運作**：可直接跳過本 Step（進入 Step 4），等待 operator 於 1-2 分鐘內自動更新 ConfigMaps
+> - **若需驗證或手動干預**：見下方「執行步驟」
+> 
+> **建議**：先檢查 operator logs (`kubectl logs -n rook-ceph deployment/rook-ceph-operator`)，確認是否已偵測到 MON 變更；若已發生自動更新，無需手動執行 Step 2-3。
+
+#### 執行步驟（若未自動同步）
 
 #### 執行步驟
 
@@ -334,9 +363,12 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 
 ---
 
-### Step 3: Verify rook-ceph-config and mon_host
+### Step 3: Verify rook-ceph-config and mon_host (Optional if Auto-Sync)
 
 **目標**：確認 `rook-ceph-config` 的 `mon_host` 欄位已更新
+
+> **⚠️ Auto-Sync Check First**:
+> 若 Rook operator 已自動更新 `mon_host`（見 Step 2 note），**可跳過本 Step 的編輯部分**，僅執行「Check ceph.conf mon_host」驗證即可。
 
 #### 執行步驟
 
