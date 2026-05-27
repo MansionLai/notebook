@@ -160,7 +160,7 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 #### 執行步驟
 
 1. **Step 0**：執行前置檢查
-2. **Step 1**：Ceph 端 add-before-remove（`ceph mon add ...`）
+2. **Step 1**：Ceph 端 add-before-remove（`ceph orch apply mon --placement="mon-dc2-01 mon-dc2-02 mon-dc2-03"`）
 3. **Step 2-3**：跳過手動 ConfigMap 編輯，等待 Rook operator 自動同步（1-2 分鐘）
 4. **Step 4**：驗證 csi-rbdplugin logs 確認已連線至新 MON endpoints
 5. **Step 5**：關鍵驗證 — 檢查 VM I/O 持續正常（fio 或應用層檢查）
@@ -230,16 +230,11 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
    kubectl get vmi -A -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,VOLUMES:.spec.volumes[*].persistentVolumeClaim.claimName
    ```
 
-5. **Check MON Service Mode**
+5. **Check MON Service Placement**
    ```bash
    ceph orch ls mon -f yaml
-   # 若目前 MON service 仍由 cephadm placement spec 自動管理，
-   # 先切成 unmanaged，避免 Step 1 / Step 7 的 daemon add/rm 被 reconciliation 覆寫
-
-   ceph orch apply mon --unmanaged
-
-   # 再次確認狀態
-   ceph orch ls mon -f yaml
+   # 確認目前 MON service 狀態與 placement，
+   # 並記錄變更前配置，供 rollback 使用
    ```
 
 6. **Confirm dc2 MON Candidate Hosts Are Registered**
@@ -255,64 +250,43 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 - ✅ Rook external mode 配置已備份
 - ✅ 當前 MON endpoint 清單已記錄
 - ✅ Client workload inventory 已完成
-- ✅ MON service 已切到 unmanaged，或已確認本次操作不會被 cephadm placement spec 覆寫
+- ✅ MON service placement 已確認並已記錄（供 rollback）
 - ✅ dc2 MON 候選主機（mon-dc2-01 / 02 / 03）已在 cephadm orchestrator host 清單中，且 location metadata 正確
 
 ---
 
 ### Step 1: Add dc2 MONs to Cluster
 
-**目標**：逐一新增 dc2 MON 節點，擴大 quorum 至 4、5、6 個成員
+**目標**：一次套用 dc2 MON placement，讓 orchestrator 建立 dc2 MON 節點並擴大 quorum 至 6 個成員
 
-> **cephadm note**: 本 Step 假設 MON service 已先切到 `--unmanaged`；否則 `ceph orch daemon add mon ...` 可能被既有 placement spec 自動覆寫。
+> **cephadm note**: 本 Step 會更新 MON service placement spec。請先確認本次變更符合目標拓撲，並避免被其他自動化流程覆寫。
 
 #### 執行步驟
 
-1. **Add First dc2 MON (mon-dc2-01)**
-    ```bash
-    # 前提：mon-dc2-01 已在 host 上具備正確 location metadata
-    ceph orch daemon add mon mon-dc2-01
-   
-   # 等待 MON daemon 啟動（約 30-60 秒）
-   sleep 60
-   
-   # 驗證 MON 已加入 quorum
-   ceph mon stat
-   # 預期：quorum: 0,1,2,3 (4 MONs)
-    
-   ceph quorum_status -f json-pretty | grep -A 1 mon-dc2-01
-   # 確認 mon-dc2-01 在 quorum 中
+1. **Apply dc2 MON Placement**
+   ```bash
+   # 前提：mon-dc2-01 / mon-dc2-02 / mon-dc2-03 已在 host 上具備正確 location metadata
+   ceph orch apply mon --placement="mon-dc2-01 mon-dc2-02 mon-dc2-03"
 
-   ACTUAL=$(ceph quorum_status -f json-pretty | jq '.quorum | length')
-   [ "$ACTUAL" -eq 4 ] || { echo "HALT: mon-dc2-01 did not join quorum ($ACTUAL != 4)"; exit 1; }
+   # 等待 orchestrator 完成 MON daemon 調度（約 60-120 秒）
+   sleep 120
+
+   # 確認 MON service placement 已更新
+   ceph orch ls mon -f yaml
    ```
 
-2. **Add Second dc2 MON (mon-dc2-02)**
-    ```bash
-    # 前提：mon-dc2-02 已在 host 上具備正確 location metadata
-    ceph orch daemon add mon mon-dc2-02
-   
-   sleep 60
-    
-   ceph mon stat
-   # 預期：quorum: 0,1,2,3,4 (5 MONs)
-
-   ACTUAL=$(ceph quorum_status -f json-pretty | jq '.quorum | length')
-   [ "$ACTUAL" -eq 5 ] || { echo "HALT: mon-dc2-02 did not join quorum ($ACTUAL != 5)"; exit 1; }
-   ```
-
-3. **Add Third dc2 MON (mon-dc2-03)**
-    ```bash
-    # 前提：mon-dc2-03 已在 host 上具備正確 location metadata
-    ceph orch daemon add mon mon-dc2-03
-   
-   sleep 60
-    
+2. **Verify MON Quorum Expanded to 6 Members**
+   ```bash
    ceph mon stat
    # 預期：quorum: 0,1,2,3,4,5 (6 MONs)
 
+   # 逐一確認 dc2 MON 在 quorum 中
+   ceph quorum_status -f json-pretty | grep -A 1 mon-dc2-01
+   ceph quorum_status -f json-pretty | grep -A 1 mon-dc2-02
+   ceph quorum_status -f json-pretty | grep -A 1 mon-dc2-03
+
    ACTUAL=$(ceph quorum_status -f json-pretty | jq '.quorum | length')
-   [ "$ACTUAL" -eq 6 ] || { echo "HALT: mon-dc2-03 did not join quorum ($ACTUAL != 6)"; exit 1; }
+   [ "$ACTUAL" -eq 6 ] || { echo "HALT: dc2 MONs not fully joined quorum ($ACTUAL != 6)"; exit 1; }
    ```
 
 #### Gate Criteria (進入 Step 2 前)
@@ -641,7 +615,7 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 5. **Re-apply MON Placement on dc2 Hosts**
    ```bash
    # 將 MON service 恢復為 managed，並收斂到 dc2 三台主機
-   ceph orch apply mon --placement="mon-dc2-01,mon-dc2-02,mon-dc2-03"
+   ceph orch apply mon --placement="mon-dc2-01 mon-dc2-02 mon-dc2-03"
 
    # 驗證 service spec
    ceph orch ls mon -f yaml
@@ -773,7 +747,7 @@ kubectl -n rook-ceph apply -f /backup/rook-ceph-mon-endpoints.${BACKUP_DATE}.yam
 kubectl -n rook-ceph apply -f /backup/rook-ceph-config.${BACKUP_DATE}.yaml
 
 # 恢復 MON service 為 managed，並回到原始 dc1 placement
-ceph orch apply mon --placement="mon-dc1-01,mon-dc1-02,mon-dc1-03"
+ceph orch apply mon --placement="mon-dc1-01 mon-dc1-02 mon-dc1-03"
 ceph orch ls mon -f yaml
 ```
 
@@ -788,11 +762,9 @@ ceph orch ls mon -f yaml
 **緩解措施**：
 - 若 dc1 MON 節點仍可存取，可嘗試重新加入：
   ```bash
-  # 重新加入 dc1 MON 節點
+  # 重新套用 dc1 MON placement
   # 前提：對應 host 已先具備正確 location metadata
-  ceph orch daemon add mon mon-dc1-01
-  ceph orch daemon add mon mon-dc1-02
-  ceph orch daemon add mon mon-dc1-03
+  ceph orch apply mon --placement="mon-dc1-01 mon-dc1-02 mon-dc1-03"
   
   # 驗證 quorum
   ceph mon stat
