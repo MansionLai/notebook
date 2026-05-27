@@ -1,0 +1,87 @@
+# Netbox Helm Chart 自訂配置示例
+# 用於生產環境部署
+
+# Netbox 應用配置
+replicaCount: 3
+
+image:
+  repository: netboxcommunity/netbox
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# 資源限制（生產環境推薦值）
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+# PostgreSQL 配置
+postgresql:
+  enabled: true
+  replicaCount: 3
+  
+  primary:
+    persistence:
+      enabled: true
+      size: 50Gi  # 根據需要調整大小
+      storageClassName: local-path
+  
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  
+  auth:
+    username: netbox
+    password: change-me-to-strong-password
+    database: netbox
+
+# Redis 配置
+redis:
+  enabled: true
+  
+  replica:
+    replicaCount: 2  # 1 master + 2 replicas
+  
+  persistence:
+    enabled: false  # 會話丟失無需持久化
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  
+  auth:
+    enabled: true
+    password: change-me-to-strong-redis-password
+
+# Service 配置
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8001
+
+# Ingress 配置（可選，用於外部訪問）
+ingress:
+  enabled: false
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: netbox.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: netbox-tls
+      hosts:
+        - netbox.example.com
