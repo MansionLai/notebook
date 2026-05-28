@@ -1,3 +1,9 @@
+---
+title: Multipass + K3s 基礎設施搭建
+parent: Netbox
+nav_order: 2
+---
+
 # Multipass + K3s 基礎設施搭建指南
 
 ## 概述

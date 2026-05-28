@@ -1,3 +1,9 @@
+---
+title: 完整部署步驟
+parent: Netbox
+nav_order: 4
+---
+
 # 完整部署步驟
 
 ## 概述

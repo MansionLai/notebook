@@ -1,3 +1,9 @@
+---
+title: Netbox 架構詳解
+parent: Netbox
+nav_order: 1
+---
+
 # Netbox 架構詳解
 
 ## 概述

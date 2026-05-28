@@ -1,3 +1,10 @@
+---
+title: Netbox
+nav_order: 5
+has_children: true
+permalink: /netbox/
+---
+
 # Netbox 多副本高可用部署指南
 
 在 Mac-mini 上使用 Multipass + K3s + Helm chart 部署 Netbox、PostgreSQL、Redis 的完整指南。

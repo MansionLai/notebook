@@ -1,3 +1,9 @@
+---
+title: 配置參考表
+parent: Netbox
+nav_order: 5
+---
+
 # 配置參考表
 
 本文檔提供 Netbox、PostgreSQL 和 Redis 的完整配置項速查表，方便向同事介紹或調整部署。

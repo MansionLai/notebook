@@ -1,3 +1,9 @@
+---
+title: Helm Chart 深度指南
+parent: Netbox
+nav_order: 3
+---
+
 # Helm Chart 深度指南
 
 ## 概述
