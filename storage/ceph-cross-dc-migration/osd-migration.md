@@ -69,7 +69,7 @@ flowchart LR
 ### 現有 RBD Pool 配置
 
 - **Pool 用途**：服務 KubeVirt 虛擬機的持久化儲存
-- **Replication**：假設為 `size=3, min_size=2`（標準高可用配置）
+- **Replication**：假設為 `size=3, min_size=1`（3 份副本，最少 1 份可用）
 - **PG 數量**：依據 pool 大小與 OSD 數量計算（應符合 Ceph best practice）
 
 ### KubeVirt VM 影響評估
@@ -81,9 +81,11 @@ flowchart LR
    - VM 的 block device I/O 會經歷額外的網路跳轉與 backfill traffic
    - **建議**：監控 VM 應用層面的延遲指標，必要時調整 recovery throttling
 
-2. **資料可用性無虞**
-   - 只要 `min_size=2` 且 cluster 健康，VM 不會遭遇 I/O 中斷
-   - CRUSH 保證每個 PG 的 replica 分布於不同 racks（failure domain）
+2. **資料可用性保證**
+   - `min_size=1` 表示即使 3 個副本僅剩 1 個，cluster 仍繼續提供 I/O
+   - 在 recovery 過程中，VM 不會遭遇 I/O 中斷（只要至少 1 個副本可存取）
+   - **注意**：此設定下資料容錯能力有限，單次故障可能導致資料不可復原
+   - CRUSH 保證每個 PG 的 replica 分布於不同 racks（failure domain），最大化容錯
 
 3. **VM 遷移考量**
    - **無需遷移 VM**：Ceph RBD 遷移對 VM 透明，VM 持續運行於原 KubeVirt 節點
