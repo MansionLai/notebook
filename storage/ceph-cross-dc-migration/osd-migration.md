@@ -188,13 +188,16 @@ flowchart LR
 
 2. **Deploy OSDs**
    ```bash
-   # 使用 cephadm 自動部署 OSD（假設已有 OSD spec）
-   ceph orch apply -i /path/to/osd-spec-dc2-o4.yaml
-   
-   # 或手動指定每台節點的 disks
+   # 手動指定每台節點的 disks
    # 範例：對每個節點的 10 顆 disk 執行
    ceph orch daemon add osd osd-dc2-o4-01:/dev/sdb
-   # ... 重複 10 顆 disk
+   ceph orch daemon add osd osd-dc2-o4-01:/dev/sdc
+   # ... 重複直到所有 disks
+    
+   # 對其他 4 台節點重複相同操作
+   ceph orch daemon add osd osd-dc2-o4-02:/dev/sdb
+   ceph orch daemon add osd osd-dc2-o4-02:/dev/sdc
+   # ... 以此類推
    ```
 
 3. **Verify OSD Creation**
@@ -421,9 +424,11 @@ done
   for node in osd-dc1-o1-{01..05}; do
     ceph orch host add $node --labels osd --location rack=o1
   done
-  
-  # 重新部署 OSDs（需 disks 資料仍存在）
-  ceph orch apply -i /path/to/osd-spec-dc1-o1.yaml
+   
+  # 手動重新加入 OSDs（需 disks 資料仍存在）
+  ceph orch daemon add osd osd-dc1-o1-01:/dev/sdb
+  ceph orch daemon add osd osd-dc1-o1-01:/dev/sdc
+  # ... 重複所有 disks
   ```
 
 - 若節點已無法恢復，則：
