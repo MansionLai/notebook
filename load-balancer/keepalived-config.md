@@ -1,7 +1,7 @@
 ---
 title: Keepalived 配置
 parent: Load Balancer
-nav_order: 3
+nav_order: 4
 ---
 
 # Keepalived 配置

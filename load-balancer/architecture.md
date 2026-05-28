@@ -17,22 +17,25 @@ graph TB
             subgraph MASTER["lb-master · 192.168.50.211"]
                 KA_M["Keepalived<br/>(MASTER · priority 100)"]
                 HP_M["HAProxy"]
+                WEB_M["🐳 web-server :8080"]
+                API_M["🐳 api-server :8081"]
             end
             subgraph SLAVE["lb-slave · 192.168.50.212"]
                 KA_S["Keepalived<br/>(BACKUP · priority 90)"]
                 HP_S["HAProxy"]
+                WEB_S["🐳 web-server :8080"]
+                API_S["🐳 api-server :8081"]
             end
             VIP["⭐ VIP: 192.168.50.250<br/>(平時綁在 Master)"]
         end
     end
 
-    Backend1["Backend Server 1"]
-    Backend2["Backend Server 2"]
-
-    Client -->|"連線到 VIP :80"| VIP
+    Client -->|"連線到 VIP :80 / :8081"| VIP
     VIP --> HP_M
-    HP_M --> Backend1
-    HP_M --> Backend2
+    HP_M -->|"roundrobin"| WEB_M
+    HP_M -->|"roundrobin"| WEB_S
+    HP_M -->|"roundrobin"| API_M
+    HP_M -->|"roundrobin"| API_S
     KA_M <-->|"VRRP 心跳 (multicast)"| KA_S
     KA_M -->|"持有 VIP"| VIP
 ```

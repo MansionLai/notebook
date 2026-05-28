@@ -1,7 +1,7 @@
 ---
 title: 故障切換測試
 parent: Load Balancer
-nav_order: 5
+nav_order: 7
 ---
 
 # 故障切換測試

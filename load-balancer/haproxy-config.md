@@ -1,7 +1,7 @@
 ---
 title: HAProxy 配置
 parent: Load Balancer
-nav_order: 4
+nav_order: 5
 ---
 
 # HAProxy 配置
@@ -98,9 +98,9 @@ backend http_back
     option httpchk GET /health
     http-check expect status 200
 
-    # 後端伺服器（請換成你實際的後端 IP）
-    server web1 192.168.50.101:8080 check inter 5s fall 3 rise 2
-    server web2 192.168.50.102:8080 check inter 5s fall 3 rise 2
+    # 後端 Web Server（Docker 容器，跑在兩台 VM 上）
+    server lb-master 192.168.50.211:8080 check inter 5s fall 3 rise 2
+    server lb-slave  192.168.50.212:8080 check inter 5s fall 3 rise 2
 ```
 
 ---

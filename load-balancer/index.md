@@ -15,8 +15,10 @@ permalink: /load-balancer/
 |------|------|
 | [架構概覽](./architecture) | VRRP 原理、VIP 漂移機制、整體設計 |
 | [VM 環境搭建](./vm-setup) | Multipass 建立兩台 VM、設定固定 IP |
+| [Docker Backend Service](./backend-service) | 在 VM 上用 Docker 建立 Web + API 後端 |
 | [Keepalived 配置](./keepalived-config) | Master/Slave VRRP 設定、健康檢查 |
 | [HAProxy 配置](./haproxy-config) | 前端/後端配置、stats 頁面 |
+| [Ansible Playbook](./ansible-playbook) | 一鍵自動化部署所有元件 |
 | [故障切換測試](./failover-testing) | 驗證 VIP 漂移、切換時間量測 |
 
 ## 🏗️ 環境規劃

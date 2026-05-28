@@ -17,6 +17,8 @@ nav_order: 99
 > 我要使用 active-standby mode, 請幫我把 vm 使用固定 ip
 > (192.168.50.211, 192.168.50.212), 並加上一個 VIP 192.168.50.250,
 > 只有 master 會有 VIP.」
+> 幫我在node上面透過docker創建簡單的http web + api server當作backend service
+> 並且把keepalived / haproxy setup & config流程使用ansible playbook完成
 
 ---
 
@@ -43,6 +45,8 @@ nav_order: 99
 |------|------|---------|
 | **Keepalived** | VIP 管理、故障偵測 | 使用 VRRP 協定，master priority 100，slave priority 90 |
 | **HAProxy** | 實際負載均衡 | 兩台 VM 配置相同，由 VIP 決定流量進入哪台 |
+| **Docker** | 後端服務容器 | 每台 VM 上跑 web-server(:8080) + api-server(:8081) |
+| **Ansible** | 自動化部署 | 一鍵完成 keepalived/haproxy/docker 的 setup & config |
 
 ### IP 規劃
 
@@ -65,10 +69,12 @@ nav_order: 99
 | 文件 | 說明 |
 |------|------|
 | `index.md` | 主題導覽 |
-| `architecture.md` | VRRP 原理、元件分工、切換流程圖 |
+| `architecture.md` | VRRP 原理、元件分工、切換流程圖（含 Docker backend）|
 | `vm-setup.md` | Multipass 建 VM、netplan 設定靜態 IP |
+| `backend-service.md` | Docker 建立 web-server + api-server |
 | `keepalived-config.md` | Master/Slave 完整 keepalived.conf |
 | `haproxy-config.md` | HAProxy frontend/backend/stats 配置 |
+| `ansible-playbook.md` | Ansible 自動化部署所有元件 |
 | `failover-testing.md` | 5 種故障切換測試情境 |
 
 ---
@@ -77,9 +83,9 @@ nav_order: 99
 
 - [ ] VM 網卡介面名稱：文件中預設用 `ens4`，實際可能是 `enp0s2` 或其他，需要 `ip addr show` 確認
 - [ ] 路由器 Gateway：文件假設 `192.168.50.1`，請確認你的實際路由器 IP
-- [ ] HAProxy 後端：文件中的後端 (`192.168.50.101`, `.102`) 是佔位符，需替換為實際後端 IP
 - [ ] Mac 網路介面：文件假設有線是 `en0`，請用 `multipass networks` 確認
 - [ ] Multipass 版本：橋接網路的 `--network` 參數需要 Multipass 1.11+
+- [ ] Ansible inventory 的 SSH user：文件假設是 `ubuntu`，請確認 Multipass VM 的預設使用者名稱
 
 ---
 
