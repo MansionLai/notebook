@@ -257,25 +257,41 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 
 ### Step 1: Add dc2 MONs to Cluster
 
-**目標**：一次套用 dc2 MON placement，讓 orchestrator 建立 dc2 MON 節點並擴大 quorum 至 6 個成員
+**目標**：先把 dc2 MON 節點加入 Ceph cluster 的 monmap，再透過 placement 指定完整的 6 個 MON 節點，讓 orchestrator 建立並擴大 quorum
 
-> **cephadm note**: 本 Step 會更新 MON service placement spec。請先確認本次變更符合目標拓撲，並避免被其他自動化流程覆寫。
+> **cephadm note**: 本 Step 分兩階段執行：
+> 1. 先用 `ceph mon add` 把 dc2 MON 加入 monmap
+> 2. 再用 `ceph orch apply mon --placement=` 指定完整的 6 台 MON（包含 dc1 與 dc2）
 
 #### 執行步驟
 
-1. **Apply dc2 MON Placement**
+1. **Add dc2 MONs to Monmap**
    ```bash
-   # 前提：mon-dc2-01 / mon-dc2-02 / mon-dc2-03 已在 host 上具備正確 location metadata
-   ceph orch apply mon --placement="mon-dc2-01 mon-dc2-02 mon-dc2-03"
+   # 前提：已取得 dc2 MON 節點的 IP 與 port（通常為 6789）
+   # 範例假設：mon-dc2-01=10.2.1.1, mon-dc2-02=10.2.1.2, mon-dc2-03=10.2.1.3
+   
+   ceph mon add mon-dc2-01 10.2.1.1:6789
+   ceph mon add mon-dc2-02 10.2.1.2:6789
+   ceph mon add mon-dc2-03 10.2.1.3:6789
+   
+   # 驗證 monmap
+   ceph mon dump | grep mon
+   # 預期應列出 6 個 MON（mon-dc1-01/02/03 + mon-dc2-01/02/03）
+   ```
 
-   # 等待 orchestrator 完成 MON daemon 調度（約 60-120 秒）
+2. **Apply Complete MON Placement with All 6 Nodes**
+   ```bash
+   # 使用 ceph orch apply mon 指定包含所有 6 個 MON 節點的 placement
+   ceph orch apply mon --placement="mon-dc1-01 mon-dc1-02 mon-dc1-03 mon-dc2-01 mon-dc2-02 mon-dc2-03"
+
+   # 等待 orchestrator 完成 MON daemon 調度與啟動（約 60-120 秒）
    sleep 120
 
    # 確認 MON service placement 已更新
    ceph orch ls mon -f yaml
    ```
 
-2. **Verify MON Quorum Expanded to 6 Members**
+3. **Verify MON Quorum Expanded to 6 Members**
    ```bash
    ceph mon stat
    # 預期：quorum: 0,1,2,3,4,5 (6 MONs)
@@ -297,21 +313,19 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 
 ---
 
-### Step 2: Update rook-ceph-mon-endpoints (Add-Before-Remove)
+### Step 2: Wait for Rook Operator Auto-Sync (or Manual Update if Needed)
 
-**目標**：更新 Rook external mode ConfigMap，同時包含 dc1 + dc2 MON endpoints
+**目標**：等待 Rook operator 自動同步 ConfigMaps 以反映新的 6 個 MON 拓撲
 
 > **⚠️ Rook Operator Auto-Sync Note** (v1.14+): 
-> 在最新 Rook operator 中，當 Ceph cluster 中 MON 拓撲變更時，`rook-ceph-mon-endpoints` 與 `rook-ceph-config` 的 `mon_host` 會**自動同步更新**。
+> 在最新 Rook operator 中，當 Ceph cluster 中 MON 拓撲變更時（Step 1 完成後），`rook-ceph-mon-endpoints` 與 `rook-ceph-config` 的 `mon_host` 會**自動同步更新**。
 > 
-> - **若 Rook operator 自動同步正常運作**：可直接跳過本 Step（進入 Step 4），等待 operator 於 1-2 分鐘內自動更新 ConfigMaps
+> - **若 Rook operator 自動同步正常運作**：可直接跳過下方執行步驟（進入 Step 3），無需手動編輯
 > - **若需驗證或手動干預**：見下方「執行步驟」
 > 
-> **建議**：先檢查 operator logs (`kubectl logs -n rook-ceph deployment/rook-ceph-operator`)，確認是否已偵測到 MON 變更；若已發生自動更新，無需手動執行 Step 2-3。
+> **建議**：先檢查 operator logs (`kubectl logs -n rook-ceph deployment/rook-ceph-operator`) 確認是否已自動更新；若已更新至包含 6 個 MON endpoints，無需手動執行下方步驟。
 
-#### 執行步驟（若未自動同步）
-
-#### 執行步驟
+#### 執行步驟（若 Rook operator 未自動同步）
 
 1. **Get New MON Endpoint Addresses**
    ```bash
