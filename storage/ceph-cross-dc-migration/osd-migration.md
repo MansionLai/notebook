@@ -254,27 +254,26 @@ ceph config get osd osd_recovery_sleep_hdd
 
 **目標**：移除 dc1 第一個 rack（o1）的 5 台 OSD 節點
 
+**策略**：標準 OSD 節點移除流程，以主機為單位進行回填與清理
+
 #### 執行步驟
 
-1. **Mark OSDs Out**
+1. **調整 CRUSH 回填權重（清空資料）**
    ```bash
-   # 取得 rack o1 的所有 OSD IDs
-   ceph osd crush ls o1 | sed 's/osd\.//' > /tmp/o1-osds.txt
-   
-   # 逐一標記 out（觸發 data migration）
-   for osd_id in $(cat /tmp/o1-osds.txt); do
-     ceph osd out osd.$osd_id
+   # 對 rack o1 的每台節點進行 reweight，權重設為 0
+   for node in osd-dc1-o1-{01..05}; do
+     ceph osd crush reweight-by-host $node 0
    done
-   
-   # 驗證
+    
+   # 驗證節點已標記為回填狀態
    ceph osd tree | grep o1
-   # 應看到對應 OSDs 顯示 out
+   # 應看到對應節點的 weight 為 0
    ```
 
-2. **Wait for Data Migration**
+2. **等待資料遷移完成**
    ```bash
    watch -n 5 'ceph -s'
-   # 等待所有 PGs 再次恢復為 active+clean
+   # 等待所有 PGs 恢復為 active+clean
    # 使用更可靠的檢查：當 ceph -s 不包含 recovering/backfilling/degraded/misplaced 時視為完成
    while ceph -s | grep -Eq 'recovering|backfilling|degraded|misplaced'; do
      echo "Recovery in progress or PGs not clean:"
@@ -284,29 +283,31 @@ ceph config get osd osd_recovery_sleep_hdd
    echo "PASS: All PGs active+clean and no recovery activity"
    ```
 
-3. **Stop OSD Daemons**
+3. **透過 Orchestrator 移除 OSD（含資料抹除）**
    ```bash
-   for osd_id in $(cat /tmp/o1-osds.txt); do
-     ceph orch daemon stop osd.$osd_id
-   done
+   # 取得 rack o1 的所有 OSD IDs
+   ceph osd crush ls o1 | sed 's/osd\.//' > /tmp/o1-osds.txt
+    
+   # 讀取 OSD IDs 並用空格分隔
+   OSD_IDS=$(tr '\n' ' ' < /tmp/o1-osds.txt)
+    
+   # 透過 Orchestrator 移除 OSDs 並抹除資料
+   ceph orch osd rm $OSD_IDS --zap
+    
+   # 驗證 OSD 移除進度
+   ceph orch osd rm status
+   # 等待移除完成（顯示 empty）
    ```
 
-4. **Purge OSDs from CRUSH**
+4. **清除主機標籤並移出集群**
    ```bash
-   for osd_id in $(cat /tmp/o1-osds.txt); do
-     ceph osd purge osd.$osd_id --yes-i-really-mean-it
-   done
-   
-   # 驗證
-   ceph osd tree | grep o1
-   # 應不再顯示 rack o1 的 OSDs
-   ```
-
-5. **Remove Hosts from Cluster**
-   ```bash
+   # 從集群移除主機
    for node in osd-dc1-o1-{01..05}; do
-     ceph orch host rm $node --force
+     ceph orch host rm $node
    done
+    
+   # 驗證主機已移除
+   ceph orch host ls | grep -q "osd-dc1-o1" && echo "FAIL: Hosts still present" || echo "PASS: All hosts removed"
    ```
 
 #### Gate Criteria (進入 Phase 3 前)
@@ -390,29 +391,36 @@ ceph osd df tree | awk '/osd\./ {print $7}' | \
 
 #### Case 1: 剛加入 dc2 rack，尚未移除 dc1 rack
 
-**操作**：將新加入的 dc2 rack OSDs 標記 out 並移除
+**操作**：將新加入的 dc2 rack OSDs 逐漸移除並搬回資料到 dc1
 
 ```bash
 # 假設在 Phase 1，剛加入 rack o4
-# 取得 rack o4 的所有 OSD IDs
-ceph osd crush ls o4 | sed 's/osd\.//' > /tmp/o4-osds.txt
-
-# 標記 out
-for osd_id in $(cat /tmp/o4-osds.txt); do
-  ceph osd out osd.$osd_id
-done
-
-# 等待資料搬回 dc1 racks
-watch -n 5 'ceph -s'
-
-# 移除 OSDs
-for osd_id in $(cat /tmp/o4-osds.txt); do
-  ceph osd purge osd.$osd_id --yes-i-really-mean-it
-done
-
-# 移除 hosts
+# 步驟1：調整 CRUSH 回填權重
 for node in osd-dc2-o4-{01..05}; do
-  ceph orch host rm $node --force
+  ceph osd crush reweight-by-host $node 0
+done
+
+# 步驟2：等待資料搬回 dc1 racks
+while ceph -s | grep -Eq 'recovering|backfilling|degraded|misplaced'; do
+  echo "Data migration in progress..."
+  ceph -s
+  sleep 30
+done
+echo "PASS: All data migrated back"
+
+# 步驟3：取得 rack o4 的所有 OSD IDs
+ceph osd crush ls o4 | sed 's/osd\.//' > /tmp/o4-osds.txt
+OSD_IDS=$(tr '\n' ' ' < /tmp/o4-osds.txt)
+
+# 步驟4：透過 Orchestrator 移除 OSDs
+ceph orch osd rm $OSD_IDS --zap
+
+# 步驟5：等待移除完成
+ceph orch osd rm status
+
+# 步驟6：移除 hosts
+for node in osd-dc2-o4-{01..05}; do
+  ceph orch host rm $node
 done
 ```
 
