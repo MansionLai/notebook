@@ -563,90 +563,85 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 
 ### Step 7: Remove dc1 MONs from Cluster
 
-**目標**：在 client-side 已切到 dc2-only 後，逐一移除 Ceph cluster 內的 dc1 MON 節點
+**目標**：在 client-side 已切到 dc2-only 後，逐步移除 Ceph cluster 內的 dc1 MON 節點
+
+**策略**：分三步逐個移除 dc1 MON，每步驗證 quorum 穩定後再進行下一步，確保 high availability
 
 #### 執行步驟
 
-1. **Remove First dc1 MON (mon-dc1-01)**
+1. **Phase 1: Remove mon-dc1-01 from Placement**
    ```bash
-   # 先從 monmap 移除，再移除 daemon
-   ceph mon rm mon-dc1-01
-   ceph orch daemon rm mon.mon-dc1-01 --force
+   # 更新 MON placement，移除 mon-dc1-01（保留 dc1 的 02/03）
+   ceph orch apply mon --placement="mon-dc1-02 mon-dc1-03 mon-dc2-01 mon-dc2-02 mon-dc2-03"
+   ceph orch apply mgr --placement="mon-dc1-02 mon-dc1-03 mon-dc2-01 mon-dc2-02 mon-dc2-03"
    
-   # 等待 MON daemon 停止（約 30-60 秒）
-   sleep 60
+   # 等待 Ceph orchestrator 移除 mon-dc1-01（約 1-2 分鐘）
+   sleep 120
    
-   # 驗證 MON 已從 quorum 移除
+   # 驗證 quorum 狀態（應為 5 個 MON）
    ceph mon stat
-   # 預期：quorum: 1,2,3,4,5 (5 MONs)
-    
-   # 確認 cluster health 正常
-   ceph -s
-
    ACTUAL=$(ceph quorum_status -f json-pretty | jq '.quorum | length')
    [ "$ACTUAL" -eq 5 ] || { echo "HALT: quorum count mismatch ($ACTUAL != 5)"; exit 1; }
+   
+   # 確認 cluster health 正常
+   ceph health detail
    ```
 
-2. **Remove Second dc1 MON (mon-dc1-02)**
-    ```bash
-    ceph mon rm mon-dc1-02
-    ceph orch daemon rm mon.mon-dc1-02 --force
-   
-    sleep 60
-    
-    ceph mon stat
-    # 預期：quorum: 2,3,4,5 (4 MONs)
-
-    # 確認 cluster health 正常
-    ceph -s
-
-    ACTUAL=$(ceph quorum_status -f json-pretty | jq '.quorum | length')
-    [ "$ACTUAL" -eq 4 ] || { echo "HALT: quorum count mismatch ($ACTUAL != 4)"; exit 1; }
-    ```
-
-3. **Remove Third dc1 MON (mon-dc1-03)**
-    ```bash
-    ceph mon rm mon-dc1-03
-    ceph orch daemon rm mon.mon-dc1-03 --force
-   
-    sleep 60
-    
-    ceph mon stat
-    # 預期：quorum: 3,4,5 (3 MONs, 全為 dc2)
-
-    # 確認 cluster health 正常
-    ceph -s
-
-    ACTUAL=$(ceph quorum_status -f json-pretty | jq '.quorum | length')
-    [ "$ACTUAL" -eq 3 ] || { echo "HALT: quorum count mismatch ($ACTUAL != 3)"; exit 1; }
-    ```
-
-4. **Remove dc1 MON Hosts from Cluster**
-  ```bash
-  # 前提：dc1 主機上的其他 daemon（如 OSD / MGR）已先完成移除或遷移
-  for node in mon-dc1-{01..03}; do
-    echo "=== $node ==="
-    non_mon=$(ceph orch ps --hostname $node -f json | jq '[.[] | select(.daemon_type != "mon")] | length')
-    if [ "$non_mon" -gt 0 ]; then
-      echo "HALT: $node still has non-MON daemons. Complete the related runbook first."
-      exit 1
-    fi
-  done
-
-  for node in mon-dc1-{01..03}; do
-    ceph orch host rm $node --force
-  done
-  ```
-
-5. **Re-apply MON Placement on dc2 Hosts**
+2. **Phase 2: Remove mon-dc1-02 from Placement**
    ```bash
-   # 將 MON service 恢復為 managed，並收斂到 dc2 三台主機
-   ceph orch apply mon --placement="mon-dc2-01 mon-dc2-02 mon-dc2-03"
+   # 更新 MON placement，再移除 mon-dc1-02（只保留 dc1 的 03）
+   ceph orch apply mon --placement="mon-dc1-03 mon-dc2-01 mon-dc2-02 mon-dc2-03"
+   ceph orch apply mgr --placement="mon-dc1-03 mon-dc2-01 mon-dc2-02 mon-dc2-03"
+   
+   # 等待 Ceph orchestrator 移除 mon-dc1-02（約 1-2 分鐘）
+   sleep 120
+   
+   # 驗證 quorum 狀態（應為 4 個 MON）
+   ceph mon stat
+   ACTUAL=$(ceph quorum_status -f json-pretty | jq '.quorum | length')
+   [ "$ACTUAL" -eq 4 ] || { echo "HALT: quorum count mismatch ($ACTUAL != 4)"; exit 1; }
+   
+   # 確認 cluster health 正常
+   ceph health detail
+   ```
 
-   # 驗證 service spec
-   ceph orch ls mon -f yaml
-   ceph orch ps --daemon_type mon
-   # 確認 MON service 已由 placement spec 管理，且僅落在 dc2 hosts
+3. **Phase 3: Move Completely to dc2 (Final MON/MGR Placement)**
+   ```bash
+   # 更新 MON placement，完全移除 mon-dc1-03，所有 MON 僅在 dc2
+   ceph orch apply mon --placement="mon-dc2-01 mon-dc2-02 mon-dc2-03"
+   ceph orch apply mgr --placement="mon-dc2-01 mon-dc2-02 mon-dc2-03"
+   
+   # 等待 Ceph orchestrator 移除 mon-dc1-03（約 1-2 分鐘）
+   sleep 120
+   
+   # 驗證 quorum 狀態（應為 3 個 MON，全為 dc2）
+   ceph mon stat
+   ACTUAL=$(ceph quorum_status -f json-pretty | jq '.quorum | length')
+   [ "$ACTUAL" -eq 3 ] || { echo "HALT: quorum count mismatch ($ACTUAL != 3)"; exit 1; }
+   
+   # 確認 cluster health 正常
+   ceph health detail
+   ```
+
+4. **Remove dc1 Hosts from Cluster**
+   ```bash
+   # 前提：dc1 主機上的其他 daemon（如 OSD / MGR）已先完成移除或遷移
+   for node in mon-dc1-{01..03}; do
+     echo "=== Checking $node ==="
+     non_mon=$(ceph orch ps --hostname $node -f json | jq '[.[] | select(.daemon_type != "mon")] | length' 2>/dev/null || echo "0")
+     if [ "$non_mon" -gt 0 ]; then
+       echo "HALT: $node still has non-MON daemons. Complete the related runbook first."
+       exit 1
+     fi
+   done
+
+   # 移除 dc1 主機
+   ceph orch host rm mon-dc1-01
+   ceph orch host rm mon-dc1-02
+   ceph orch host rm mon-dc1-03
+   
+   # 驗證主機已移除
+   ceph orch host ls
    ```
 
 #### Final Validation
