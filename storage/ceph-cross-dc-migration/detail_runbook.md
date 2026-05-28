@@ -160,7 +160,7 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 #### 執行步驟
 
 1. **Step 0**：執行前置檢查
-2. **Step 1**：Ceph 端 add-before-remove（`ceph orch apply mon --placement="mon-dc2-01 mon-dc2-02 mon-dc2-03"`）
+2. **Step 1**：Ceph 端 host add 和 placement 配置（`ceph orch host add` + `ceph orch apply mon/mgr`）
 3. **Step 2-3**：跳過手動 ConfigMap 編輯，等待 Rook operator 自動同步（1-2 分鐘）
 4. **Step 4**：驗證 csi-rbdplugin logs 確認已連線至新 MON endpoints
 5. **Step 5**：關鍵驗證 — 檢查 VM I/O 持續正常（fio 或應用層檢查）
@@ -257,31 +257,31 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 
 ### Step 1: Add dc2 MONs to Cluster
 
-**目標**：先把 dc2 MON 節點加入 Ceph cluster 的 monmap，再透過 placement 指定完整的 6 個 MON 節點，讓 orchestrator 建立並擴大 quorum
+**目標**：將 dc2 MON 候選主機加入 orchestrator，並指定 MON/MGR 角色到所有 6 個節點
 
 > **cephadm note**: 本 Step 分兩階段執行：
-> 1. 先用 `ceph mon add` 把 dc2 MON 加入 monmap
-> 2. 再用 `ceph orch apply mon --placement=` 指定完整的 6 台 MON（包含 dc1 與 dc2）
+> 1. 使用 `ceph orch host add` 逐一將 dc2 節點（mon-dc2-01 / 02 / 03）加入 orchestrator host 清單
+> 2. 使用 `ceph orch apply mon` 與 `ceph orch apply mgr` 指定完整 6 台節點的 placement
 
 #### 執行步驟
 
-1. **Add dc2 MONs to Monmap**
+1. **Add dc2 Hosts to Orchestrator**
    ```bash
-   # 前提：已取得 dc2 MON 節點的 IP 與 port（通常為 6789）
-   # 範例假設：mon-dc2-01=10.2.1.1, mon-dc2-02=10.2.1.2, mon-dc2-03=10.2.1.3
+   # 前提：已取得 dc2 MON 節點的 IP 與 SSH 連線方式
+   # 範例假設：mon-dc2-01=192.168.1.14, mon-dc2-02=192.168.1.15, mon-dc2-03=192.168.1.16
    
-   ceph mon add mon-dc2-01 10.2.1.1:6789
-   ceph mon add mon-dc2-02 10.2.1.2:6789
-   ceph mon add mon-dc2-03 10.2.1.3:6789
+   ceph orch host add mon-dc2-01 192.168.1.14
+   ceph orch host add mon-dc2-02 192.168.1.15
+   ceph orch host add mon-dc2-03 192.168.1.16
    
-   # 驗證 monmap
-   ceph mon dump | grep mon
-   # 預期應列出 6 個 MON（mon-dc1-01/02/03 + mon-dc2-01/02/03）
+   # 驗證主機已被加入
+   ceph orch host ls
+   # 預期：mon-dc1-01, mon-dc1-02, mon-dc1-03, mon-dc2-01, mon-dc2-02, mon-dc2-03 都應列出
    ```
 
-2. **Apply Complete MON Placement with All 6 Nodes**
+2. **Apply MON Placement to All 6 Nodes**
    ```bash
-   # 使用 ceph orch apply mon 指定包含所有 6 個 MON 節點的 placement
+   # 使用 ceph orch apply mon 指定包含 dc1 與 dc2 的完整 6 節點 placement
    ceph orch apply mon --placement="mon-dc1-01 mon-dc1-02 mon-dc1-03 mon-dc2-01 mon-dc2-02 mon-dc2-03"
 
    # 等待 orchestrator 完成 MON daemon 調度與啟動（約 60-120 秒）
@@ -291,7 +291,19 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
    ceph orch ls mon -f yaml
    ```
 
-3. **Verify MON Quorum Expanded to 6 Members**
+3. **Apply MGR Placement to All 6 Nodes**
+   ```bash
+   # 同樣指定 MGR placement 到全部 6 台節點
+   ceph orch apply mgr --placement="mon-dc1-01 mon-dc1-02 mon-dc1-03 mon-dc2-01 mon-dc2-02 mon-dc2-03"
+
+   # 等待 orchestrator 完成 MGR daemon 調度（約 30-60 秒）
+   sleep 60
+
+   # 確認 MGR service placement 已更新
+   ceph orch ls mgr -f yaml
+   ```
+
+4. **Verify MON Quorum Expanded to 6 Members**
    ```bash
    ceph mon stat
    # 預期：quorum: 0,1,2,3,4,5 (6 MONs)
