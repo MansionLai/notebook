@@ -223,12 +223,19 @@ flowchart LR
 若 recovery 對線上業務影響過大，可調整 throttling 參數：
 
 ```bash
-# 降低 recovery 優先級
-ceph tell osd.* config set osd_recovery_max_active 1
-ceph tell osd.* config set osd_max_backfills 1
+# 限制每個 OSD 同時進行的復原請求數為 1
+ceph config set osd osd_recovery_max_active 1
+
+# 限制每個 OSD 同時進行的資料回填請求數為 1
+ceph config set osd osd_max_backfills 1
 
 # 限制 recovery bandwidth
-ceph tell osd.* config set osd_recovery_sleep_hdd 0.1
+ceph config set osd osd_recovery_sleep_hdd 0.1
+
+# 驗證設定
+ceph config get osd osd_recovery_max_active
+ceph config get osd osd_max_backfills
+ceph config get osd osd_recovery_sleep_hdd
 ```
 
 #### Gate Criteria (進入 Phase 2 前)
@@ -443,14 +450,14 @@ done
 
 ```bash
 # 降低 recovery 優先級（減少對線上業務影響）
-ceph tell osd.* config set osd_recovery_max_active 1
-ceph tell osd.* config set osd_max_backfills 1
-ceph tell osd.* config set osd_recovery_sleep_hdd 0.1
+ceph config set osd osd_recovery_max_active 1
+ceph config set osd osd_max_backfills 1
+ceph config set osd osd_recovery_sleep_hdd 0.1
 
 # 恢復預設值（加速 recovery）
-ceph tell osd.* config set osd_recovery_max_active 3
-ceph tell osd.* config set osd_max_backfills 1
-ceph tell osd.* config set osd_recovery_sleep_hdd 0
+ceph config set osd osd_recovery_max_active 3
+ceph config set osd osd_max_backfills 1
+ceph config set osd osd_recovery_sleep_hdd 0
 ```
 
 ---
