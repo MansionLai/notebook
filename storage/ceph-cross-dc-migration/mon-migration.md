@@ -160,9 +160,10 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 
 1. **Step 0**：執行前置檢查
 2. **Step 1**：Ceph 端 host add 和 placement 配置（`ceph orch host add` + `ceph orch apply mon/mgr`）
-3. **Step 2**：跳過手動 ConfigMap 編輯，等待 Rook operator 自動同步（1-2 分鐘）
-4. **Step 3**：驗證 csi-rbdplugin logs 確認已連線至新 MON endpoints，並確認 VM I/O 持續正常
-5. **Step 4**：Ceph 端 remove dc1 MON 節點（`ceph orch apply mon/mgr` + `ceph orch host rm`）
+3. **Step 2**：等待 Rook operator 自動同步 + 驗證 csi-rbdplugin & VM I/O（新 6 MON endpoints）
+4. **Step 3**：Disable dc1 MON daemons（逐步縮減 placement 至 dc2-only）
+5. **Step 4**：等待 Rook operator 自動同步 + 驗證 csi-rbdplugin（dc2-only endpoints）
+6. **Step 5**：Remove dc1 MONs from Cluster（`ceph orch host rm`）
 
 **預期總耗時**：8-10 分鐘
 
@@ -207,9 +208,9 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 
 ---
 
-### Step 2: Wait for Rook Operator Auto-Sync
+### Step 2: Wait for Rook Operator Auto-Sync and Verify I/O
 
-**目標**：等待 Rook operator 自動同步 ConfigMaps 以反映新的 6 個 MON 拓撲
+**目標**：等待 Rook operator 自動同步 ConfigMaps（反映 6 MON 拓撲），並確認 csi-rbdplugin 與 VM I/O 正常
 
 > **⚠️ Rook Operator Auto-Sync Note** (v1.14+):
 > 當 Ceph cluster MON 拓撲變更後，`rook-ceph-mon-endpoints` 與 `rook-ceph-config` 的 `mon_host` 會**自動同步更新**。
@@ -217,35 +218,47 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 
 | Precheck<br>（檢查項目 / 使用指令 / 原因） | Action<br>（節點 / 指令） | Postcheck<br>（預期結果 / Rollback 方式） |
 |---|---|---|
-| **Step 1 quorum = 6 已確認**<br>Rook operator 在 MON 拓撲變更後 1-2 分鐘自動同步 ConfigMap | K8s admin 節點<br>等待 1-2 分鐘後<br>`kubectl logs -n rook-ceph deployment/rook-ceph-operator --tail=50 \| grep -i mon`<br>`kubectl -n rook-ceph get configmap rook-ceph-mon-endpoints -o jsonpath='{.data.data}'` | ✅ ConfigMap 包含 6 個 MON endpoints<br>❌ 手動執行：`kubectl -n rook-ceph edit configmap rook-ceph-mon-endpoints`（加入 dc2，保留 dc1） |
+| **Step 1 quorum = 6 已確認**<br>Rook operator 在 MON 拓撲變更後 1-2 分鐘自動同步 ConfigMap | K8s admin 節點<br>等待 1-2 分鐘後<br>`kubectl logs -n rook-ceph deployment/rook-ceph-operator --tail=50 \| grep -i mon`<br>`kubectl -n rook-ceph get configmap rook-ceph-mon-endpoints -o jsonpath='{.data.data}'` | ✅ ConfigMap 包含 6 個 MON endpoints（dc1 + dc2）<br>❌ 手動執行：`kubectl -n rook-ceph edit configmap rook-ceph-mon-endpoints`（加入 dc2，保留 dc1） |
 | **確認 rook-ceph-config mon_host 已更新**<br>csi-rbdplugin reconnect 時讀取 ceph.conf，mon_host 必須含 dc1 + dc2 | K8s admin 節點<br>`kubectl -n rook-ceph get configmap rook-ceph-config -o jsonpath='{.data.ceph\.conf}' \| grep mon_host` | ✅ mon_host 包含 dc1 + dc2 地址<br>❌ 手動執行：`kubectl -n rook-ceph edit configmap rook-ceph-config`（更新 mon_host） |
-
----
-
-### Step 3: Check csi-rbdplugin and KubeVirt VM I/O
-
-**目標**：驗證 ceph-csi 是否成功吸收新 MON endpoints，以及 KubeVirt VM I/O 是否持續正常
-
-| Precheck<br>（檢查項目 / 使用指令 / 原因） | Action<br>（節點 / 指令） | Postcheck<br>（預期結果 / Rollback 方式） |
-|---|---|---|
-| **Rook ConfigMap 已更新（Step 2 gate 通過）**<br>確認 csi-rbdplugin 已吸收新 MON endpoints | K8s admin 節點<br>`kubectl -n rook-ceph logs -l app=csi-rbdplugin --tail=50 \| grep -i mon` | ✅ logs 顯示已連線至新 MON endpoints<br>❌ 分批重啟：`kubectl -n rook-ceph delete pod <pod>` 每批間隔 30s |
+| **確認 csi-rbdplugin 已吸收新 MON endpoints** | K8s admin 節點<br>`kubectl -n rook-ceph logs -l app=csi-rbdplugin --tail=50 \| grep -i mon` | ✅ logs 顯示已連線至新 MON endpoints<br>❌ 分批重啟：`kubectl -n rook-ceph delete pod <pod>` 每批間隔 30s |
 | **csi-rbdplugin 可連線至 Ceph cluster**<br>確認 client 端已可 reach dc2 MON | K8s admin 節點 → exec 進 csi-rbdplugin pod<br>`kubectl -n rook-ceph exec -it <csi-rbdplugin-pod> -- bash`<br>`ceph -s --conf=/etc/ceph/ceph.conf --keyring=/etc/ceph/keyring` | ✅ `ceph -s` 正常回傳，無連線錯誤<br>❌ 檢查 dc2 MON 網路連通性 |
 | **VM I/O 正常（關鍵驗證）**<br>MON endpoint 切換期間 VM 不應有 I/O 中斷 | VM guest OS<br>`virtctl console <vm-name> -n <namespace>`<br>`dd if=/dev/zero of=/tmp/test.dat bs=1M count=100`<br>`iostat -x 1 5` | ✅ I/O 正常，無錯誤或明顯延遲<br>❌ 暫停遷移，執行 Rollback：<br>`ceph orch apply mon --placement="mon-dc1-01 mon-dc1-02 mon-dc1-03"`<br>`ceph orch apply mgr --placement="mon-dc1-01 mon-dc1-02 mon-dc1-03"`<br>（將 MON/MGR 收回 dc1-only，恢復原始狀態） |
 
 ---
 
-### Step 4: Remove dc1 MONs from Cluster
+### Step 3: Disable dc1 MON Daemons
 
-**目標**：在 client-side 已切到 dc2-only 後，逐步移除 Ceph cluster 內的 dc1 MON 節點
+**目標**：逐步縮減 MON placement 至 dc2-only，移除 dc1 MON daemons
 
 **策略**：分三 Phase 逐個移除 dc1 MON（6→5→4→3），每 Phase 驗證 quorum 穩定後再進行下一步
 
 | Precheck<br>（檢查項目 / 使用指令 / 原因） | Action<br>（節點 / 指令） | Postcheck<br>（預期結果 / Rollback 方式） |
 |---|---|---|
-| **csi-rbdplugin 已切到新 endpoints（Step 3 gate 通過）**<br>確認 client-side 已穩定，quorum 目前 = 6 | Ceph admin 節點<br>**Phase 1 — 移除 mon-dc1-01**<br>`ceph orch apply mon --placement="mon-dc1-02 mon-dc1-03 mon-dc2-01 mon-dc2-02 mon-dc2-03"`<br>`ceph orch apply mgr --placement="mon-dc1-02 mon-dc1-03 mon-dc2-01 mon-dc2-02 mon-dc2-03"`<br>`sleep 120` | ✅ `ceph mon stat` — quorum = 5<br>✅ `ceph health detail` — HEALTH_OK<br>❌ 若 quorum != 5：停止，重新套用 6 節點 placement |
+| **csi-rbdplugin 已切到新 endpoints（Step 2 gate 通過）**<br>確認 client-side 已穩定，quorum 目前 = 6 | Ceph admin 節點<br>**Phase 1 — 移除 mon-dc1-01**<br>`ceph orch apply mon --placement="mon-dc1-02 mon-dc1-03 mon-dc2-01 mon-dc2-02 mon-dc2-03"`<br>`ceph orch apply mgr --placement="mon-dc1-02 mon-dc1-03 mon-dc2-01 mon-dc2-02 mon-dc2-03"`<br>`sleep 120` | ✅ `ceph mon stat` — quorum = 5<br>✅ `ceph health detail` — HEALTH_OK<br>❌ 若 quorum != 5：停止，重新套用 6 節點 placement |
 | **Phase 1 quorum = 5 已確認**<br>`ceph mon stat` 驗證，確保穩定後再繼續 | Ceph admin 節點<br>**Phase 2 — 移除 mon-dc1-02**<br>`ceph orch apply mon --placement="mon-dc1-03 mon-dc2-01 mon-dc2-02 mon-dc2-03"`<br>`ceph orch apply mgr --placement="mon-dc1-03 mon-dc2-01 mon-dc2-02 mon-dc2-03"`<br>`sleep 120` | ✅ `ceph mon stat` — quorum = 4<br>✅ `ceph health detail` — HEALTH_OK<br>❌ 若失敗：重新套用 5 節點 placement |
 | **Phase 2 quorum = 4 已確認**<br>`ceph mon stat` 驗證，確保穩定後再繼續 | Ceph admin 節點<br>**Phase 3 — 移除 mon-dc1-03（完全切至 dc2）**<br>`ceph orch apply mon --placement="mon-dc2-01 mon-dc2-02 mon-dc2-03"`<br>`ceph orch apply mgr --placement="mon-dc2-01 mon-dc2-02 mon-dc2-03"`<br>`sleep 120` | ✅ `ceph mon stat` — quorum = 3（全為 dc2）<br>✅ `ceph health detail` — HEALTH_OK<br>❌ 若失敗：重新套用 4 節點 placement |
-| **quorum = 3 dc2 MON 已確認**<br>確認 dc1 節點無其他非 MON daemon（如 OSD / MGR） | Ceph admin 節點<br>確認無 non-MON daemon 後：<br>`ceph orch host rm mon-dc1-01`<br>`ceph orch host rm mon-dc1-02`<br>`ceph orch host rm mon-dc1-03` | ✅ `ceph orch host ls` — dc1 節點已移除<br>✅ `rook-ceph-mon-endpoints` 與 `mon_host` 已為 dc2-only<br>❌ 若有 non-MON daemon：先完成 OSD runbook 再執行 host rm |
+
+---
+
+### Step 4: Verify Rook Operator Auto-Sync (dc2-only)
+
+**目標**：等待 Rook operator 自動同步 ConfigMaps 以反映 dc2-only MON 拓撲，並確認 csi-rbdplugin 正常
+
+| Precheck<br>（檢查項目 / 使用指令 / 原因） | Action<br>（節點 / 指令） | Postcheck<br>（預期結果 / Rollback 方式） |
+|---|---|---|
+| **Step 3 quorum = 3（dc2-only）已確認**<br>Rook operator 在 MON 拓撲變更後 1-2 分鐘自動同步 ConfigMap | K8s admin 節點<br>等待 1-2 分鐘後<br>`kubectl logs -n rook-ceph deployment/rook-ceph-operator --tail=50 \| grep -i mon`<br>`kubectl -n rook-ceph get configmap rook-ceph-mon-endpoints -o jsonpath='{.data.data}'` | ✅ ConfigMap 僅包含 dc2 MON endpoints（3 個）<br>❌ 手動執行：`kubectl -n rook-ceph edit configmap rook-ceph-mon-endpoints`（移除 dc1，保留 dc2） |
+| **確認 rook-ceph-config mon_host 已更新為 dc2-only**<br>ceph.conf mon_host 必須只含 dc2 地址 | K8s admin 節點<br>`kubectl -n rook-ceph get configmap rook-ceph-config -o jsonpath='{.data.ceph\.conf}' \| grep mon_host` | ✅ mon_host 僅含 dc2 地址<br>❌ 手動更新 rook-ceph-config |
+| **確認 csi-rbdplugin 正常連線至 dc2 MON** | K8s admin 節點<br>`kubectl -n rook-ceph logs -l app=csi-rbdplugin --tail=50 \| grep -i mon` | ✅ logs 顯示已連線至 dc2 MON endpoints<br>❌ 分批重啟：`kubectl -n rook-ceph delete pod <pod>` 每批間隔 30s |
+
+---
+
+### Step 5: Remove dc1 MONs from Cluster
+
+**目標**：確認 dc1 無其他 daemon 後，從 orchestrator 中移除 dc1 主機
+
+| Precheck<br>（檢查項目 / 使用指令 / 原因） | Action<br>（節點 / 指令） | Postcheck<br>（預期結果 / Rollback 方式） |
+|---|---|---|
+| **Step 4 gate 通過，csi-rbdplugin 連線至 dc2-only**<br>確認 dc1 節點無其他非 MON daemon（如 OSD / MGR） | Ceph admin 節點<br>`ceph orch ps \| grep mon-dc1`<br>確認無殘留 daemon 後：<br>`ceph orch host rm mon-dc1-01`<br>`ceph orch host rm mon-dc1-02`<br>`ceph orch host rm mon-dc1-03` | ✅ `ceph orch host ls` — dc1 節點已移除<br>✅ `rook-ceph-mon-endpoints` 與 `mon_host` 已為 dc2-only<br>❌ 若有 non-MON daemon：先完成 OSD runbook 再執行 host rm |
 
 ---
 
@@ -396,8 +409,10 @@ ceph orch ls mon -f yaml
 | Step | Rollback 難度 | 建議行動 |
 |------|-------------|---------|
 | Step 1（加入 dc2 MON） | ⭐ 簡單 | 直接移除 dc2 MON，恢復原狀 |
-| Step 2（等待 Rook operator 自動同步） | ⭐⭐ 中等 | 恢復 Rook ConfigMap，重啟 csi-rbdplugin，必要時重新確認 ConfigMap 未被 reconcile |
-| Step 4（移除 dc1 MON） | ⭐⭐⭐ 困難 | 若需 rollback，需重新加入 dc1 MON（若硬體仍可用）、恢復 endpoint 配置，並將 MON service 設回原始 placement |
+| Step 2（等待 Rook operator 自動同步 + 驗證 I/O） | ⭐⭐ 中等 | `ceph orch apply mon/mgr --placement="mon-dc1-01 mon-dc1-02 mon-dc1-03"` 恢復 dc1-only |
+| Step 3（Disable dc1 MON daemons） | ⭐⭐ 中等 | 重新套用含 dc1 的 placement；若 quorum 喪失優先恢復 6 節點 placement |
+| Step 4（驗證 dc2-only 同步） | ⭐⭐⭐ 困難 | 重新加入 dc1 MON placement，恢復 endpoint 配置 |
+| Step 5（移除 dc1 主機） | ⭐⭐⭐ 困難 | 若需 rollback，需重新執行 `ceph orch host add` + 重建 dc1 MON |
 
 ---
 
