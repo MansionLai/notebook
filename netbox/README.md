@@ -5,9 +5,9 @@ has_children: true
 permalink: /netbox/
 ---
 
-# Netbox 多副本高可用部署指南
+# Netbox 本地實驗 3 節點部署指南
 
-在 Mac-mini 上使用 Multipass + K3s + Helm chart 部署 Netbox、PostgreSQL、Redis 的完整指南。
+在 Mac-mini 上使用 Multipass + K3s + Helm chart 進行 Netbox、PostgreSQL、Redis 的本地開發/測試（local-lab）部署指南。
 
 ## 📚 文檔結構
 
@@ -70,6 +70,7 @@ permalink: /netbox/
 - **K3s** (lightweight Kubernetes)
 - **Helm 3** (package manager for Kubernetes)
 - **kubectl** (Kubernetes CLI)
+- **本地最小化安裝（local dev/test）**：3-node 預設規格為 control plane `2C/4G/20G`，兩台 workers 各 `1C/2G/15G`
 
 ## 📊 核心圖表
 
@@ -78,11 +79,11 @@ permalink: /netbox/
 - **架構圖** — 3 節點 K3s 叢集和 pod 分布
 - **數據流圖** — Netbox、PostgreSQL、Redis 的通信
 - **Helm 部署流程** — Chart 到 Kubernetes resources 的轉換
-- **故障轉移機制圖** — 高可用保證機制
+- **故障處置機制圖** — 本地實驗環境下的節點/服務恢復流程
 - **配置參考表** — 所有重要設置的快速查詢
 
 ---
 
-**最後更新:** 2026-05-27  
+**最後更新:** 2026-05-29  
 **作者:** @MansionLai  
 **版本:** 1.0

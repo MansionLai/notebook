@@ -17,17 +17,18 @@ nav_order: 2
 - **Helm 3** 已安裝在本地 Mac
 - **kubectl** 已安裝在本地 Mac
 - Mac-mini 至少 16GB RAM (建議 32GB)
-- 至少 100GB 可用磁盤空間
+- 至少 50GB 可用磁盤空間（對應 3-node 最小化配置：20G + 15G + 15G）
 
 ## 第 1 步：創建 3 個 Ubuntu VM
+
+> **注意：** Multipass 既有 VM 的磁碟容量一般無法原地縮小。若要降低 `--disk`，通常需要刪除並用較小的 `--disk` 參數重建 VM。
+>
+> **相容性警告（最小化規格）：** 本頁的 VM 最小化 sizing 僅適用於同時採用部署文件中的「精簡版 NetBox Helm 資源限制與 PVC 容量設定」。若直接沿用預設（較重）Helm 資源/PVC 參數，可能超出上述 VM 容量並導致部署失敗或節點資源不足。
 
 ### 步驟 1.1：創建 Control Plane VM
 
 ```bash
-multipass launch --name k3s-control \
-  --cpus 4 \
-  --memory 8G \
-  --disk 50G
+multipass launch --name k3s-control --cpus 2 --memory 4G --disk 20G
 
 multipass list
 ```
@@ -35,15 +36,9 @@ multipass list
 ### 步驟 1.2：創建 Worker Node 1 和 2
 
 ```bash
-multipass launch --name k3s-worker-1 \
-  --cpus 4 \
-  --memory 8G \
-  --disk 50G
+multipass launch --name k3s-worker-1 --cpus 1 --memory 2G --disk 15G
 
-multipass launch --name k3s-worker-2 \
-  --cpus 4 \
-  --memory 8G \
-  --disk 50G
+multipass launch --name k3s-worker-2 --cpus 1 --memory 2G --disk 15G
 ```
 
 ### 步驟 1.3：驗證所有 VM 運行
