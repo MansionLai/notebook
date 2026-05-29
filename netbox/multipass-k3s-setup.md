@@ -21,13 +21,12 @@ nav_order: 2
 
 ## 第 1 步：創建 3 個 Ubuntu VM
 
+> **注意：** Multipass 既有 VM 的磁碟容量一般無法原地縮小。若要降低 `--disk`，通常需要刪除並用較小的 `--disk` 參數重建 VM。
+
 ### 步驟 1.1：創建 Control Plane VM
 
 ```bash
-multipass launch --name k3s-control \
-  --cpus 4 \
-  --memory 8G \
-  --disk 50G
+multipass launch --name k3s-control --cpus 2 --memory 4G --disk 20G
 
 multipass list
 ```
@@ -35,15 +34,9 @@ multipass list
 ### 步驟 1.2：創建 Worker Node 1 和 2
 
 ```bash
-multipass launch --name k3s-worker-1 \
-  --cpus 4 \
-  --memory 8G \
-  --disk 50G
+multipass launch --name k3s-worker-1 --cpus 1 --memory 2G --disk 15G
 
-multipass launch --name k3s-worker-2 \
-  --cpus 4 \
-  --memory 8G \
-  --disk 50G
+multipass launch --name k3s-worker-2 --cpus 1 --memory 2G --disk 15G
 ```
 
 ### 步驟 1.3：驗證所有 VM 運行
