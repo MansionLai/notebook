@@ -39,38 +39,6 @@ flowchart LR
 
 **預期耗時**：8-10 分鐘
 
----
-
-## Step-by-Step Flow（Pre-check / Action / Post-check）
-
-```mermaid
-flowchart LR
-    classDef precheck fill:#fff3cd,stroke:#d69e2e
-    classDef action fill:#e8f5e9,stroke:#2f855a
-    classDef postcheck fill:#dbeafe,stroke:#3b82f6
-
-    subgraph S0["Step 0：Pre-Migration"]
-        PC0[HEALTH_OK & dc2 hosts registered]:::precheck --> A0[Backup configs & record baseline]:::action --> OK0[Backups saved & endpoints recorded]:::postcheck
-    end
-
-    subgraph S1["Step 1：Add dc2 MONs"]
-        PC1[quorum=3 & dc2 host IPs ready]:::precheck --> A1[host add ×3 + apply mon/mgr 6 nodes]:::action --> OK1[quorum=6 & HEALTH_OK]:::postcheck
-    end
-
-    subgraph S2["Step 2：Rook Auto-Sync"]
-        PC2[quorum=6 & HEALTH_OK]:::precheck --> A2[Wait Rook to sync ConfigMaps]:::action --> OK2[ConfigMap has 6 MON entries]:::postcheck
-    end
-
-    subgraph S4["Step 4：Verify Client I/O"]
-        PC4[ConfigMap has 6 MON entries]:::precheck --> A4[Check csi-rbdplugin logs & VM I/O]:::action --> OK4[dc2 MON connections & VM I/O healthy]:::postcheck
-    end
-
-    subgraph S7["Step 7：Remove dc1 MONs"]
-        PC7[quorum=6 & csi using dc2 MONs]:::precheck --> A7[Gradual placement 6→5→4→3 + rm hosts]:::action --> OK7[quorum=3 dc2-only & HEALTH_OK]:::postcheck
-    end
-
-    S0 --> S1 --> S2 --> S4 --> S7
-```
 
 
 
