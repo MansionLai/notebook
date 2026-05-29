@@ -17,7 +17,7 @@ nav_order: 2
 - **Helm 3** 已安裝在本地 Mac
 - **kubectl** 已安裝在本地 Mac
 - Mac-mini 至少 16GB RAM (建議 32GB)
-- 至少 100GB 可用磁盤空間
+- 至少 50GB 可用磁盤空間（對應 3-node 最小化配置：20G + 15G + 15G）
 
 ## 第 1 步：創建 3 個 Ubuntu VM
 
