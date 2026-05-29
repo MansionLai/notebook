@@ -51,7 +51,7 @@ datacenter dc2
 
 (建議順序：先 MON，後 OSD)
 
-- **[MON Migration Runbook](detail_runbook.md)**
+- **[MON Migration Runbook](mon-migration.md)**
   - quorum 重新定位 / monitor 拓樸變動
   - Rook external 模式協調
   - ceph-csi / KubeVirt 驗證步驟

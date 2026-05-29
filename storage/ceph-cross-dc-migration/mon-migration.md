@@ -1,7 +1,7 @@
 ---
 title: MON Migration Runbook
 parent: Ceph Cross-DC Migration
-permalink: /storage/ceph-cross-dc-migration/detail_runbook/
+permalink: /storage/ceph-cross-dc-migration/mon-migration/
 ---
 
 # MON Migration Runbook

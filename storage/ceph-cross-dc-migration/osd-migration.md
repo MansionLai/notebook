@@ -8,7 +8,7 @@ permalink: /storage/ceph-cross-dc-migration/osd-migration/
 
 本頁為 OSD 資料平面遷移的實作手冊（runbook），專注於以 rack 為單位的 OSD 遷移作業流程與執行步驟。
 
-- MON runbook（控制面）參考： [MON Runbook](../detail_runbook/)
+- MON runbook（控制面）參考： [MON Runbook](../mon-migration/)
 - 遷移策略與分析： [Solutions Overview](../solutions/)
 - 主文件（場景與架構概述）： [主文件](../)
 
@@ -474,6 +474,6 @@ ceph config set osd osd_recovery_sleep_hdd 0
 
 - **[← 回到主文件](../)**
 - **[← 遷移策略分析](../solutions/)**
-- **[← MON runbook（控制面）](../detail_runbook/)**
+- **[← MON runbook（控制面）](../mon-migration/)**
 
 ---

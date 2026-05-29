@@ -112,7 +112,7 @@ permalink: /storage/ceph-cross-dc-migration/solutions/
 - **[← 回到主文件](../)**  
   返回 Ceph Cross-DC Migration 主題入口，查看架構概述與場景說明
 
-- **[→ MON Migration Runbook](../detail_runbook/)**  
+- **[→ MON Migration Runbook](../mon-migration/)**  
   前往 MON Migration Runbook（monitor relocation、Rook external 協調、ceph-csi / KubeVirt 驗證）
 
 - **[→ OSD Migration Runbook](../osd-migration/)**  

@@ -44,5 +44,5 @@ permalink: /storage/ceph-cross-dc-migration/spec/
 1. `storage/ceph-cross-dc-migration/index.md`
 2. `storage/ceph-cross-dc-migration/solutions.md`
 3. `storage/ceph-cross-dc-migration/osd-migration.md`
-4. `storage/ceph-cross-dc-migration/detail_runbook.md`
+4. `storage/ceph-cross-dc-migration/mon-migration.md`
 
