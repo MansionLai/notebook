@@ -34,7 +34,7 @@ datacenter dc2
 
 ---
 
-## 3. Reading Guide
+## 2. Reading Guide
 
 本文件為跨資料中心 Ceph 遷移的主題入口。深入的解決方案分析與執行細節請參考：
 
