@@ -12,7 +12,7 @@ nav_order: 4
 
 ## 前置準備
 
-- K3s 叢集已運行（3 個節點）
+- K3s 叢集已運行
 - kubectl 已配置
 - Helm 3 已安裝
 - 至少 30GB 可用存儲空間
@@ -49,25 +49,25 @@ helm pull netbox-community/netbox --untar
 # 創建自訂 values 文件
 cat > netbox-values.yaml << 'EOF'
 # Netbox 副本數
-replicaCount: 3
+replicaCount: 1
 
 # Netbox 容器資源
 resources:
   limits:
-    cpu: 1000m
-    memory: 1Gi
-  requests:
     cpu: 500m
     memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
 
 # PostgreSQL 配置
 postgresql:
   enabled: true
-  replicaCount: 3
+  architecture: standalone
   primary:
     persistence:
       enabled: true
-      size: 20Gi
+      size: 5Gi
       storageClassName: local-path
   auth:
     username: netbox
@@ -77,11 +77,9 @@ postgresql:
 # Redis 配置
 redis:
   enabled: true
-  replica:
-    replicaCount: 2
+  architecture: standalone
   auth:
-    enabled: true
-    password: redis-password
+    enabled: false
 
 # Service 配置
 service:
@@ -128,14 +126,9 @@ kubectl get pods -n netbox
 # 預期輸出：
 # NAME                          READY   STATUS    RESTARTS   AGE
 # netbox-xxx                    1/1     Running   0          2m
-# netbox-xxx                    1/1     Running   0          2m
-# netbox-xxx                    1/1     Running   0          2m
+# netbox-worker-xxx             1/1     Running   0          2m
 # postgresql-0                  1/1     Running   0          3m
-# postgresql-1                  1/1     Running   0           2m
-# postgresql-2                  1/1     Running   0           2m
 # redis-master-0                1/1     Running   0          3m
-# redis-replica-0               1/1     Running   0           2m
-# redis-replica-1               1/1     Running   0           2m
 ```
 
 ### 步驟 6.2：詳細檢查 Pod 詳情
@@ -271,20 +264,17 @@ kubectl top nodes
 │  │                                                       │ │
 │  │  Netbox Service (ClusterIP)                         │ │
 │  │  ├─ netbox-pod-1                                    │ │
-│  │  ├─ netbox-pod-2                                    │ │
-│  │  └─ netbox-pod-3                                    │ │
+│  │  └─ netbox-worker-pod-1                             │ │
 │  │         │                                            │ │
 │  │         └──► PostgreSQL Service                     │ │
 │  │         │    ├─ postgresql-0 (Primary)              │ │
-│  │         │    ├─ postgresql-1 (Replica)              │ │
-│  │         │    └─ postgresql-2 (Replica)              │ │
+│  │         │                                            │ │
 │  │         │         │                                  │ │
-│  │         │         └─► PersistentVolume (20Gi)       │ │
+│  │         │         └─► PersistentVolume (5Gi)        │ │
 │  │         │                                            │ │
 │  │         └──► Redis Service                          │ │
 │  │              ├─ redis-master-0                      │ │
-│  │              ├─ redis-replica-0                     │ │
-│  │              └─ redis-replica-1                     │ │
+│  │              └─ (standalone)                        │ │
 │  │                                                       │ │
 │  └─────────────────────────────────────────────────────┘ │
 │                                                             │
@@ -295,6 +285,12 @@ kubectl top nodes
 ```
 
 ## 故障排查常見命令
+
+### 資源不足排查（優先順序）
+
+1. 先下調 NetBox 的 requests/limits（優先）
+2. 檢查 netbox-worker 的記憶體使用量是否過高
+3. 最後才考慮升級 VM 規格
 
 ```bash
 # 查看部署狀態
