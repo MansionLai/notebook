@@ -81,6 +81,10 @@ redis:
   auth:
     enabled: false
 
+# ⚠️ 最小化配置安全提醒
+# redis.auth.enabled: false 僅適用於「隔離的本機實驗環境」。
+# 若部署在共享或多租戶叢集，必須改為 enabled: true，並以 Kubernetes Secret 管理密碼。
+
 # Service 配置
 service:
   type: ClusterIP
@@ -262,9 +266,10 @@ kubectl top nodes
 │  ┌─────────────────────────────────────────────────────┐ │
 │  │           netbox namespace                          │ │
 │  │                                                       │ │
-│  │  Netbox Service (ClusterIP)                         │ │
-│  │  ├─ netbox-pod-1                                    │ │
-│  │  └─ netbox-worker-pod-1                             │ │
+│  │  Netbox Service (ClusterIP，僅提供 Web/API)         │ │
+│  │  └─ netbox-pod-1                                    │ │
+│  │                                                       │ │
+│  │  netbox-worker-pod-1（背景工作 Pod，非 Service 端點）│ │
 │  │         │                                            │ │
 │  │         └──► PostgreSQL Service                     │ │
 │  │         │    ├─ postgresql-0 (Primary)              │ │
