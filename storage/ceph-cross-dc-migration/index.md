@@ -34,38 +34,6 @@ datacenter dc2
 
 ---
 
-## 2. Architecture Diagram
-
-```mermaid
-flowchart LR
-    subgraph BEFORE["Before（dc1 only）"]
-        direction TB
-        B_MON["MON × 3\nmon-dc1-01/02/03"]
-        B_OSD["OSD racks o1/o2/o3\n15 nodes / 150 OSDs"]
-    end
-
-    subgraph DURING["During（dc1 + dc2）"]
-        direction TB
-        D_MON["MON × 6\ndc1 × 3 + dc2 × 3"]
-        D_OSD["OSD racks o1~o6\n15~30 nodes（rack-by-rack）"]
-    end
-
-    subgraph AFTER["After（dc2 only）"]
-        direction TB
-        A_MON["MON × 3\nmon-dc2-01/02/03"]
-        A_OSD["OSD racks o4/o5/o6\n15 nodes / 150 OSDs"]
-    end
-
-    BEFORE -->|"Step 1: Add dc2 MONs\nStep 1~3: Add dc2 OSD racks"| DURING
-    DURING -->|"Step 7: Remove dc1 MONs\nStep 2~6: Remove dc1 OSD racks"| AFTER
-
-    style BEFORE fill:#fef3c7,stroke:#d69e2e,stroke-width:2px
-    style DURING fill:#e8f1ff,stroke:#3b82f6,stroke-width:2px
-    style AFTER fill:#e6ffed,stroke:#2f855a,stroke-width:2px
-```
-
----
-
 ## 3. Reading Guide
 
 本文件為跨資料中心 Ceph 遷移的主題入口。深入的解決方案分析與執行細節請參考：
