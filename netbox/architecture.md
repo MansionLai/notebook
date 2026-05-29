@@ -6,6 +6,11 @@ nav_order: 1
 
 # Netbox 架構詳解
 
+> **Profile 標籤**
+> - **Minimal local-lab profile**：本地最小化部署請先遵循 [`deployment-steps.md`](./deployment-steps.md) 的精簡參數與 [`README.md`](./README.md) 的最小 VM sizing。  
+> - **HA/production profile**：本文中的多副本與高可用架構段落屬於 HA/production 設計導向。  
+> ⚠️ 若採最小 VM 規格，請使用 `deployment-steps.md` 的降配設定，勿直接套用 HA 預設。
+
 ## 概述
 
 Netbox 是一個網絡資源管理系統（Network Resource Management Platform），用於管理和文檔化網絡基礎設施。本文檔詳細介紹 Netbox 的系統架構和各個組件的角色。

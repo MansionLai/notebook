@@ -6,6 +6,11 @@ nav_order: 5
 
 # 配置參考表
 
+> **Profile 標籤**
+> - **Minimal local-lab profile**：最小化實驗環境請以 [`deployment-steps.md`](./deployment-steps.md) 的精簡 values 與 [`README.md`](./README.md) 的最小 VM sizing 為基準。  
+> - **HA/production profile**：本文件多數默認值與生產配置段落（如副本與資源建議）偏向 HA/production 參考。  
+> ⚠️ 最小 VM profile 必須使用 `deployment-steps.md` 的降配值，不可混用 HA 預設。
+
 本文檔提供 Netbox、PostgreSQL 和 Redis 的完整配置項速查表，方便向同事介紹或調整部署。
 
 ## Netbox 配置參考

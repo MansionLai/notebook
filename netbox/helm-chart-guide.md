@@ -6,6 +6,11 @@ nav_order: 3
 
 # Helm Chart 深度指南
 
+> **Profile 標籤**
+> - **Minimal local-lab profile**：請以 [`deployment-steps.md`](./deployment-steps.md) 的精簡 values 與 [`README.md`](./README.md) 的最小 VM sizing 為準。  
+> - **HA/production profile**：本文件中的多副本與較高資源配置屬於 HA/production 參考。  
+> ⚠️ 使用最小化 VM 規格時，必須套用 `deployment-steps.md` 的降配值，**不可直接沿用 HA 預設值**。
+
 ## 概述
 
 本指南詳細解析官方 Netbox Helm chart 的結構，幫助你理解每個配置項的含義，並學會根據需要調整部署。
