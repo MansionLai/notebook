@@ -36,72 +36,33 @@ datacenter dc2
 
 ## 2. Architecture Diagram
 
-### CRUSH Tree + Cabinet View
-
 ```mermaid
-graph LR
-    subgraph META["Topology Metadata"]
-        DC1["datacenter dc1"]
-        R1["room r1"]
-        M1["MON racks<br/>m1 / m2 / m3"]
-        O1["OSD racks<br/>o1 / o2 / o3"]
-
-        DC2["datacenter dc2"]
-        R2["room r2"]
-        M2["MON racks<br/>m4 / m5 / m6"]
-        O2["OSD racks<br/>o4 / o5 / o6"]
-
-        DC1 --> R1
-        R1 --> M1
-        R1 --> O1
-        DC2 --> R2
-        R2 --> M2
-        R2 --> O2
+flowchart LR
+    subgraph BEFORE["Before（dc1 only）"]
+        direction TB
+        B_MON["MON × 3\nmon-dc1-01/02/03"]
+        B_OSD["OSD racks o1/o2/o3\n15 nodes / 150 OSDs"]
     end
 
-    subgraph CAB["Cabinet View"]
-        subgraph C1["dc1 / room r1"]
-            C1M["MON racks × 3"]
-            C1O["OSD racks × 3<br/>15 nodes / 150 OSDs"]
-        end
-
-        subgraph C2["dc2 / room r2"]
-            C2M["MON racks × 3"]
-            C2O["OSD racks × 3<br/>15 nodes / 150 OSDs"]
-        end
+    subgraph DURING["During（dc1 + dc2）"]
+        direction TB
+        D_MON["MON × 6\ndc1 × 3 + dc2 × 3"]
+        D_OSD["OSD racks o1~o6\n15~30 nodes（rack-by-rack）"]
     end
 
-    NET["Stretched Layer 2<br/>Same IP Segment"]
-    RBD["RBD Pool<br/>for KubeVirt VMs"]
+    subgraph AFTER["After（dc2 only）"]
+        direction TB
+        A_MON["MON × 3\nmon-dc2-01/02/03"]
+        A_OSD["OSD racks o4/o5/o6\n15 nodes / 150 OSDs"]
+    end
 
-    M1 -.-> C1M
-    O1 -.-> C1O
-    M2 -.-> C2M
-    O2 -.-> C2O
+    BEFORE -->|"Step 1: Add dc2 MONs\nStep 1~3: Add dc2 OSD racks"| DURING
+    DURING -->|"Step 7: Remove dc1 MONs\nStep 2~6: Remove dc1 OSD racks"| AFTER
 
-    C1O --- NET --- C2O
-    C1O --> RBD
-    C2O --> RBD
-
-    classDef metaStyle fill:#e8f1ff,stroke:#3b82f6,stroke-width:1.5px
-    classDef monStyle fill:#fff7db,stroke:#b7791f,stroke-width:1.5px
-    classDef osdStyle fill:#e6ffed,stroke:#2f855a,stroke-width:1.5px
-    classDef netStyle fill:#f2f2f2,stroke:#666,stroke-width:1px
-    classDef rbdStyle fill:#e8edff,stroke:#4c51bf,stroke-width:1.5px
-
-    class DC1,DC2,R1,R2 metaStyle
-    class M1,M2,C1M,C2M monStyle
-    class O1,O2,C1O,C2O osdStyle
-    class NET netStyle
-    class RBD rbdStyle
+    style BEFORE fill:#fef3c7,stroke:#d69e2e,stroke-width:2px
+    style DURING fill:#e8f1ff,stroke:#3b82f6,stroke-width:2px
+    style AFTER fill:#e6ffed,stroke:#2f855a,stroke-width:2px
 ```
-
-**圖說**：
-- 左側以 `datacenter -> room -> rack` 呈現 topology metadata
-- 右側以機櫃群視角呈現 dc1 / dc2 的 MON 與 OSD 分布
-- 每個 DC 各有 3 個 MON racks 與 3 個 OSD racks，OSD 區合計 15 nodes / 150 OSDs
-- 兩個 DC 透過 stretched Layer 2 網路連通，並共同提供 RBD 給 KubeVirt VM 使用
-- 虛線箭頭表示拓樸 metadata 與機櫃視圖的對應關係，不代表資料流向
 
 ---
 
@@ -120,17 +81,17 @@ graph LR
 
 ### 📋 Runbooks
 
-(建議順序：先 OSD，後 MON)
-
-- **[OSD Migration Runbook](osd-migration/)**
-  - 以機櫃 (rack-by-rack) 為單位遷移
-  - 觀察 recovery/backfill 進度並設定觀察門檻
-  - RBD workload 影響評估與 gate criteria
+(建議順序：先 MON，後 OSD)
 
 - **[MON Migration Runbook](detail_runbook/)**
   - quorum 重新定位 / monitor 拓樸變動
   - Rook external 模式協調
   - ceph-csi / KubeVirt 驗證步驟
+
+- **[OSD Migration Runbook](osd-migration/)**
+  - 以機櫃 (rack-by-rack) 為單位遷移
+  - 觀察 recovery/backfill 進度並設定觀察門檻
+  - RBD workload 影響評估與 gate criteria
 
 ---
 
