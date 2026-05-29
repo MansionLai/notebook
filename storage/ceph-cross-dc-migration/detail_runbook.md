@@ -41,7 +41,62 @@ flowchart LR
 
 ---
 
-## 1. MON Migration Principles
+## Step-by-Step Flow（Pre-check / Action / Post-check）
+
+每個步驟的三個層級：🔍 執行前確認 → ⚡ 執行動作 → ✅ 執行後確認
+
+```mermaid
+flowchart TD
+    classDef precheck fill:#fff3cd,stroke:#d69e2e,color:#000
+    classDef action fill:#e8f5e9,stroke:#2f855a,color:#000
+    classDef postcheck fill:#dbeafe,stroke:#3b82f6,color:#000
+
+    subgraph S0["Step 0：Pre-Migration Backup & Validation"]
+        direction LR
+        PC0("🔍 Pre-check\n──────────\n• Ceph HEALTH_OK\n• dc2 hosts registered in orch\n• SSH connectivity to dc2 hosts"):::precheck
+        A0("⚡ Action\n──────────\n• Backup rook ConfigMaps & Secrets\n• Record MON endpoints baseline\n• Inventory csi-rbdplugin & VM workloads\n• Confirm MON service placement"):::action
+        OK0("✅ Post-check\n──────────\n• Backups saved to /backup/\n• MON endpoints recorded\n• dc2 host list confirmed"):::postcheck
+        PC0 --> A0 --> OK0
+    end
+
+    subgraph S1["Step 1：Add dc2 MONs to Cluster"]
+        direction LR
+        PC1("🔍 Pre-check\n──────────\n• quorum = 3/3, dc1 only\n• Cluster HEALTH_OK\n• dc2 host IPs confirmed"):::precheck
+        A1("⚡ Action\n──────────\n• ceph orch host add mon-dc2-01/02/03\n• ceph orch apply mon (all 6 nodes)\n• ceph orch apply mgr (all 6 nodes)"):::action
+        OK1("✅ Post-check\n──────────\n• quorum = 6/6\n• All dc2 MONs in quorum\n• Cluster HEALTH_OK"):::postcheck
+        PC1 --> A1 --> OK1
+    end
+
+    subgraph S2["Step 2：Rook Operator Auto-Sync ConfigMaps"]
+        direction LR
+        PC2("🔍 Pre-check\n──────────\n• quorum = 6, HEALTH_OK\n• Rook operator logs check\n  (auto-sync expected v1.14+)"):::precheck
+        A2("⚡ Action\n──────────\n• Wait ~1-2 min for Rook auto-sync\n• If not auto: manually edit\n  rook-ceph-mon-endpoints\n  + rook-ceph-config mon_host"):::action
+        OK2("✅ Post-check\n──────────\n• rook-ceph-mon-endpoints\n  has 6 MON entries\n• mon_host includes dc2 addresses\n• Rook operator logs show sync OK"):::postcheck
+        PC2 --> A2 --> OK2
+    end
+
+    subgraph S4["Step 4：Verify csi-rbdplugin & VM I/O"]
+        direction LR
+        PC4("🔍 Pre-check\n──────────\n• ConfigMap has 6 MON entries\n• Rook operator sync confirmed"):::precheck
+        A4("⚡ Action\n──────────\n• Check csi-rbdplugin logs for\n  dc2 MON connections\n• Exec into pod: ceph -s\n• VM dd / iostat I/O test\n• If stale logs → Step 5 batch restart"):::action
+        OK4("✅ Post-check\n──────────\n• Logs show dc2 MON connections\n• VM I/O healthy\n• No SLA violation"):::postcheck
+        PC4 --> A4 --> OK4
+    end
+
+    subgraph S7["Step 7：Remove dc1 MONs from Cluster"]
+        direction LR
+        PC7("🔍 Pre-check\n──────────\n• quorum = 6, HEALTH_OK\n• csi-rbdplugin using dc2 MONs\n• VM I/O confirmed healthy"):::precheck
+        A7("⚡ Action\n──────────\n• Phase 1: apply mon → 5 nodes\n  (remove dc1-01)\n• Phase 2: apply mon → 4 nodes\n  (remove dc1-02)\n• Phase 3: apply mon/mgr → dc2 only\n• orch host rm dc1-01/02/03"):::action
+        OK7("✅ Post-check\n──────────\n• quorum = 3/3, dc2 only\n• rook ConfigMaps dc2-only\n• Cluster HEALTH_OK\n• VM I/O healthy"):::postcheck
+        PC7 --> A7 --> OK7
+    end
+
+    S0 --> S1 --> S2 --> S4 --> S7
+```
+
+---
+
+
 
 ### 核心原則
 
