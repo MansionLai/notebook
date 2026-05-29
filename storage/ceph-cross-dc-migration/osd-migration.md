@@ -113,138 +113,24 @@ flowchart LR
 
 **目標**：確保 cluster 健康、備份關鍵配置、建立監控基線
 
-#### 前置檢查清單
-
-1. **Cluster Health Check**
-   ```bash
-   ceph -s
-   # 必須為 HEALTH_OK，無 degraded/misplaced PGs
-   
-   ceph osd tree
-   # 確認現有 dc1 的 rack 結構（o1, o2, o3）
-   
-   ceph osd df tree
-   # 記錄 OSD 使用率基線
-   ```
-
-2. **Backup CRUSH Map**
-   ```bash
-   ceph osd getcrushmap -o /backup/crushmap.$(date +%Y%m%d).bin
-   crushtool -d /backup/crushmap.$(date +%Y%m%d).bin -o /backup/crushmap.$(date +%Y%m%d).txt
-   ```
-
-3. **Verify MON Quorum**
-   ```bash
-   ceph mon stat
-   # 確認 3 個 MON 都在 quorum 中
-   ```
-
-4. **Record Baseline Metrics**
-   - 記錄當前 cluster 的 IOPS、throughput、latency 基線
-   - 記錄 VM 應用層的效能基線（若有監控）
-
-5. **Network Connectivity Test**
-   ```bash
-   # 從 dc1 節點測試到 dc2 節點的連通性
-   ping -c 10 <dc2-node-ip>
-   iperf3 -c <dc2-node-ip> -t 30
-   # 確認 latency < 5ms，bandwidth 符合預期
-   ```
-
-#### Gate Criteria (進入 Phase 1 前)
-
-- ✅ Cluster health = `HEALTH_OK`
-- ✅ 所有 PGs 為 `active+clean`
-- ✅ CRUSH map 已備份
-- ✅ dc1 ↔ dc2 網路連通性驗證完成
-- ✅ 監控系統已就緒，可追蹤 recovery 進度
+| Precheck<br>（檢查項目 / 使用指令 / 原因） | Action<br>（節點 / 指令） | Postcheck<br>（預期結果 / Rollback 方式） |
+|---|---|---|
+| **遷移前 cluster 必須 HEALTH_OK**<br>確認無 degraded/misplaced PGs，記錄 dc1 rack 結構與 OSD 使用率基線 | Ceph admin 節點<br>`ceph -s`<br>`ceph osd tree`<br>`ceph osd df tree` | ✅ HEALTH_OK，所有 PGs active+clean<br>❌ 停止遷移，先修復 cluster health |
+| **備份 CRUSH Map**<br>保留還原點，遷移失敗時可快速 rollback | Ceph admin 節點<br>`export BACKUP_DATE=$(date +%Y%m%d)`<br>`ceph osd getcrushmap -o /backup/crushmap.${BACKUP_DATE}.bin`<br>`crushtool -d /backup/crushmap.${BACKUP_DATE}.bin -o /backup/crushmap.${BACKUP_DATE}.txt` | ✅ 備份檔案存在且可讀<br>❌ 重新備份，勿繼續 |
+| **確認 MON Quorum 健康**<br>OSD 遷移期間 MON 必須穩定 | Ceph admin 節點<br>`ceph mon stat` | ✅ 3 個 MON 均在 quorum 中<br>❌ 先執行 MON runbook 修復 quorum |
+| **dc1 ↔ dc2 網路連通性驗證**<br>確認跨 DC 網路 latency / bandwidth 符合需求，避免 recovery 過慢 | Ceph admin 節點<br>`ping -c 10 <dc2-node-ip>`<br>`iperf3 -c <dc2-node-ip> -t 30` | ✅ latency < 5ms，bandwidth 符合預期<br>❌ 先解決網路問題再繼續 |
 
 ---
 
 ### Phase 1: Add dc2 Rack o4 (First Batch)
 
-**目標**：加入 dc2 第一個 rack（o4）的 5 台 OSD 節點
+**目標**：加入 dc2 第一個 rack（o4）的 5 台 OSD 節點（共 50 個 OSDs）
 
-#### 執行步驟
-
-1. **Add OSD Nodes to Cluster**
-   ```bash
-   # 使用 cephadm 加入 dc2 rack o4 的 5 台節點
-   # dc2 節點位置資訊固定為 datacenter=dc2, room=r2
-   # 假設節點名稱為 osd-dc2-o4-{01..05}
-
-   for node in osd-dc2-o4-{01..05}; do
-     ceph orch host add $node --labels osd --location datacenter=dc2 room=r2 rack=o4
-   done
-
-   # 驗證節點已加入
-   ceph orch host ls | grep o4
-   ```
-
-   - dc2 範例使用 `datacenter=dc2 room=r2`（上方加入指令已示範）
-   - dc1 節點的對應位置可視為 `datacenter=dc1 room=r1`（作為拓樸對照參考）
-   - `datacenter` 與 `room` 用來補充拓樸資訊
-   - failure domain 仍然是 `rack`（CRUSH failure domain 保持在 rack，無需變更設計）
-
-2. **Deploy OSDs**
-   ```bash
-   # 手動指定每台節點的 disks
-   # 範例：對每個節點的 10 顆 disk 執行
-   ceph orch daemon add osd osd-dc2-o4-01:/dev/sdb
-   ceph orch daemon add osd osd-dc2-o4-01:/dev/sdc
-   # ... 重複直到所有 disks
-    
-   # 對其他 4 台節點重複相同操作
-   ceph orch daemon add osd osd-dc2-o4-02:/dev/sdb
-   ceph orch daemon add osd osd-dc2-o4-02:/dev/sdc
-   # ... 以此類推
-   ```
-
-3. **Verify OSD Creation**
-   ```bash
-   ceph osd tree | grep o4
-   # 確認 50 個新 OSDs 已 up 且 in
-   
-   ceph osd df tree | grep o4
-   # 檢查新 OSDs 的狀態與初始 weight
-   ```
-
-4. **Monitor Recovery Progress**
-   ```bash
-   watch -n 5 'ceph -s'
-   # 觀察 PGs 進入 remapped/backfilling 狀態
-   
-   ceph osd pool stats
-   # 檢查 recovery rate 與 backfill throughput
-   ```
-
-#### Recovery Throttling (Optional)
-
-若 recovery 對線上業務影響過大，可調整 throttling 參數：
-
-```bash
-# 限制每個 OSD 同時進行的復原請求數為 1
-ceph config set osd osd_recovery_max_active 1
-
-# 限制每個 OSD 同時進行的資料回填請求數為 1
-ceph config set osd osd_max_backfills 1
-
-# 限制 recovery bandwidth
-ceph config set osd osd_recovery_sleep_hdd 0.1
-
-# 驗證設定
-ceph config get osd osd_recovery_max_active
-ceph config get osd osd_max_backfills
-ceph config get osd osd_recovery_sleep_hdd
-```
-
-#### Gate Criteria (進入 Phase 2 前)
-
-- ✅ 50 個新 OSDs (rack o4) 已 `up` 且 `in`
-- ✅ Cluster health = `HEALTH_OK`，所有 PGs 恢復為 `active+clean`
-- ✅ Recovery 完成（`ceph -s` 顯示 0 個 degraded/misplaced PGs）
-- ✅ OSD 使用率已重新平衡（無單一 OSD 超載）
-- ✅ VM I/O latency 恢復正常（若先前有異常）
+| Precheck<br>（檢查項目 / 使用指令 / 原因） | Action<br>（節點 / 指令） | Postcheck<br>（預期結果 / Rollback 方式） |
+|---|---|---|
+| **Phase 0 gate 通過，cluster HEALTH_OK**<br>確認 dc2 o4 節點 SSH 可達且 cephadm 已安裝 | Ceph admin 節點<br>`for node in osd-dc2-o4-{01..05}; do`<br>`  ceph orch host add $node --labels osd --location datacenter=dc2 room=r2 rack=o4`<br>`done`<br>`ceph orch host ls \| grep o4` | ✅ 5 台節點出現在 host 清單，location metadata 正確<br>❌ 檢查 SSH 連線與 cephadm 安裝狀態 |
+| **5 台節點已在 host 清單中**<br>確認節點就緒後再 deploy OSDs | Ceph admin 節點<br>`ceph orch daemon add osd osd-dc2-o4-01:/dev/sdb`<br>`ceph orch daemon add osd osd-dc2-o4-01:/dev/sdc`<br>`# 重複每台節點的所有 disks（每節點 10 顆）` | ✅ `ceph osd tree \| grep o4` 顯示 50 個 OSD up+in<br>❌ `ceph orch ps --hostname osd-dc2-o4-XX` 檢查 daemon 狀態 |
+| **50 個 OSDs up+in 已確認**<br>等待 CRUSH rebalance 完成，確認資料已均衡分布 | Ceph admin 節點<br>`watch -n 5 'ceph -s'`<br>`ceph osd pool stats`<br>（可選）Recovery Throttling：<br>`ceph config set osd osd_recovery_max_active 1`<br>`ceph config set osd osd_max_backfills 1` | ✅ 所有 PGs active+clean，0 degraded/misplaced<br>✅ VM I/O latency 正常<br>❌ 若 recovery > 24h：檢查 OSD 狀態與網路 |
 
 **預估時間**：數小時至一天（視資料量與網路頻寬而定）
 
@@ -256,217 +142,34 @@ ceph config get osd osd_recovery_sleep_hdd
 
 **策略**：標準 OSD 節點移除流程，以主機為單位進行回填與清理
 
-#### 執行步驟
-
-1. **調整 CRUSH 回填權重（清空資料）**
-   ```bash
-   # 對 rack o1 的每台節點進行 reweight，權重設為 0
-   for node in osd-dc1-o1-{01..05}; do
-     ceph osd crush reweight-by-host $node 0
-   done
-    
-   # 驗證節點已標記為回填狀態
-   ceph osd tree | grep o1
-   # 應看到對應節點的 weight 為 0
-   ```
-
-2. **等待資料遷移完成**
-   ```bash
-   watch -n 5 'ceph -s'
-   # 等待所有 PGs 恢復為 active+clean
-   # 使用更可靠的檢查：當 ceph -s 不包含 recovering/backfilling/degraded/misplaced 時視為完成
-   while ceph -s | grep -Eq 'recovering|backfilling|degraded|misplaced'; do
-     echo "Recovery in progress or PGs not clean:"
-     ceph -s
-     sleep 30
-   done
-   echo "PASS: All PGs active+clean and no recovery activity"
-   ```
-
-3. **透過 Orchestrator 移除 OSD（含資料抹除）**
-   ```bash
-   # 取得 rack o1 的所有 OSD IDs
-   ceph osd crush ls o1 | sed 's/osd\.//' > /tmp/o1-osds.txt
-    
-   # 讀取 OSD IDs 並用空格分隔
-   OSD_IDS=$(tr '\n' ' ' < /tmp/o1-osds.txt)
-    
-   # 透過 Orchestrator 移除 OSDs 並抹除資料
-   ceph orch osd rm $OSD_IDS --zap
-    
-   # 驗證 OSD 移除進度
-   ceph orch osd rm status
-   # 等待移除完成（顯示 empty）
-   ```
-
-4. **清除主機標籤並移出集群**
-   ```bash
-   # 從集群移除主機
-   for node in osd-dc1-o1-{01..05}; do
-     ceph orch host rm $node
-   done
-    
-   # 驗證主機已移除
-   ceph orch host ls | grep -q "osd-dc1-o1" && echo "FAIL: Hosts still present" || echo "PASS: All hosts removed"
-   ```
-
-#### Gate Criteria (進入 Phase 3 前)
-
-- ✅ Rack o1 的 50 個 OSDs 已從 CRUSH map 移除
-- ✅ Cluster health = `HEALTH_OK`，所有 PGs 恢復為 `active+clean`
-- ✅ OSD 使用率已重新平衡（剩餘 OSDs 無超載）
-- ✅ 物理節點已從 orchestrator 移除
+| Precheck<br>（檢查項目 / 使用指令 / 原因） | Action<br>（節點 / 指令） | Postcheck<br>（預期結果 / Rollback 方式） |
+|---|---|---|
+| **Phase 1 gate 通過（PGs active+clean）**<br>確認 dc2 o4 rack 資料已穩定，再開始清空 dc1 o1 | Ceph admin 節點<br>**步驟一：調整 CRUSH 回填權重（清空資料）**<br>`for node in osd-dc1-o1-{01..05}; do`<br>`  ceph osd crush reweight-by-host $node 0`<br>`done` | ✅ `ceph osd tree \| grep o1` 顯示 weight = 0<br>❌ 若 reweight 失敗：檢查節點是否在 CRUSH map 中 |
+| **Weight = 0 已確認，資料遷移進行中**<br>等待所有 PG 資料搬離 o1，確保無資料遺留 | Ceph admin 節點<br>**步驟二：等待資料遷移完成**<br>`while ceph -s \| grep -Eq 'recovering\|backfilling\|degraded\|misplaced'; do`<br>`  echo "Recovery in progress..."; ceph -s; sleep 30`<br>`done`<br>`echo "PASS: All PGs active+clean"` | ✅ ceph -s 無 recovering/backfilling/degraded/misplaced<br>❌ 等待或調低 throttling 加速 recovery |
+| **PGs active+clean，o1 資料已清空**<br>安全移除 OSDs 並抹除磁碟 | Ceph admin 節點<br>**步驟三：透過 Orchestrator 移除 OSD（含資料抹除）**<br>`OSD_IDS=$(ceph osd crush ls o1 \| sed 's/osd\.//' \| tr '
+' ' ')`<br>`ceph orch osd rm $OSD_IDS --zap`<br>`ceph orch osd rm status` | ✅ `ceph orch osd rm status` 顯示 empty（移除完成）<br>❌ 若 --zap 失敗：手動確認 disk 狀態 |
+| **OSDs 移除完成**<br>確認無其他 daemon 殘留後移除主機 | Ceph admin 節點<br>**步驟四：清除主機標籤並移出集群**<br>`for node in osd-dc1-o1-{01..05}; do`<br>`  ceph orch host rm $node`<br>`done` | ✅ `ceph orch host ls` — o1 節點已移除<br>✅ `ceph -s` HEALTH_OK，PGs active+clean<br>❌ 若有 non-OSD daemon：先處理後再 host rm |
 
 **預估時間**：數小時至一天
 
 ---
 
-### Phase 3–6: Repeat for remaining racks
+### Phase 3–6: Repeat for Remaining Racks
 
-Phase 3 (Add dc2 rack o5), Phase 4 (Remove dc1 rack o2), Phase 5 (Add dc2 rack o6), Phase 6 (Remove dc1 rack o3) follow the same patterns as Phase 1 and Phase 2. 在每一階段均應遵守相同的 Gate Criteria、監控流程與 Recovery Throttling 建議以保持 cluster 健康。
+| Phase | 動作 | 模式 |
+|-------|------|------|
+| Phase 3 | Add dc2 rack o5 | 同 Phase 1 |
+| Phase 4 | Remove dc1 rack o2 | 同 Phase 2 |
+| Phase 5 | Add dc2 rack o6 | 同 Phase 1 |
+| Phase 6 | Remove dc1 rack o3 | 同 Phase 2 |
 
-#### Final Validation (after Phase 6)
+每個 Phase 均遵守相同的 Gate Criteria、監控流程與 Recovery Throttling 建議。
 
-- ✅ 所有 dc1 racks (o1, o2, o3) 已完全移除
-- ✅ 僅剩 dc2 racks (o4, o5, o6) 的 150 個 OSDs
-- ✅ Cluster health = `HEALTH_OK`
-- ✅ OSD 使用率平衡（無單一 OSD 超過 80%）
+#### Final Validation（after Phase 6）
 
----
-
-## Cutover Gates (OSD-focused)
-
-每個 Phase 必須滿足以下條件才能進入下一階段（OSD migration 專用 gates）：
-
-### Recovery Completion Gate
-
-```bash
-# 檢查 PG 狀態
-ceph pg stat | grep -q 'active+clean' && echo "PASS: All PGs active+clean" || echo "FAIL"
-
-# 檢查無 degraded PGs
-ceph -s | grep -q 'degraded\|misplaced' && echo "FAIL: Degraded PGs exist" || echo "PASS"
-
-# 檢查 recovery 完成
-ceph -s | grep -q 'recovering\|backfilling' && echo "FAIL: Recovery in progress" || echo "PASS"
-```
-
-### Cluster Health Gate
-
-```bash
-# 必須為 HEALTH_OK 或 HEALTH_WARN（僅接受已知的非關鍵 warning）
-ceph health detail
-```
-
-### OSD Balance Gate
-
-```bash
-# 檢查 OSD 使用率標準差（應 < 10%）
-ceph osd df tree | awk '/osd\./ {print $7}' | \
-  awk '{sum+=$1; sumsq+=$1*$1} END {print sqrt(sumsq/NR - (sum/NR)^2)}'
-# 若標準差 > 10，考慮手動 reweight 或等待進一步 rebalance
-```
-
----
-
-## Rollback Rules (OSD)
-
-### 何時需要 Rollback
-
-1. **Recovery 失敗**：
-   - PG 持續處於 `degraded` 超過預期時間（如 > 24 小時）
-   - 出現大量 `incomplete` 或 `stale` PGs
-
-2. **硬體故障**：
-   - 新加入的 dc2 節點出現硬體問題（disk failure, network issue）
-   - 無法在短時間內修復
-
-3. **效能劣化**：
-   - VM I/O latency 超過 SLA（如 p99 > 100ms）
-
-4. **網路問題**：
-   - dc1 ↔ dc2 網路中斷或延遲飆升
-
-### Rollback 步驟
-
-#### Case 1: 剛加入 dc2 rack，尚未移除 dc1 rack
-
-**操作**：將新加入的 dc2 rack OSDs 逐漸移除並搬回資料到 dc1
-
-```bash
-# 假設在 Phase 1，剛加入 rack o4
-# 步驟1：調整 CRUSH 回填權重
-for node in osd-dc2-o4-{01..05}; do
-  ceph osd crush reweight-by-host $node 0
-done
-
-# 步驟2：等待資料搬回 dc1 racks
-while ceph -s | grep -Eq 'recovering|backfilling|degraded|misplaced'; do
-  echo "Data migration in progress..."
-  ceph -s
-  sleep 30
-done
-echo "PASS: All data migrated back"
-
-# 步驟3：取得 rack o4 的所有 OSD IDs
-ceph osd crush ls o4 | sed 's/osd\.//' > /tmp/o4-osds.txt
-OSD_IDS=$(tr '\n' ' ' < /tmp/o4-osds.txt)
-
-# 步驟4：透過 Orchestrator 移除 OSDs
-ceph orch osd rm $OSD_IDS --zap
-
-# 步驟5：等待移除完成
-ceph orch osd rm status
-
-# 步驟6：移除 hosts
-for node in osd-dc2-o4-{01..05}; do
-  ceph orch host rm $node
-done
-```
-
-**結果**：恢復為原始的 dc1-only cluster 狀態
-
----
-
-#### Case 2: 已移除部分 dc1 rack，需 rollback
-
-**限制**：若已移除 dc1 rack o1，則無法完全 rollback（因資料已搬離且節點已移除）
-
-**緩解措施**：
-- 若 dc1 rack o1 的節點與 disks 仍可存取，可嘗試重新加入：
-  ```bash
-  # 重新加入 dc1 rack o1 節點
-  for node in osd-dc1-o1-{01..05}; do
-    ceph orch host add $node --labels osd --location rack=o1
-  done
-   
-  # 手動重新加入 OSDs（需 disks 資料仍存在）
-  ceph orch daemon add osd osd-dc1-o1-01:/dev/sdb
-  ceph orch daemon add osd osd-dc1-o1-01:/dev/sdc
-  # ... 重複所有 disks
-  ```
-
-- 若節點已無法恢復，則：
-  - **保持當前狀態**（dc2 部分 racks + dc1 部分 racks 混合模式）
-  - 等待 cluster health 穩定後，評估繼續遷移或維持混合模式
-
-**建議**：Rollback 的最佳時機是在**每個 Phase 的 gate criteria 檢查點之前**。一旦跨越 gate 進入下一 Phase，rollback 難度與風險顯著增加。
-
----
-
-## Recovery Throttling (commands)
-
-```bash
-# 降低 recovery 優先級（減少對線上業務影響）
-ceph config set osd osd_recovery_max_active 1
-ceph config set osd osd_max_backfills 1
-ceph config set osd osd_recovery_sleep_hdd 0.1
-
-# 恢復預設值（加速 recovery）
-ceph config set osd osd_recovery_max_active 3
-ceph config set osd osd_max_backfills 1
-ceph config set osd osd_recovery_sleep_hdd 0
-```
+| Precheck<br>（檢查項目 / 使用指令 / 原因） | Action<br>（節點 / 指令） | Postcheck<br>（預期結果 / Rollback 方式） |
+|---|---|---|
+| **所有 dc1 racks 已移除，dc2 racks 存在**<br>最終確認遷移完整性 | Ceph admin 節點<br>`ceph osd tree`<br>`ceph osd df tree`<br>`ceph -s` | ✅ 僅剩 dc2 racks (o4, o5, o6) 的 150 個 OSDs<br>✅ HEALTH_OK，所有 PGs active+clean<br>✅ OSD 使用率平衡（無單一 OSD 超過 80%） |
 
 ---
 
