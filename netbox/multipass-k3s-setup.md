@@ -22,6 +22,8 @@ nav_order: 2
 ## 第 1 步：創建 3 個 Ubuntu VM
 
 > **注意：** Multipass 既有 VM 的磁碟容量一般無法原地縮小。若要降低 `--disk`，通常需要刪除並用較小的 `--disk` 參數重建 VM。
+>
+> **相容性警告（最小化規格）：** 本頁的 VM 最小化 sizing 僅適用於同時採用部署文件中的「精簡版 NetBox Helm 資源限制與 PVC 容量設定」。若直接沿用預設（較重）Helm 資源/PVC 參數，可能超出上述 VM 容量並導致部署失敗或節點資源不足。
 
 ### 步驟 1.1：創建 Control Plane VM
 
