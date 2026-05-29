@@ -248,7 +248,7 @@ Rook external mode 使用以下兩個 Kubernetes resources 傳遞 Ceph cluster �
 |---|---|---|
 | **Step 3 quorum = 3（dc2-only）已確認**<br>Rook operator 在 MON 拓撲變更後 1-2 分鐘自動同步 ConfigMap | K8s admin 節點<br>等待 1-2 分鐘後<br>`kubectl logs -n rook-ceph deployment/rook-ceph-operator --tail=50 \| grep -i mon`<br>`kubectl -n rook-ceph get configmap rook-ceph-mon-endpoints -o jsonpath='{.data.data}'` | ✅ ConfigMap 僅包含 dc2 MON endpoints（3 個）<br>❌ 手動執行：`kubectl -n rook-ceph edit configmap rook-ceph-mon-endpoints`（移除 dc1，保留 dc2） |
 | **確認 rook-ceph-config mon_host 已更新為 dc2-only**<br>ceph.conf mon_host 必須只含 dc2 地址 | K8s admin 節點<br>`kubectl -n rook-ceph get configmap rook-ceph-config -o jsonpath='{.data.ceph\.conf}' \| grep mon_host` | ✅ mon_host 僅含 dc2 地址<br>❌ 手動更新 rook-ceph-config |
-| **確認 csi-rbdplugin 正常連線至 dc2 MON** | K8s admin 節點<br>`kubectl -n rook-ceph logs -l app=csi-rbdplugin --tail=50 \| grep -i mon` | ✅ logs 顯示已連線至 dc2 MON endpoints<br>❌ 分批重啟：`kubectl -n rook-ceph delete pod <pod>` 每批間隔 30s |
+| **VM I/O 正常（關鍵驗證）**<br>MON endpoint 切換期間 VM 不應有 I/O 中斷 | VM guest OS<br>`virtctl console <vm-name> -n <namespace>`<br>`dd if=/dev/zero of=/tmp/test.dat bs=1M count=100`<br>`iostat -x 1 5` | ✅ I/O 正常，無錯誤或明顯延遲<br>❌ 暫停遷移，執行 Rollback：<br>`ceph orch apply mon --placement="mon-dc2-01 mon-dc2-02 mon-dc2-03 mon-dc1-03"`<br>`ceph orch apply mgr --placement="mon-dc2-01 mon-dc2-02 mon-dc2-03 mon-dc1-03"`<br>（重新加回 dc1 MON，恢復穩定狀態） |
 
 ---
 
