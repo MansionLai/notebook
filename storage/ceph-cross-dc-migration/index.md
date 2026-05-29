@@ -42,7 +42,7 @@ datacenter dc2
 
 深入探討遷移策略的比較與決策依據：
 
-- **[Solutions Overview](solutions/)**
+- **[Solutions Overview](solutions.md)**
   - Option A vs Option B 比較
   - 設計取捨分析
   - 風險評估與緩解措施
@@ -51,12 +51,12 @@ datacenter dc2
 
 (建議順序：先 MON，後 OSD)
 
-- **[MON Migration Runbook](detail_runbook/)**
+- **[MON Migration Runbook](detail_runbook.md)**
   - quorum 重新定位 / monitor 拓樸變動
   - Rook external 模式協調
   - ceph-csi / KubeVirt 驗證步驟
 
-- **[OSD Migration Runbook](osd-migration/)**
+- **[OSD Migration Runbook](osd-migration.md)**
   - 以機櫃 (rack-by-rack) 為單位遷移
   - 觀察 recovery/backfill 進度並設定觀察門檻
   - RBD workload 影響評估與 gate criteria
