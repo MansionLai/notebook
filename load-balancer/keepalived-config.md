@@ -1,7 +1,7 @@
 ---
 title: Keepalived 配置
 parent: Load Balancer
-nav_order: 4
+nav_order: 5
 ---
 
 # Keepalived 配置
@@ -11,7 +11,7 @@ nav_order: 4
 ```mermaid
 graph TB
     subgraph MASTER["lb-master (192.168.50.211)"]
-        KAM["keepalived.conf<br/>━━━━━━━━━━━━━━━━<br/>state: MASTER<br/>priority: 100<br/>VIP: 192.168.50.250"]
+        KAM["keepalived.conf<br/>━━━━━━━━━━━━━━━━<br/>state: BACKUP<br/>priority: 100<br/>VIP: 192.168.50.250"]
         SCRIPT_M["vrrp_script<br/>━━━━━━━━━━━━━━━━<br/>監控 HAProxy 程序<br/>掛掉時 priority -20"]
     end
 
@@ -21,7 +21,7 @@ graph TB
     end
 
     KAM <-->|"VRRP multicast<br/>224.0.0.18"| KAS
-    KAM -->|"持有 VIP<br/>(priority 100 > 90)"| VIP["⭐ 192.168.50.250"]
+    KAM -->|"啟動後由較高 priority 持有 VIP<br/>(100 > 90)"| VIP["⭐ 192.168.50.250"]
 ```
 
 ---
@@ -58,12 +58,12 @@ vrrp_script chk_haproxy {
 
 # VRRP 實例設定
 vrrp_instance VI_1 {
-    state MASTER                 # 初始角色：Master
+    state BACKUP                 # 初始角色：Backup（No preempt 模式）
     interface ens4               # 橋接網卡名稱（請確認你的介面名）
     virtual_router_id 51         # VRRP 群組 ID（Master 和 Slave 要一致）
     priority 100                 # 優先級（越高越優先持有 VIP）
     advert_int 1                 # VRRP 廣播間隔（秒）
-    preempt                      # Master 恢復後自動搶回 VIP
+    nopreempt                    # 不主動搶回 VIP（No preempt）
 
     authentication {
         auth_type PASS
@@ -141,18 +141,18 @@ vrrp_instance VI_1 {
 | 設定項 | lb-master | lb-slave | 說明 |
 |--------|-----------|----------|------|
 | `router_id` | `lb-master` | `lb-slave` | 各自識別用 |
-| `state` | `MASTER` | `BACKUP` | 初始角色 |
+| `state` | `BACKUP` | `BACKUP` | 初始角色（No preempt 模式） |
 | `priority` | `100` | `90` | Master 較高，優先持有 VIP |
 | `virtual_router_id` | `51` | `51` | **必須相同** |
 | `advert_int` | `1` | `1` | **必須相同** |
 | `auth_pass` | `LB2024secret` | `LB2024secret` | **必須相同** |
-| `preempt` / `nopreempt` | `preempt` | `nopreempt` | Master 恢復時自動搶回 |
+| `preempt` / `nopreempt` | `nopreempt` | `nopreempt` | 不主動搶回，避免來回漂移 |
 
 ---
 
 ## 啟動 Keepalived
 
-在**兩台 VM** 都執行（先啟動 Master，再啟動 Slave）：
+在**兩台 VM** 都執行（建議先啟動 Master，再啟動 Slave）：
 
 ```bash
 # 啟動並設定開機自啟
@@ -226,4 +226,4 @@ sequenceDiagram
     Note over KA,KAS: VIP 漂移到 Slave！
 ```
 
-下一步：[HAProxy 配置](./haproxy-config)
+下一步：[故障切換測試](./failover-testing.md)

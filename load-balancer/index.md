@@ -7,7 +7,7 @@ permalink: /load-balancer/
 
 # Load Balancer 高可用實驗室
 
-在 Mac mini 上使用 Multipass 創建兩台 VM，實作 **Keepalived + HAProxy** 的 Active-Standby 高可用負載均衡架構。
+在 Mac mini 上使用 Multipass 創建兩台 VM，實作 **HAProxy + Keepalived** 的 Active-Standby 高可用負載均衡架構。
 
 ## 📚 文檔結構
 
@@ -16,8 +16,8 @@ permalink: /load-balancer/
 | [架構概覽](./architecture.md) | VRRP 原理、VIP 漂移機制、整體設計 |
 | [VM 環境搭建](./vm-setup.md) | Multipass 建立兩台 VM、設定固定 IP |
 | [Docker Backend Service](./backend-service.md) | 在 VM 上用 Docker 建立 Web + API 後端 |
-| [Keepalived 配置](./keepalived-config.md) | Master/Slave VRRP 設定、健康檢查 |
 | [HAProxy 配置](./haproxy-config.md) | 前端/後端配置、stats 頁面 |
+| [Keepalived 配置](./keepalived-config.md) | Master/Slave VRRP 設定、健康檢查 |
 | [Ansible Playbook](./ansible-playbook.md) | 一鍵自動化部署所有元件 |
 | [故障切換測試](./failover-testing.md) | 驗證 VIP 漂移、切換時間量測 |
 

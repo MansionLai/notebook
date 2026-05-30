@@ -1,7 +1,7 @@
 ---
 title: HAProxy 配置
 parent: Load Balancer
-nav_order: 5
+nav_order: 4
 ---
 
 # HAProxy 配置
@@ -202,4 +202,4 @@ graph TB
     HS --- NOTE
 ```
 
-下一步：[故障切換測試](./failover-testing)
+下一步：[Keepalived 配置](./keepalived-config.md)
