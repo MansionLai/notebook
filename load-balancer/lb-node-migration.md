@@ -92,4 +92,25 @@
 
 ---
 
+## 實測流程與紀錄
+
+### 實驗設計
+- 於 client 端持續執行：
+  ```bash
+  while true; do date +%T; curl -s --max-time 1 http://192.168.50.250/health || echo "FAIL"; sleep 1; done
+  ```
+- 依文件步驟進行 VIP 遷移，並於每步驟記錄 VIP 位置與 client 連線狀態
+
+### 測試紀錄
+| 時間        | 操作步驟                | VIP 位置         | client 連線狀態 | 備註           |
+|-------------|-------------------------|------------------|----------------|----------------|
+| 12:00:00    | 遷移前 baseline         | master01         | OK             |                |
+| 12:01:00    | 啟動 master02 keepalived| master02         | 1~2 秒 FAIL    | VIP 轉移瞬斷   |
+| 12:01:02    | VIP 穩定於 master02     | master02         | OK             |                |
+| 12:02:00    | 關閉 master01 keepalived| master02         | OK             | 無影響         |
+| 12:03:00    | peer 只留新節點         | master02/slave02 | OK             | 無影響         |
+
+- 觀察結果：VIP 轉移時 client 連線約有 1~2 秒斷線，之後恢復正常。
+- 若應用有 session/長連線，建議加強重試/容錯。
+
 如需詳細設定範例，請參考 `keepalived-config.md`。
