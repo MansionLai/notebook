@@ -70,7 +70,7 @@ permalink: /netbox/
 - **K3s** (lightweight Kubernetes)
 - **Helm 3** (package manager for Kubernetes)
 - **kubectl** (Kubernetes CLI)
-- **本地最小化安裝（local dev/test）**：3-node 預設規格為 control plane `2C/4G/20G`，兩台 workers 各 `1C/2G/15G`
+- **本地最小化安裝（local dev/test）**：3-node 預設規格為 control plane `2C/4G/20G`，兩台 workers 各 `1C/4G/15G`
 
 ## 📊 核心圖表
 

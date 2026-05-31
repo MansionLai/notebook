@@ -29,12 +29,12 @@ nav_order: 5
 | 配置項 | 限制 | 請求 | 說明 |
 |------|------|------|------|
 | CPU | 1000m | 500m | 單核=1000m |
-| 內存 | 1Gi | 512Mi | 1GB=1Gi |
+| 內存 | 2Gi | 1Gi | 1GB=1Gi |
 
 **調整建議：**
-- 開發環境：CPU 500m, Memory 256Mi
-- 生產環境（小規模）：CPU 1000m, Memory 1Gi
-- 生產環境（大規模）：CPU 2000m, Memory 2Gi
+- 開發環境：CPU 1000m, Memory 1Gi (建議 2Gi 以確保遷移順利)
+- 生產環境（小規模）：CPU 1000m, Memory 2Gi
+- 生產環境（大規模）：CPU 2000m, Memory 4Gi
 
 ### 健康檢查配置
 

@@ -21,7 +21,7 @@ nav_order: 4
 
 ```bash
 # 添加官方 Netbox Helm repo
-helm repo add netbox-community https://github.com/netbox-community/helm-charts
+helm repo add netbox https://charts.netbox.oss.netboxlabs.com/
 
 # 更新 repo
 helm repo update
@@ -44,7 +44,7 @@ kubectl get namespace netbox
 
 ```bash
 # 拉取官方 chart 以查看默認值
-helm pull netbox-community/netbox --untar
+helm pull netbox/netbox --untar
 
 # 創建自訂 values 文件
 cat > netbox-values.yaml << 'EOF'
@@ -54,11 +54,11 @@ replicaCount: 1
 # Netbox 容器資源
 resources:
   limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
     cpu: 500m
     memory: 512Mi
-  requests:
-    cpu: 200m
-    memory: 256Mi
 
 # PostgreSQL 配置
 postgresql:
@@ -293,9 +293,9 @@ kubectl top nodes
 
 ### 資源不足排查（優先順序）
 
-1. 先下調 NetBox 的 requests/limits（優先）
-2. 檢查 netbox-worker 的記憶體使用量是否過高
-3. 最後才考慮升級 VM 規格
+1. **內存不足 (OOMKilled)**：Netbox 在執行 `manage.py migrate` 時非常消耗內存，建議限制至少設為 `1Gi` (本指南已更新為 `2Gi` 以確保 100% 成功)。
+2. 檢查 netbox-worker 的記憶體使用量是否過高。
+3. 如果節點顯示 `Insufficient cpu`，請檢查是否有多個 pod 競爭同一個節點（特別是 bound 到特定節點的 PVC）。
 
 ```bash
 # 查看部署狀態

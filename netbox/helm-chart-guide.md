@@ -209,13 +209,13 @@ helm install netbox netbox-chart/
 
 ```bash
 # 添加官方 Helm repository
-helm repo add netbox-community https://github.com/netbox-community/helm-charts
+helm repo add netbox https://charts.netbox.oss.netboxlabs.com/
 
 # 更新 repo
 helm repo update
 
 # 拉取 chart
-helm pull netbox-community/netbox --untar
+helm pull netbox/netbox --untar
 ```
 
 ### 步驟 2：檢查默認值

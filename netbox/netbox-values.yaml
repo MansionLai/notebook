@@ -1,0 +1,38 @@
+# Netbox 副本數
+replicaCount: 1
+
+# Netbox 容器資源
+resources:
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+# PostgreSQL 配置
+postgresql:
+  enabled: true
+  architecture: standalone
+  primary:
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClassName: local-path
+  auth:
+    username: netbox
+    password: netbox
+    database: netbox
+
+# Redis 配置
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+
+# Service 配置
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8001

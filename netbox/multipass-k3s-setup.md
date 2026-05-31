@@ -36,9 +36,9 @@ multipass list
 ### 步驟 1.2：創建 Worker Node 1 和 2
 
 ```bash
-multipass launch --name k3s-worker-1 --cpus 1 --memory 2G --disk 15G
+multipass launch --name k3s-worker-1 --cpus 1 --memory 4G --disk 15G
 
-multipass launch --name k3s-worker-2 --cpus 1 --memory 2G --disk 15G
+multipass launch --name k3s-worker-2 --cpus 1 --memory 4G --disk 15G
 ```
 
 ### 步驟 1.3：驗證所有 VM 運行

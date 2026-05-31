@@ -68,9 +68,10 @@ kubectl logs netbox-xxx -n netbox --previous
 kubectl describe pod netbox-xxx -n netbox
 
 # 常見錯誤：
-# - "连接数据库失败" → PostgreSQL 未就緒或密碼錯誤
-# - "内存不足" → 增加內存限制
-# - "权限被拒绝" → 檢查 PVC 權限
+# - "連接數據庫失敗" → PostgreSQL 未就緒或密碼錯誤
+# - "內存不足 (OOMKilled)" → Netbox 初始遷移需要較多內存。
+#   解決：將 `resources.limits.memory` 增加至至少 `1Gi` 或 `2Gi`。
+# - "權限被拒絕" → 檢查 PVC 權限
 ```
 
 ### 問題 3：PostgreSQL 無法連接
