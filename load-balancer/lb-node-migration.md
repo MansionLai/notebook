@@ -1,3 +1,9 @@
+---
+title: 節點線上遷移與 VIP 轉移
+parent: Load Balancer
+nav_order: 98
+---
+
 # Load Balancer Node Online Migration
 
 > 本文件說明如何在不更動現有 master01/slave01 設定下，將 VIP 線上轉移到全新 master02/slave02 節點，並最終下線舊節點。
@@ -91,12 +97,6 @@
 - 新舊節點 VRRP group、virtual_router_id、auth 必須一致
 - 建議先在測試環境驗證流程
 - 若有自動化監控，記得調整監控目標
-
----
-title: Node Online Migration
-parent: Load Balancer
-nav_order: 2
----
 
 ## 實測流程與紀錄
 
