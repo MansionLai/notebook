@@ -89,6 +89,26 @@ nav_order: 99
 
 ---
 
+## 節點線上遷移（VIP 轉移）
+
+### 需求場景
+- 在不更動舊 LB 節點（master01/slave01）設定下，將 VIP 線上轉移到新 LB 節點（master02/slave02）
+- 遷移過程不中斷服務，最終下線舊節點
+
+### 實作重點
+- 新節點 keepalived.conf `unicast_peer` 同時包含新舊節點
+- 新節點 priority 設定高於舊節點，啟動後自動搶佔 VIP
+- 舊節點收到更高 priority 廣播自動降級為 BACKUP
+- VIP 轉移時 client 連線僅短暫中斷（1~2 秒）
+- 最終可將 peer 清理為僅新節點，並下線舊節點
+
+### 實測摘要
+- 依文件步驟操作，VIP 可順利線上轉移
+- 客戶端連線僅於 VIP 轉移瞬間短暫失敗，之後恢復
+- 詳細流程、設定與測試紀錄見 `lb-node-migration.md`
+
+---
+
 ## 未來可擴展的方向（使用者未提及，供參考）
 
 - Active-Active 模式（兩台同時服務）
