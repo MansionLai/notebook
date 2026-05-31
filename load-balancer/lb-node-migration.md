@@ -22,22 +22,22 @@
 1. **在 master02/slave02 完成 HAProxy 與 backend service 配置**
    - 確認新節點可正常代理流量
 
-2. **設定 Keepalived（多 peer 範例）**
-   - master02/slave02 的 keepalived.conf `vrrp_instance` 內 `unicast_peer` 同時包含 master01/slave01 及 master02/slave02 (即：**遷移期間列表應包含所有 4 個節點**)
-   - 將 master02/slave02 的 `priority` 設定高於 master01/slave01
-   - 其餘 VRRP 設定（如 interface、virtual_ipaddress）與舊節點一致
-   - **關鍵提示**：確認新舊節點的 `virtual_router_id` 必須完全一致（範例為 51），否則無法正確競爭 VIP。
+2. **設定 Keepalived（單向 Peer 追蹤）**
+   - **優點**：不需更動任何 master01/slave01 的現有設定。
+   - master02/slave02 的 `vrrp_instance` 內 `unicast_peer` 列表包含 **舊節點主機** 及 **新節點配對**。
+   - 將 master02/slave02 的 `priority` 設定高於 master01/slave01。
+   - 設定 `nopreempt`：確保新節點啟動後，即使優先級高，也會先維持 BACKUP 狀態，直到舊節點關閉。
 
-   **範例 keepalived.conf（以 master02/slave02 為例）：**
+   **範例 keepalived.conf（以 master02 為例）：**
 
    ```conf
    vrrp_instance VI_1 {
        state BACKUP
        interface <bridge-iface>
        virtual_router_id 51
-       priority 110                # 高於舊節點
+       priority 110                # 高於舊節點 (100)
        advert_int 1
-       nopreempt
+       nopreempt                   # 關鍵：不主動搶佔，等待舊節點離線
        authentication {
            auth_type PASS
            auth_pass LB2024secret
@@ -45,25 +45,25 @@
        virtual_ipaddress {
            192.168.50.250/24
        }
-       unicast_src_ip 192.168.50.213   # 本機 IP (以 master02 為例)
+       unicast_src_ip 192.168.50.213   # master02 IP
        unicast_peer {
-           192.168.50.211   # master01
-           192.168.50.212   # slave01
-           192.168.50.214   # slave02
+           192.168.50.211   # master01 (追蹤對象)
+           192.168.50.212   # slave01 (追蹤對象)
+           192.168.50.214   # slave02 (新節點配對)
        }
    }
    ```
 
 3. **啟動 master02/slave02 的 Keepalived**
-   - 啟動後，由於設定了 `nopreempt`，master02 雖然 priority 較高，但不會主動搶佔 master01 的 VIP。
-   - **手動切換方式 A (建議)**：停止 master01 的 keepalived (`sudo systemctl stop keepalived`)，VIP 會立刻漂移到 master02。
-   - **手動切換方式 B**：在 master02 設定中暫時移除 `nopreempt` 並重啟，它會主動奪取 VIP，隨後再加回 `nopreempt` 以維持穩定。
+   - 啟動後，master02 會偵測到 master01 正在持有 VIP。
+   - 由於設定了 `nopreempt`，master02 會安靜地維持在 BACKUP 狀態。
+   - 此時 master01 完全不知道 master02 的存在（因為不需更改 master01 配置），不會產生衝突。
 
-4. **觀察 VIP 轉移**
-   - 確認 VIP 是否已經由 master02 接管 (`ip a`)。
-   - 舊節點 master01 如果還沒關閉，會因為收到更高 priority 的廣播而維持在 BACKUP 狀態。
+4. **執行 VIP 轉移（下線舊節點）**
+   - 停止 master01 的 keepalived (`sudo systemctl stop keepalived`) 或直接關機。
+   - master02 會偵測到 master01 離線，且它是剩餘節點中 priority 最高的，於是立即接管 VIP。
 
-5. **驗證服務流量**
+5. **驗證與清理**
    - 確認 VIP 流量已經由 master02/slave02 處理
    - 可逐步將流量導向新節點，觀察應用層健康狀態
 
