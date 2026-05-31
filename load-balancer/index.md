@@ -20,7 +20,7 @@ permalink: /load-balancer/
 | [Keepalived 配置](./keepalived-config.md) | Master/Slave VRRP 設定、健康檢查 |
 | [Ansible Playbook](./ansible-playbook.md) | 一鍵自動化部署所有元件 |
 | [故障切換測試](./failover-testing.md) | 驗證 VIP 漂移、切換時間量測 |
-| [節點線上遷移與 VIP 轉移](./lb-node-migration.md) | 新舊 LB 節點無縫交接、VIP 線上轉移流程 |
+| [Node Online Migration](./lb-node-migration.md) | 新舊 LB 節點無縫交接、VIP 線上轉移流程 |
 
 ## 🏗️ 環境規劃
 

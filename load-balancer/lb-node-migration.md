@@ -92,8 +92,10 @@
 - 建議先在測試環境驗證流程
 - 若有自動化監控，記得調整監控目標
 
+---
+title: Node Online Migration
 parent: Load Balancer
-nav_order: 98
+nav_order: 2
 ---
 
 ## 實測流程與紀錄
