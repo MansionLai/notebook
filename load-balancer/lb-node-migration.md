@@ -23,9 +23,10 @@
    - 確認新節點可正常代理流量
 
 2. **設定 Keepalived（多 peer 範例）**
-   - master02/slave02 的 keepalived.conf `vrrp_instance` 內 `unicast_peer` 同時包含 master01/slave01 及 master02/slave02
+   - master02/slave02 的 keepalived.conf `vrrp_instance` 內 `unicast_peer` 同時包含 master01/slave01 及 master02/slave02 (即：**遷移期間列表應包含所有 4 個節點**)
    - 將 master02/slave02 的 `priority` 設定高於 master01/slave01
    - 其餘 VRRP 設定（如 interface、virtual_ipaddress）與舊節點一致
+   - **關鍵提示**：確認新舊節點的 `virtual_router_id` 必須完全一致（範例為 51），否則無法正確競爭 VIP。
 
    **範例 keepalived.conf（以 master02/slave02 為例）：**
 

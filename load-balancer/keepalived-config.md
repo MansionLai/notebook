@@ -67,6 +67,12 @@ vrrp_instance VI_1 {
     advert_int 1                 # VRRP 廣播間隔（秒）
     nopreempt                    # 不主動搶回 VIP（No preempt）
 
+    # 注意：若家用路由器不支援多播 (Multicast)，請取消註解並設定單播 (Unicast)
+    # unicast_src_ip 192.168.50.211  # 本機 IP
+    # unicast_peer {
+    #     192.168.50.212              # 對端 IP
+    # }
+
     authentication {
         auth_type PASS
         auth_pass LB2024secret   # 認證密碼（Master 和 Slave 要一致）
