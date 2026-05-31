@@ -27,7 +27,9 @@
 - 重要流程、設定、規範請獨立成檔並於 index.md 連結。
 
 ## 6. 版本控管
-- 每次修改請 commit 並 push 至 GitHub，確保版本紀錄完整。
+- 每次修改請 commit。
+- push 前請先執行 `git pull --rebase`，確保 local 有最新的修改並修正 conflicts。
+- 完成後再 push 至 GitHub，確保版本紀錄完整。
 
 ## 7. 實測與驗證
 - 文件涉及操作流程時，建議實際操作並記錄過程與結果。
