@@ -67,11 +67,11 @@ vrrp_instance VI_1 {
     advert_int 1                 # VRRP 廣播間隔（秒）
     nopreempt                    # 不主動搶回 VIP（No preempt）
 
-    # 注意：若家用路由器不支援多播 (Multicast)，請取消註解並設定單播 (Unicast)
-    # unicast_src_ip 192.168.50.211  # 本機 IP
-    # unicast_peer {
-    #     192.168.50.212              # 對端 IP
-    # }
+    # 設定單播 (Unicast) 以提高相容性（適合多數家用網路）
+    unicast_src_ip 192.168.50.211  # 本機 IP
+    unicast_peer {
+        192.168.50.212              # 對端 IP
+    }
 
     authentication {
         auth_type PASS
@@ -138,6 +138,11 @@ vrrp_instance VI_1 {
         192.168.50.250/24
     }
 
+    unicast_src_ip 192.168.50.212  # 本機 IP
+    unicast_peer {
+        192.168.50.211              # 對端 IP
+    }
+
     track_script {
         chk_haproxy
     }
@@ -157,6 +162,8 @@ vrrp_instance VI_1 {
 | `advert_int` | `1` | `1` | **必須相同** |
 | `auth_pass` | `LB2024secret` | `LB2024secret` | **必須相同** |
 | `preempt` / `nopreempt` | `nopreempt` | `nopreempt` | 不主動搶回，避免來回漂移 |
+| `unicast_src_ip` | `.211` | `.212` | 本機實體 IP |
+| `unicast_peer` | `.212` | `.211` | 對端實體 IP |
 
 ---
 

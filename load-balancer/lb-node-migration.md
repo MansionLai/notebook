@@ -45,22 +45,23 @@
        virtual_ipaddress {
            192.168.50.250/24
        }
+       unicast_src_ip 192.168.50.213   # 本機 IP (以 master02 為例)
        unicast_peer {
            192.168.50.211   # master01
            192.168.50.212   # slave01
-           192.168.50.213   # master02
            192.168.50.214   # slave02
        }
    }
    ```
 
 3. **啟動 master02/slave02 的 Keepalived**
-   - 觀察 syslog 或 `ip a`，確認 VIP 是否已經由 master02 接管
-   - 可用 `arping` 或 `ping` 驗證 VIP 是否正確浮動到新節點
+   - 啟動後，由於設定了 `nopreempt`，master02 雖然 priority 較高，但不會主動搶佔 master01 的 VIP。
+   - **手動切換方式 A (建議)**：停止 master01 的 keepalived (`sudo systemctl stop keepalived`)，VIP 會立刻漂移到 master02。
+   - **手動切換方式 B**：在 master02 設定中暫時移除 `nopreempt` 並重啟，它會主動奪取 VIP，隨後再加回 `nopreempt` 以維持穩定。
 
-4. **觀察舊節點行為**
-   - master01/slave01 會自動偵測到有更高 priority 的 VRRP 廣播，並切換為 BACKUP 狀態
-   - 不需更動舊節點任何設定
+4. **觀察 VIP 轉移**
+   - 確認 VIP 是否已經由 master02 接管 (`ip a`)。
+   - 舊節點 master01 如果還沒關閉，會因為收到更高 priority 的廣播而維持在 BACKUP 狀態。
 
 5. **驗證服務流量**
    - 確認 VIP 流量已經由 master02/slave02 處理
