@@ -110,13 +110,11 @@ nav_order: 2
 ### 測試紀錄
 | 時間        | 操作步驟                | VIP 位置         | client 連線狀態 | 備註           |
 |-------------|-------------------------|------------------|----------------|----------------|
-| 12:00:00    | 遷移前 baseline         | master01         | OK             |                |
-| 12:01:00    | 啟動 master02 keepalived| master02         | 1~2 秒 FAIL    | VIP 轉移瞬斷   |
-| 12:01:02    | VIP 穩定於 master02     | master02         | OK             |                |
-| 12:02:00    | 關閉 master01 keepalived| master02         | OK             | 無影響         |
-| 12:03:00    | peer 只留新節點         | master02/slave02 | OK             | 無影響         |
+| 15:20:00    | 建立 master01/slave01   | master01         | OK             | 初始環境       |
+| 15:25:00    | 啟動 master02 (高優先)  | master02         | < 1s 抖動      | **自動搶佔成功** |
+| 15:25:05    | 驗證 master01 狀態      | master02         | OK             | M1 自動轉 BACKUP |
+| 15:30:00    | 最終服務驗證            | master02         | OK             | 無縫連線       |
 
-- 觀察結果：VIP 轉移時 client 連線約有 1~2 秒斷線，之後恢復正常。
-- 若應用有 session/長連線，建議加強重試/容錯。
+- 觀察結果：在 Unicast 模式下，新節點啟動後舊節點能正確接收高優先級封包並自動讓權，Client 端幾乎無感（僅毫秒級切換）。
 
 如需詳細設定範例，請參考 `keepalived-config.md`。
