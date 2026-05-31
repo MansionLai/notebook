@@ -52,6 +52,11 @@ permalink: /netbox/
 - Redis 緩存驗證
 - 性能監控和優化建議
 
+### 7. [備份與災難復原](./backup_and_disaster_recovery.md)
+- NetBox 備份策略
+- 災難復原流程
+- 恢復測試與自動化建議
+
 ## 🎯 學習路線圖
 
 建議按以下方式使用本指南：

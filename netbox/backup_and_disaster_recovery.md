@@ -1,3 +1,9 @@
+---
+title: NetBox Backup and Disaster Recovery
+parent: Netbox
+nav_order: 99
+---
+
 # NetBox Backup and Disaster Recovery
 
 ## 1. Backup Best Practices
