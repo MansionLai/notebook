@@ -256,7 +256,7 @@ curl http://192.168.50.212:8081/api/info
 | 服務 | lb-master | lb-slave | HAProxy VIP |
 |------|-----------|----------|-------------|
 | Web | `192.168.50.211:8080` | `192.168.50.212:8080` | `192.168.50.250:80` |
-| API | `192.168.50.211:8081` | `192.168.50.212:8081` | `192.168.50.250:8081` |
+| API | `192.168.50.211:8081` | `192.168.50.212:8081` | —（預設未透過 HAProxy 轉發） |
 | Health | `:8081/health` | `:8081/health` | — |
 
-下一步：更新 [HAProxy 配置](./haproxy-config) 指向這些後端，或使用 [Ansible Playbook](./ansible-playbook) 一鍵完成所有設定。
+下一步：更新 [HAProxy 配置](./haproxy-config.md) 指向這些後端，或使用 [Ansible Playbook](./ansible-playbook.md) 一鍵完成所有設定。

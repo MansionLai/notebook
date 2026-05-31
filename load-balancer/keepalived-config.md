@@ -24,6 +24,8 @@ graph TB
     KAM -->|"啟動後由較高 priority 持有 VIP<br/>(100 > 90)"| VIP["⭐ 192.168.50.250"]
 ```
 
+> 將上面配置裡的 `<bridge-iface>` 替換成你的橋接網卡名稱（例如 `ens4` 或 `enp0s2`）。
+
 ---
 
 ## lb-master 配置
@@ -59,7 +61,7 @@ vrrp_script chk_haproxy {
 # VRRP 實例設定
 vrrp_instance VI_1 {
     state BACKUP                 # 初始角色：Backup（No preempt 模式）
-    interface ens4               # 橋接網卡名稱（請確認你的介面名）
+    interface <bridge-iface>     # 橋接網卡名稱（例如 ens4 / enp0s2）
     virtual_router_id 51         # VRRP 群組 ID（Master 和 Slave 要一致）
     priority 100                 # 優先級（越高越優先持有 VIP）
     advert_int 1                 # VRRP 廣播間隔（秒）
@@ -80,6 +82,8 @@ vrrp_instance VI_1 {
     }
 }
 ```
+
+> 將上面配置裡的 `<bridge-iface>` 替換成和 lb-master 相同的橋接網卡名稱。
 
 ---
 
@@ -113,7 +117,7 @@ vrrp_script chk_haproxy {
 
 vrrp_instance VI_1 {
     state BACKUP                 # ← 改這裡：BACKUP
-    interface ens4
+    interface <bridge-iface>
     virtual_router_id 51         # ← 必須和 Master 一樣
     priority 90                  # ← 改這裡：90（低於 Master 的 100）
     advert_int 1
@@ -167,15 +171,21 @@ sudo systemctl status keepalived
 
 ## 驗證 VIP 位置
 
+先找出你的橋接網卡名稱（例如 `ens4` 或 `enp0s2`）：
+
+```bash
+ip -o link show
+```
+
 **在 lb-master 確認 VIP 存在：**
 
 ```bash
-ip addr show ens4
+ip addr show <bridge-iface>
 ```
 
 預期輸出（應看到兩個 IP）：
 ```
-3: ens4: <BROADCAST,MULTICAST,UP,LOWER_UP> ...
+3: <bridge-iface>: <BROADCAST,MULTICAST,UP,LOWER_UP> ...
     inet 192.168.50.211/24 ...   ← 固定 IP
     inet 192.168.50.250/24 ...   ← VIP（Master 持有）
 ```
@@ -183,12 +193,12 @@ ip addr show ens4
 **在 lb-slave 確認 VIP 不在這裡：**
 
 ```bash
-ip addr show ens4
+ip addr show <bridge-iface>
 ```
 
 預期輸出（只有固定 IP，沒有 VIP）：
 ```
-3: ens4: <BROADCAST,MULTICAST,UP,LOWER_UP> ...
+3: <bridge-iface>: <BROADCAST,MULTICAST,UP,LOWER_UP> ...
     inet 192.168.50.212/24 ...   ← 只有固定 IP
 ```
 

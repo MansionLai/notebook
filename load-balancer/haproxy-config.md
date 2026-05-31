@@ -95,7 +95,8 @@ backend http_back
     balance roundrobin                 # 負載均衡演算法：Round Robin
 
     # 健康檢查：每 5 秒一次，連續失敗 3 次移除，成功 2 次恢復
-    option httpchk GET /health
+    # 後端是 nginx:alpine（8080），使用 "/" 才會回 200
+    option httpchk GET /
     http-check expect status 200
 
     # 後端 Web Server（Docker 容器，跑在兩台 VM 上）
