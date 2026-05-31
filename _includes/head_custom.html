@@ -43,8 +43,14 @@
       {% endfor %}
     ];
 
-    const normalizePath = (path) => path.replace(/index\.html$/, "").replace(/\/+$/, "/");
-    const currentPath = normalizePath(window.location.pathname);
+    // 優化：處理路徑，移除 baseurl，並正規化斜線
+    const baseUrl = {{ site.baseurl | jsonify }};
+    const normalize = (path) => {
+        let p = path.replace(new RegExp('^' + baseUrl), "").replace(/\/+$/, "").replace(/^\/+/, "/");
+        return p === "" ? "/" : p;
+    };
+    
+    const currentPath = normalize(window.location.pathname);
 
     const tabs = document.createElement("nav");
     tabs.className = "topic-tabs";
@@ -52,11 +58,14 @@
 
     topics.forEach(({ title, url }) => {
       const link = document.createElement("a");
-      const linkPath = normalizePath(new URL(url, window.location.origin).pathname);
+      const linkPath = normalize(url);
+      
       link.className = "topic-tabs__link";
       link.href = url;
       link.textContent = title;
-      if (currentPath === linkPath || currentPath.startsWith(linkPath)) {
+      
+      // 改進匹配邏輯：精確匹配或子目錄匹配
+      if (currentPath === linkPath || (linkPath !== "/" && currentPath.startsWith(linkPath + "/"))) {
         link.classList.add("is-active");
         link.setAttribute("aria-current", "page");
       }
