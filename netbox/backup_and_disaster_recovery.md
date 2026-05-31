@@ -6,6 +6,16 @@ nav_order: 99
 
 # NetBox Backup and Disaster Recovery
 
+## 方案比較表
+
+| 方案類型 | 說明 | 優點 | 缺點 | 適用情境 |
+|---|---|---|---|---|
+| 單向備援（主備） | 定期將 NetBox01 的資料庫、media、config 備份同步到 NetBox02，災難時手動切換 | 架構簡單、維護容易、資料一致性高 | 需手動切換、RPO 取決於備份頻率 | 跨區域備援、災難復原 |
+| 雙向同步（Active-Active） | 兩套 NetBox 互相同步資料，理論上可同時對外服務 | 理論上零停機、可分散讀取壓力 | NetBox 無原生支援，易有資料衝突與一致性問題，維護困難 | 嚴格高可用需求（不建議） |
+| 高可用（HA） | 多個 NetBox 實例共用同一 PostgreSQL 資料庫叢集，搭配負載平衡 | 自動故障切換、無需手動操作 | 需共用資料庫，跨區域困難，僅適合同區高可用 | 同區高可用、不中斷服務 |
+
+> NetBox 並不原生支援多活（active-active）或自動雙向同步（sync）兩套 NetBox 實例。強行同步容易造成資料衝突與一致性問題，建議採用主備架構，定期單向同步資料，災難時手動切換。
+
 ## 1. Backup Best Practices
 
 ### A. Database Backups
