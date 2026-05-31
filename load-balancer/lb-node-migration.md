@@ -22,10 +22,36 @@
 1. **在 master02/slave02 完成 HAProxy 與 backend service 配置**
    - 確認新節點可正常代理流量
 
-2. **設定 Keepalived**
+2. **設定 Keepalived（多 peer 範例）**
    - master02/slave02 的 keepalived.conf `vrrp_instance` 內 `unicast_peer` 同時包含 master01/slave01 及 master02/slave02
    - 將 master02/slave02 的 `priority` 設定高於 master01/slave01
    - 其餘 VRRP 設定（如 interface、virtual_ipaddress）與舊節點一致
+
+   **範例 keepalived.conf（以 master02/slave02 為例）：**
+
+   ```conf
+   vrrp_instance VI_1 {
+       state BACKUP
+       interface <bridge-iface>
+       virtual_router_id 51
+       priority 110                # 高於舊節點
+       advert_int 1
+       nopreempt
+       authentication {
+           auth_type PASS
+           auth_pass LB2024secret
+       }
+       virtual_ipaddress {
+           192.168.50.250/24
+       }
+       unicast_peer {
+           192.168.50.211   # master01
+           192.168.50.212   # slave01
+           192.168.50.213   # master02
+           192.168.50.214   # slave02
+       }
+   }
+   ```
 
 3. **啟動 master02/slave02 的 Keepalived**
    - 觀察 syslog 或 `ip a`，確認 VIP 是否已經由 master02 接管
@@ -42,6 +68,17 @@
 6. **下線舊節點**
    - 確認新節點穩定後，關閉 master01/slave01 的 keepalived 或直接關機
    - VIP 會持續由 master02/slave02 維護
+
+7. **最終 peer 清理**
+   - 確認 master01/slave01 已下線後，建議將 master02/slave02 的 keepalived.conf 內 `unicast_peer` 列表只保留 master02/slave02：
+
+   ```conf
+   unicast_peer {
+       192.168.50.213   # master02
+       192.168.50.214   # slave02
+   }
+   ```
+   - 重新啟動 keepalived 以套用設定
 
 ## 原理說明
 - VRRP 協定會根據 priority 決定誰是 MASTER
