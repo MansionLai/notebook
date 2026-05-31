@@ -4,3 +4,7 @@
   url: /kubernetes/
 - title: Storage
   url: /storage/
+- title: Netbox
+  url: /netbox/
+- title: Load Balancer
+  url: /load-balancer/
