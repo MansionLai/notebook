@@ -41,38 +41,35 @@ nav_order: 99
 - 備份命名建議：`netbox-backup-YYYYmmdd-HHMMSS`
 - 上傳 Nexus 後保留策略：`7 daily + 4 weekly + 3 monthly`
 
-### C. 備份排程（Option 1：定期自動備份 + 手動還原）
+### C. 備份程序（Step-by-Step 執行手冊）
 
-用 K8s CronJob 執行，範例頻率：
-- DB dump：每 6 小時
-- config：每日 1 次（或依變更頻率調整）
+假設你有一台可連 K8s API 與 Nexus 的管理機（bastion / jump host），已安裝 `kubectl`、`helm`、`curl`。
 
-備份程序（在 backup job 容器內）：
-```bash
-set -euo pipefail
-TS="$(date +%Y%m%d-%H%M%S)"
-WORKDIR="/backup/${TS}"
-mkdir -p "${WORKDIR}"/{db,config}
+| 步驟 | 在哪裡執行 | 指令/動作 |
+|---|---|---|
+| 1. 設定變數 | 管理機 | `export NS=netbox`<br>`export REL=netbox`<br>`export NEXUS_URL='https://nexus.example.com/repository/netbox-backup'`<br>`export NEXUS_USER='xxx'`<br>`export NEXUS_PASS='xxx'`<br>`export TS=$(date +%Y%m%d-%H%M%S)`<br>`mkdir -p ~/netbox-backup/$TS/{db,config}` |
+| 2. 找 PostgreSQL 主節點 Pod | 管理機 | `PG_POD=$(kubectl -n $NS get pod -l app.kubernetes.io/component=primary -o jsonpath '{.items[0].metadata.name}')` |
+| 3. PostgreSQL dump (`pg_dump -Fc`) | **PostgreSQL Pod 內**（由管理機 `kubectl exec` 觸發） | `kubectl -n $NS exec $PG_POD -- bash -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; pg_dump -U netbox -d netbox -Fc -f /tmp/netbox_'$TS'.dump'` |
+| 4. 把 DB 備份抓回管理機 | 管理機 | `kubectl -n $NS cp $PG_POD:/tmp/netbox_$TS.dump ~/netbox-backup/$TS/db/` |
+| 5. 備份 Helm values | 管理機 | `helm -n $NS get values $REL -o yaml > ~/netbox-backup/$TS/config/values_$TS.yaml` |
+| 6. 備份 Secrets | 管理機 | `kubectl -n $NS get secret -o yaml > ~/netbox-backup/$TS/config/secrets_$TS.yaml` |
+| 7. 產生校驗檔 | 管理機 | `cd ~/netbox-backup/$TS && find . -type f -exec shasum -a 256 {} \; > manifest_$TS.txt` |
+| 8. 打包備份 | 管理機 | `cd ~/netbox-backup && tar -czf netbox-backup-$TS.tar.gz $TS` |
+| 9. 上傳 Nexus（HTTP/S） | 管理機 | `curl -fSL -u "$NEXUS_USER:$NEXUS_PASS" --upload-file netbox-backup-$TS.tar.gz "$NEXUS_URL/netbox-backup-$TS.tar.gz"` |
+| 10. 驗證上傳成功 | 管理機 | `curl -fI -u "$NEXUS_USER:$NEXUS_PASS" "$NEXUS_URL/netbox-backup-$TS.tar.gz"` |
 
-# 1) PostgreSQL logical backup
-PGPASSWORD="${PGPASSWORD}" pg_dump \
-  -h "${PGHOST}" -U "${PGUSER}" -d "${PGDATABASE}" \
-  -Fc -f "${WORKDIR}/db/netbox_${TS}.dump"
+**執行提示**
+- 所有指令都在管理機執行，pod 內操作由 `kubectl exec` 完成
+- 變數 `$NS`、`$NEXUS_URL`、`$NEXUS_USER`、`$NEXUS_PASS` 依你環境調整
+- 確保 NetBox namespace 設定無誤，否則會找不到 pod
 
-# 2) Config / secrets export (建議由 CI 事先產生 sanitized values 檔)
-cp /backup-input/values.yaml "${WORKDIR}/config/values_${TS}.yaml"
+### D. 自動排程建議（K8s CronJob）
 
-# 3) Checksum
-find "${WORKDIR}" -type f -exec sha256sum {} \; > "${WORKDIR}/manifest_${TS}.txt"
+- **DB dump：每 6 小時** 執行一次
+- **Config 備份：每日 1 次** 執行（或依變更頻率調整）
+- **保留策略：** `7 daily + 4 weekly + 3 monthly`（自行實作 cleanup 邏輯）
 
-# 4) Upload to Nexus (HTTP/S)
-tar -C /backup -czf "/backup/netbox-backup-${TS}.tar.gz" "${TS}"
-curl -fSL -u "${NEXUS_USER}:${NEXUS_PASS}" \
-  --upload-file "/backup/netbox-backup-${TS}.tar.gz" \
-  "${NEXUS_URL}/repository/netbox-backup/netbox-backup-${TS}.tar.gz"
-```
-
-### D. 備份健檢與演練（強制）
+### E. 備份健檢與演練（強制）
 
 - 每次上傳後做 Nexus 檔案存在性驗證（HEAD/GET）。
 - 每月至少 1 次在隔離 namespace 做還原演練（非正式環境）。
