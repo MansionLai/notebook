@@ -24,17 +24,18 @@ nav_order: 99
 
 必備：
 - PostgreSQL 資料：以 `pg_dump -Fc` 產生一致性邏輯備份。
-- NetBox media：`/opt/netbox/netbox/media/`（附件、圖片）。
 - 關鍵設定與密鑰：Helm values、NetBox secret key、DB/Redis credentials、Ingress/TLS 相關設定。
 
 不建議作為主要 DR 資料來源：
 - Redis 資料本體（NetBox 多數場景可重建快取）；建議只備份 Redis 設定與連線憑證。
 
+可選（你目前可不做）：
+- NetBox media：`/opt/netbox/netbox/media/`（僅在有使用附件/圖片/檔案上傳時才需要）。
+
 ### B. 備份封裝格式與命名
 
 - 每次備份產生一個版本目錄（或壓縮檔）：
   - `db/netbox_<timestamp>.dump`
-  - `media/netbox_media_<timestamp>.tar.gz`
   - `config/values_<timestamp>.yaml`
   - `manifest_<timestamp>.txt`（含 sha256）
 - 備份命名建議：`netbox-backup-YYYYmmdd-HHMMSS`
@@ -44,30 +45,27 @@ nav_order: 99
 
 用 K8s CronJob 執行，範例頻率：
 - DB dump：每 6 小時
-- media/config：每日 1 次（或依變更頻率調整）
+- config：每日 1 次（或依變更頻率調整）
 
 備份程序（在 backup job 容器內）：
 ```bash
 set -euo pipefail
 TS="$(date +%Y%m%d-%H%M%S)"
 WORKDIR="/backup/${TS}"
-mkdir -p "${WORKDIR}"/{db,media,config}
+mkdir -p "${WORKDIR}"/{db,config}
 
 # 1) PostgreSQL logical backup
 PGPASSWORD="${PGPASSWORD}" pg_dump \
   -h "${PGHOST}" -U "${PGUSER}" -d "${PGDATABASE}" \
   -Fc -f "${WORKDIR}/db/netbox_${TS}.dump"
 
-# 2) NetBox media
-tar -C /opt/netbox/netbox -czf "${WORKDIR}/media/netbox_media_${TS}.tar.gz" media
-
-# 3) Config / secrets export (建議由 CI 事先產生 sanitized values 檔)
+# 2) Config / secrets export (建議由 CI 事先產生 sanitized values 檔)
 cp /backup-input/values.yaml "${WORKDIR}/config/values_${TS}.yaml"
 
-# 4) Checksum
+# 3) Checksum
 find "${WORKDIR}" -type f -exec sha256sum {} \; > "${WORKDIR}/manifest_${TS}.txt"
 
-# 5) Upload to Nexus (HTTP/S)
+# 4) Upload to Nexus (HTTP/S)
 tar -C /backup -czf "/backup/netbox-backup-${TS}.tar.gz" "${TS}"
 curl -fSL -u "${NEXUS_USER}:${NEXUS_PASS}" \
   --upload-file "/backup/netbox-backup-${TS}.tar.gz" \
@@ -88,10 +86,9 @@ curl -fSL -u "${NEXUS_USER}:${NEXUS_PASS}" \
 1. 從 Nexus 下載指定備份檔。
 2. 停止 NetBox app/worker（避免寫入）。
 3. 重建目標 DB（或 drop schema）並 `pg_restore`。
-4. 還原 media 到 PVC。
-5. 套用 config/secrets。
-6. 啟動 NetBox，執行 health check。
-7. 驗證資料筆數/關鍵物件（例如 devices、ipam prefixes）是否合理。
+4. 套用 config/secrets。
+5. 啟動 NetBox，執行 health check。
+6. 驗證資料筆數/關鍵物件（例如 devices、ipam prefixes）是否合理。
 
 一鍵還原核心命令範例：
 ```bash
@@ -113,9 +110,6 @@ PGPASSWORD="${PGPASSWORD}" createdb -h "${PGHOST}" -U "${PGUSER}" "${PGDATABASE}
 PGPASSWORD="${PGPASSWORD}" pg_restore \
   -h "${PGHOST}" -U "${PGUSER}" -d "${PGDATABASE}" \
   "/restore/${VER}/db/netbox_${VER}.dump"
-
-# 還原 media
-tar -C /opt/netbox/netbox -xzf "/restore/${VER}/media/netbox_media_${VER}.tar.gz"
 
 # 啟動服務
 kubectl -n netbox scale deploy netbox netbox-worker --replicas=3
