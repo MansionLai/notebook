@@ -140,15 +140,13 @@ flowchart LR
 
 **目標**：移除 dc1 第一個 rack（o1）的 5 台 OSD 節點
 
-**策略**：標準 OSD 節點移除流程，以主機為單位進行回填與清理
+**策略**：依 Ceph 官方建議，先 `host drain` 排空主機上所有 daemons，再觀察 OSD removal 狀態，最後移除主機
 
 | Precheck<br>（檢查項目 / 使用指令 / 原因） | Action<br>（節點 / 指令） | Postcheck<br>（預期結果 / Rollback 方式） |
 |---|---|---|
-| **Phase 1 gate 通過（PGs active+clean）**<br>確認 dc2 o4 rack 資料已穩定，再開始清空 dc1 o1 | Ceph admin 節點<br>**步驟一：調整 CRUSH 回填權重（清空資料）**<br>`for node in osd-dc1-o1-{01..05}; do`<br>`  ceph osd crush reweight-by-host $node 0`<br>`done` | ✅ `ceph osd tree \| grep o1` 顯示 weight = 0<br>❌ 若 reweight 失敗：檢查節點是否在 CRUSH map 中 |
-| **Weight = 0 已確認，資料遷移進行中**<br>等待所有 PG 資料搬離 o1，確保無資料遺留 | Ceph admin 節點<br>**步驟二：等待資料遷移完成**<br>`while ceph -s \| grep -Eq 'recovering\|backfilling\|degraded\|misplaced'; do`<br>`  echo "Recovery in progress..."; ceph -s; sleep 30`<br>`done`<br>`echo "PASS: All PGs active+clean"` | ✅ ceph -s 無 recovering/backfilling/degraded/misplaced<br>❌ 等待或調低 throttling 加速 recovery |
-| **PGs active+clean，o1 資料已清空**<br>安全移除 OSDs 並抹除磁碟 | Ceph admin 節點<br>**步驟三：透過 Orchestrator 移除 OSD（含資料抹除）**<br>`OSD_IDS=$(ceph osd crush ls o1 \| sed 's/osd\.//' \| tr '
-' ' ')`<br>`ceph orch osd rm $OSD_IDS --zap`<br>`ceph orch osd rm status` | ✅ `ceph orch osd rm status` 顯示 empty（移除完成）<br>❌ 若 --zap 失敗：手動確認 disk 狀態 |
-| **OSDs 移除完成**<br>確認無其他 daemon 殘留後移除主機 | Ceph admin 節點<br>**步驟四：清除主機標籤並移出集群**<br>`for node in osd-dc1-o1-{01..05}; do`<br>`  ceph orch host rm $node`<br>`done` | ✅ `ceph orch host ls` — o1 節點已移除<br>✅ `ceph -s` HEALTH_OK，PGs active+clean<br>❌ 若有 non-OSD daemon：先處理後再 host rm |
+| **Phase 1 gate 通過（PGs active+clean）**<br>確認 dc2 o4 rack 資料已穩定，再開始排空 dc1 o1 | Ceph admin 節點<br>**步驟一：drain 整個 OSD host**<br>`for node in osd-dc1-o1-{01..05}; do`<br>`  ceph orch host drain $node --zap-osd-devices`<br>`done` | ✅ `ceph orch host drain` 已把 host 加上 `_no_schedule`<br>✅ OSD removal 已進入排程<br>❌ 若 drain 失敗：先 `ceph orch ps <host>` 檢查殘留 daemon |
+| **Host 已進入 drain 狀態**<br>等待 host 上所有 OSD / daemon 完成移除，確認 PGs 回填完成 | Ceph admin 節點<br>**步驟二：監看 OSD removal 與 host daemon 清空**<br>`ceph orch osd rm status`<br>`ceph orch ps osd-dc1-o1-01`<br>`while ceph -s \| grep -Eq 'recovering\|backfilling\|degraded\|misplaced'; do`<br>`  echo "Recovery in progress..."; ceph -s; sleep 30`<br>`done` | ✅ `ceph orch osd rm status` 顯示 done / waiting for purge 或 empty<br>✅ `ceph orch ps <host>` 無殘留 daemon<br>❌ 若回填過慢：可檢查 throttling 與網路 |
+| **PGs active+clean，host 上已無 daemon**<br>安全移除主機與 CRUSH bucket | Ceph admin 節點<br>**步驟三：移除主機**<br>`for node in osd-dc1-o1-{01..05}; do`<br>`  ceph orch host rm $node --rm-crush-entry`<br>`done` | ✅ `ceph orch host ls` 中 o1 節點已消失<br>✅ `ceph -s` HEALTH_OK，PGs active+clean<br>❌ 若 host rm 失敗：先確認是否仍有 daemon / OSD 未清除 |
 
 **預估時間**：數小時至一天
 
