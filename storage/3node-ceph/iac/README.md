@@ -6,7 +6,7 @@ nav_exclude: true
 permalink: /storage/3node-ceph/iac/
 ---
 
-This folder stores the Phase 0 Azure MCP + Bicep definitions for a 3-node Ceph deployment on Azure. It contains the entrypoint Bicep files and modular building blocks used to provision the minimal infrastructure required for the Phase 0 (infrastructure and bootstrap) deployment.
+This folder stores the Phase 0 Azure MCP + Bicep definitions for a **dc1 baseline Ceph deployment (3 MON + 3 OSD, total 6 VMs)** on Azure. It contains the entrypoint Bicep files and modular building blocks used to provision infrastructure required for the Phase 0 deployment.
 
 ## Shared VNet model
 
@@ -16,8 +16,8 @@ The Ceph lab **does not create its own VNet**. It consumes the shared `mansion-s
 - This deployment **creates** only `mansion-ceph-cluster-subnet` (172.10.10.0/24) inside the existing shared VNet. The 172.10.0.0/16 address space was pre-declared by the KubeVirt VNet deployment so no destructive VNet update is needed.
 - This Ceph lab deploys into **`mansion_ceph_resource`**.
 - Ceph-related resources use the **`mansion-ceph-`** naming prefix (Azure resources do not accept `_`).
-- Ceph public NICs use 10.10.10.21-23 (sharing the `shared-node-subnet` with KubeVirt K8s nodes at .10-.12).
-- Ceph cluster NICs use 172.10.10.21-23 on the dedicated `mansion-ceph-cluster-subnet`.
+- Ceph public NICs use 10.10.10.21-26 (sharing the `shared-node-subnet` with KubeVirt K8s nodes at .10-.12).
+- Ceph cluster NICs use 172.10.10.21-26 on the dedicated `mansion-ceph-cluster-subnet`.
 
 ## File map
 

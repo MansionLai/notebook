@@ -6,80 +6,36 @@ nav_order: 14
 permalink: /storage/3node-ceph/phase-4/
 ---
 
-# Phase 4 — RBD Pool 建立
+# Phase 4 — RBD Pool 建立（dc1 baseline）
 
 ## 目標
 
-從 Mac mini 透過 Ansible 建立 `k8s_rbd_pool`、設定 replication 與 PG 參數、初始化 RBD 應用，並驗證 test image 可正常建立。
-
----
+建立 `k8s_rbd_pool` 並完成基礎驗證（size/min_size/測試 image）。
 
 ## 前置條件
 
 - 已完成 [Phase 3](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-3/)
-- Cluster 已有 3 MON / 3 MGR / 6 OSD
-- `inventory/group_vars/all.yml` 已確認：
-  - `ceph_rbd_pool_name`
-  - `ceph_rbd_pool_pg_num`
-  - `ceph_rbd_pool_pgp_num`
-  - `ceph_rbd_pool_size`
-  - `ceph_rbd_pool_min_size`
-
----
+- Cluster 為 dc1 baseline 拓撲（3 MON + 3 OSD nodes）
 
 ## Ansible 執行方式
-
-在 Mac mini 執行：
 
 ```bash
 cd storage/3node-ceph/ansible
 ansible-playbook playbooks/phase-4.yml
 ```
 
----
-
-## 這個 Phase 的 role 會做什麼
-
-- **所有池/集群層級操作由 `ceph_mon[0]` 單次執行**（透過 `run_once: true` + `delegate_to` 避免重複）
-- 建立 `k8s_rbd_pool`（name、pg_num/pgp_num 取自 `all.yml`）
-- 設定 `size=3`、`min_size=1`（符合 3-node 環境與 spec 要求）
-- 啟用 `rbd` application
-- 執行 `rbd pool init`
-- 建立 `test-image`（用於驗證 RBD 功能）
-- 驗證 pool detail、image info 與 PG 狀態達到 `active+clean`
-
-對應檔案：
-
-```text
-storage/3node-ceph/ansible/playbooks/phase-4.yml
-storage/3node-ceph/ansible/roles/rbd_pool/
-```
-
----
-
 ## 驗證方式
 
 ```bash
-ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph osd pool ls detail"
-ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph osd pool get k8s_rbd_pool size"
-ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph osd pool get k8s_rbd_pool min_size"
-ssh ubuntu@<ceph-node-01-public-ip> "sudo rbd ls k8s_rbd_pool"
-ssh ubuntu@<ceph-node-01-public-ip> "sudo rbd info k8s_rbd_pool/test-image"
-ssh ubuntu@<ceph-node-01-public-ip> "sudo ceph pg stat"
+ssh ubuntu@<mon-dc1-01-public-ip> "sudo ceph osd pool ls detail"
+ssh ubuntu@<mon-dc1-01-public-ip> "sudo ceph osd pool get k8s_rbd_pool size"
+ssh ubuntu@<mon-dc1-01-public-ip> "sudo ceph osd pool get k8s_rbd_pool min_size"
+ssh ubuntu@<mon-dc1-01-public-ip> "sudo rbd ls k8s_rbd_pool"
 ```
 
 預期結果：
 
 - pool `k8s_rbd_pool` 存在
-- `size=3`
-- `min_size=1`
-- `test-image` 已建立
-- PG 狀態進入 `active+clean`
+- `size=3`, `min_size=1`
+- 驗證 image 可建立
 
----
-
-## Troubleshooting
-
-- `pool already exists`：代表 Phase 4 曾執行過，通常不需要清掉重建
-- `application already enabled`：可視為 idempotent 正常情況
-- PG 不 clean：先回頭檢查 `ceph -s`、`ceph osd tree` 與 OSD/replication 狀態

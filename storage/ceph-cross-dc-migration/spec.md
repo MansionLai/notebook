@@ -7,42 +7,47 @@ permalink: /storage/ceph-cross-dc-migration/spec/
 
 # ceph-cross-dc-migration Spec
 
-最後更新：2026-05-22
+最後更新：2026-06-03
 
 ## 1. Goal
 
-將既有 Ceph cluster 從 dc1 擴展至 dc2，透過 CRUSH 與分批遷移，完成資料與服務重心轉移，最後可安全退場 dc1。
+在既有 **dc1 baseline Ceph cluster**（3 MON + 3 OSD）之上，新增 dc2（3 MON + 3 OSD），完成跨機房遷移演練與角色切換。
 
 ## 2. Scenario Baseline
 
-1. 現況（dc1）：3 MON + 15 OSD nodes（每台 10 顆 OSD disks）
-2. 目標（dc2）：3 MON + 15 OSD nodes（每台 10 顆 OSD disks）
-3. 網路：dc1 與 dc2 之間為 stretched Layer 2，使用同一 IP segment
-4. 主要 workload：RBD pool 服務 KubeVirt VM
+1. 現況（dc1 baseline）：3 MON + 3 OSD nodes（共 6 VM）
+2. 目標（dc2 expansion）：新增 3 MON + 3 OSD nodes（再加 6 VM）
+3. 最終拓撲：dc1 + dc2 共 12 VM
+4. 網路：dc1 與 dc2 為可互通環境（stretched L2 或等效可達）
+5. 主要 workload：RBD pool 服務 KubeVirt VM
 
-## 3. Topology Metadata Baseline
+## 3. Responsibility Boundary
 
-1. dc1 / room r1 / racks：m1,m2,m3,o1,o2,o3
-2. dc2 / room r2 / racks：m4,m5,m6,o4,o5,o6
+1. `storage/3node-ceph/phase-0~5`：只負責 dc1 baseline 建置
+2. `storage/ceph-cross-dc-migration/*`：負責 dc2 節點加入、OSD migration、MON migration
 
-## 4. Migration Principles
+## 4. Topology Metadata Baseline
 
-1. 優先 OSD，後 MON
-2. 以 rack 為單位分批遷移，降低 blast radius
-3. 每批次需設定健康檢查 gate（recovery/backfill 完成、RBD workload 驗證）
-4. 全程保留回復方案（rollback / stop gate）
+1. dc1 / room r1 / racks：`m1,m2,m3,o1,o2,o3`
+2. dc2 / room r2 / racks：`m4,m5,m6,o4,o5,o6`
 
-## 5. Required Deliverables
+## 5. Migration Principles
 
-1. 遷移策略比較與決策說明（Option A/B）
-2. OSD migration runbook（rack-by-rack）
-3. MON migration runbook（quorum / external mode 協調）
+1. 先擴展（add dc2）再收斂（remove dc1）
+2. OSD migration 先於 MON migration
+3. 每個階段都要有健康檢查 gate（`ceph -s`, PG state, VM I/O）
+4. 保留 rollback / stop gate
+
+## 6. Required Deliverables
+
+1. dc2 節點加入規劃（3 MON + 3 OSD）
+2. OSD migration runbook（依批次遷移）
+3. MON migration runbook（quorum 與 client endpoint 協調）
 4. 驗證清單（Ceph health、PG state、RBD I/O、KubeVirt）
 
-## 6. Source Documents
+## 7. Source Documents
 
 1. `storage/ceph-cross-dc-migration/index.md`
 2. `storage/ceph-cross-dc-migration/solutions.md`
 3. `storage/ceph-cross-dc-migration/osd-migration.md`
 4. `storage/ceph-cross-dc-migration/mon-migration.md`
-

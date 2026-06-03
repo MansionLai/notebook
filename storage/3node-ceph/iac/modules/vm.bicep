@@ -27,6 +27,8 @@ param dataDiskSku string
 param osDiskSizeGb int = 64
 @description('Data disk size in GB for OSD disks.')
 param dataDiskSizeGb int
+@description('Number of OSD data disks to attach.')
+param osdDiskCount int = 2
 
 resource vm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
   name: vmName
@@ -51,26 +53,15 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-09-01' = {
           storageAccountType: 'StandardSSD_LRS'
         }
       }
-      dataDisks: [
-        {
-          lun: 0
-          createOption: 'Empty'
-          diskSizeGB: dataDiskSizeGb
-          managedDisk: {
-            storageAccountType: dataDiskSku
-          }
-          deleteOption: 'Delete'
+      dataDisks: [for lun in range(0, osdDiskCount): {
+        lun: lun
+        createOption: 'Empty'
+        diskSizeGB: dataDiskSizeGb
+        managedDisk: {
+          storageAccountType: dataDiskSku
         }
-        {
-          lun: 1
-          createOption: 'Empty'
-          diskSizeGB: dataDiskSizeGb
-          managedDisk: {
-            storageAccountType: dataDiskSku
-          }
-          deleteOption: 'Delete'
-        }
-      ]
+        deleteOption: 'Delete'
+      }]
     }
     osProfile: {
       computerName: vmName
