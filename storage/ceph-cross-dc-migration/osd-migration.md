@@ -130,7 +130,7 @@ flowchart LR
 |---|---|---|
 | **Phase 0 gate 通過，cluster HEALTH_OK**<br>確認 dc2 o4 節點 SSH 可達且 cephadm 已安裝 | Ceph admin 節點<br>`for node in osd-dc2-o4-{01..05}; do`<br>`  ceph orch host add $node --labels osd --location datacenter=dc2 room=r2 rack=o4`<br>`done`<br>`ceph orch host ls \| grep o4` | ✅ 5 台節點出現在 host 清單，location metadata 正確<br>❌ 檢查 SSH 連線與 cephadm 安裝狀態 |
 | **5 台節點已在 host 清單中**<br>確認節點就緒後再 deploy OSDs | Ceph admin 節點<br>`ceph orch daemon add osd osd-dc2-o4-01:/dev/sdb`<br>`ceph orch daemon add osd osd-dc2-o4-01:/dev/sdc`<br>`# 重複每台節點的所有 disks（每節點 10 顆）` | ✅ `ceph osd tree \| grep o4` 顯示 50 個 OSD up+in<br>❌ `ceph orch ps --hostname osd-dc2-o4-XX` 檢查 daemon 狀態 |
-| **50 個 OSDs up+in 已確認**<br>等待 CRUSH rebalance 完成，確認資料已均衡分布 | Ceph admin 節點<br>`watch -n 5 'ceph -s'`<br>`ceph osd pool stats`<br>（可選）Recovery Throttling：<br>`ceph config set osd osd_recovery_max_active 1`<br>`ceph config set osd osd_max_backfills 1` | ✅ 所有 PGs active+clean，0 degraded/misplaced<br>✅ VM I/O latency 正常<br>❌ 若 recovery > 24h：檢查 OSD 狀態與網路 |
+| **50 個 OSDs up+in 已確認**<br>等待 CRUSH rebalance 完成，確認資料已均衡分布 | Ceph admin 節點<br>`watch -n 5 'ceph -s'`<br>`ceph osd pool stats`<br>（建議）Client I/O 優先（mClock）：<br>`ceph config set osd osd_mclock_profile high_client_ops`<br>`ceph config rm osd osd_recovery_max_active`<br>`ceph config rm osd osd_max_backfills` | ✅ 所有 PGs active+clean，0 degraded/misplaced<br>✅ VM I/O latency 正常<br>✅ `ceph config get osd osd_mclock_profile` = `high_client_ops`<br>❌ 若 recovery > 24h：檢查 OSD 狀態與網路 |
 
 **預估時間**：數小時至一天（視資料量與網路頻寬而定）
 
@@ -161,7 +161,7 @@ flowchart LR
 | Phase 5 | Add dc2 rack o6 | 同 Phase 1 |
 | Phase 6 | Remove dc1 rack o3 | 同 Phase 2 |
 
-每個 Phase 均遵守相同的 Gate Criteria、監控流程與 Recovery Throttling 建議。
+每個 Phase 均遵守相同的 Gate Criteria、監控流程與 mClock（high_client_ops）建議。
 
 #### Final Validation（after Phase 6）
 

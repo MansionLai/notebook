@@ -56,6 +56,7 @@
   ansible.builtin.command: test -b {{ item }}
   loop: "{{ ceph_osd_devices }}"
   changed_when: false
+  when: ceph_osd_devices is defined
 
 - name: Probe OSD device signatures
   ansible.builtin.command: blkid {{ item }}
@@ -63,11 +64,14 @@
   register: ceph_osd_blkid
   changed_when: false
   failed_when: false
+  when: ceph_osd_devices is defined
 
 - name: Wipe OSD device signatures when present
   ansible.builtin.command: wipefs --all --force {{ item.item }}
   loop: "{{ ceph_osd_blkid.results }}"
-  when: item.stdout != ""
+  when:
+    - ceph_osd_devices is defined
+    - item.stdout != ""
 
 - name: Re-probe OSD device signatures after wipe
   ansible.builtin.command: blkid {{ item }}
@@ -75,6 +79,7 @@
   register: ceph_osd_blkid_after_wipe
   changed_when: false
   failed_when: false
+  when: ceph_osd_devices is defined
 
 - name: Assert OSD devices are empty after wipe
   ansible.builtin.assert:
@@ -82,3 +87,4 @@
       - item.stdout == ""
     fail_msg: "Expected {{ item.item }} to be empty before Ceph OSD provisioning"
   loop: "{{ ceph_osd_blkid_after_wipe.results }}"
+  when: ceph_osd_devices is defined

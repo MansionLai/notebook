@@ -13,7 +13,7 @@ permalink: /storage/3node-ceph/
 
 | Phase | 主題 | 說明 |
 |------|------|------|
-| [Phase 0](phase-0/) | Azure 資源建立 | Azure MCP + Bicep 建立 Azure 網路、NSG、3 台 VM 與 managed disk |
+| [Phase 0](phase-0/) | Azure 資源建立 | Azure MCP + Bicep 建立 Azure 網路、NSG、6 台 dc1 baseline VM 與 managed disk |
 | [Phase 1](phase-1/) | OS 與磁碟準備 | Hostname、hosts、網路驗證與磁碟檢查 |
 | [Phase 2](phase-2/) | Ceph v19.2.2 安裝 | Docker、cephadm、SSH key 與環境準備 |
 | [Phase 3](phase-3/) | Cluster bootstrap | Bootstrap、加入節點、部署 MON/MGR/OSD |
@@ -54,15 +54,14 @@ ansible-playbook playbooks/site.yml
 
 Ansible 目錄內的重要結構：
 
-- `inventory/hosts.yml` — host groups
-- `inventory/group_vars/all.yml` — shared Ceph and lab settings
-- `inventory/hosts.yml` — per-node public/cluster IP mapping
+- `inventory/hosts` — host groups + per-node public/cluster IP mapping
+- `inventory/group_vars/all/all.yml` — shared Ceph and lab settings
 - `playbooks/phase-1.yml` ~ `phase-5.yml` — one playbook per phase
 - `roles/` — one primary role per phase
 
 每次重新建立 Azure VM 之後，記得先更新：
 
-- `inventory/hosts.yml` 內的 `ansible_host`
+- `inventory/hosts` 內的 `ansible_host`
 - 每台節點的 `ceph_osd_devices`
 
 ## Reference Docs

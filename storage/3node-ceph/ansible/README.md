@@ -10,12 +10,12 @@ This directory contains the Ansible-first workflow for `storage/3node-ceph/phase
 
 - Run from the Mac mini
 - SSH user: `ubuntu`
-- Inventory is static and points at the three Azure VM public IPs created in Phase 0
+- Inventory is static and points at the six Azure VM public IPs created in Phase 0
 
 ## Layout
 
-- `inventory/hosts.yml` — host groups
-- `inventory/group_vars/all/main.yml` — shared non-secret variables
+- `inventory/hosts` — host groups
+- `inventory/group_vars/all/all.yml` — shared non-secret variables
 - `inventory/group_vars/all/encrypted.yml` — secret variables (ansible-vault, auto-loaded)
 - `playbooks/phase-1.yml` ~ `phase-5.yml` — one playbook per phase
 - `playbooks/site.yml` — full Phase 1-5 chain
@@ -44,7 +44,7 @@ ansible-playbook playbooks/site.yml
 
 Before running Phase 3 in a non-lab environment, review:
 
-- `inventory/hosts.yml`
+- `inventory/hosts`
 - `inventory/group_vars/all/encrypted.yml`
 - `ceph_dashboard_password`
 - `ceph_rbd_pool_name`
@@ -52,7 +52,7 @@ Before running Phase 3 in a non-lab environment, review:
 - `ceph_rbd_crush_rule_name`
 - `prometheus_agent_remote_write_url`
 - `fluent_bit_opensearch_*`
-- `ceph_location.datacenter|room|rack` for each node
+- `rack` (host var) + `datacenter` / `room` (`[ceph_osd:vars]`)
 - `ceph_osd_devices` for each node
 
 The inventory file is the source of truth for:

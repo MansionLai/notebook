@@ -3,15 +3,15 @@
 # Format: hostname -> {datacenter, room, rack}
 
 ceph_osd_locations:
-  ceph-node-01:
+  osd-dc1-01:
     datacenter: dc1
-    room: room1
-    rack: rack1
-  ceph-node-02:
+    room: r1
+    rack: o1
+  osd-dc1-02:
     datacenter: dc1
-    room: room1
-    rack: rack2
-  ceph-node-03:
+    room: r1
+    rack: o2
+  osd-dc1-03:
     datacenter: dc1
-    room: room1
-    rack: rack3
+    room: r1
+    rack: o3

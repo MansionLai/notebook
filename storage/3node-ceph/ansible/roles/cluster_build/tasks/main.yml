@@ -143,8 +143,8 @@
   delay: 20
   until:
     - (ceph_status_json.stdout | from_json).monmap.num_mons | int == groups['ceph_mon'] | length
-    - (ceph_status_json.stdout | from_json).osdmap.num_up_osds | int == (groups['ceph_osd'] | length * (ceph_osd_devices | length))
-    - (ceph_status_json.stdout | from_json).osdmap.num_in_osds | int == (groups['ceph_osd'] | length * (ceph_osd_devices | length))
+    - (ceph_status_json.stdout | from_json).osdmap.num_up_osds | int == (ceph_desired_osd_targets | length)
+    - (ceph_status_json.stdout | from_json).osdmap.num_in_osds | int == (ceph_desired_osd_targets | length)
   run_once: true
   delegate_to: "{{ groups['ceph_mon'][0] }}"
 
@@ -157,12 +157,11 @@
     ceph_location_mappings: >-
       {%- set ns = namespace(items=[]) -%}
       {%- for host in groups['ceph_osd'] -%}
-      {%-   set location = ceph_osd_locations[host] -%}
       {%-   set _ = ns.items.append({
               'hostname': host,
-              'datacenter': location.datacenter,
-              'room': location.room,
-              'rack': location.rack
+              'datacenter': hostvars[host].datacenter | default(datacenter),
+              'room': hostvars[host].room | default(room),
+              'rack': hostvars[host].rack
             }) -%}
       {%- endfor -%}
       {{ ns.items }}
