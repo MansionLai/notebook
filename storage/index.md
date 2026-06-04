@@ -13,3 +13,5 @@ permalink: /storage/
 |--------|------|
 | [3-Node Ceph (Azure)](3node-ceph/) | Azure 三台 VM 上的 Ceph v19.2.2 lab cluster |
 | [Ceph Cross-DC Migration](ceph-cross-dc-migration/) | 同一個 Ceph cluster 的跨機房硬體汰換與分批遷移 runbook |
+
+- [mon_admin_label](mon_admin_label/) — Ceph `_admin` label 功能、mgr 管理流程與操作指令
