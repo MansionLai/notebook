@@ -31,9 +31,9 @@ ansible-playbook playbooks/phase-3.yml
 - 首次執行時，在第一台 MON 以 `cephadm bootstrap` 建立 Ceph cluster（若已存在 `/etc/ceph/ceph.conf` 則跳過 bootstrap）。
 - 將第一台 MON 的 `/etc/ceph/ceph.conf` 與 `ceph.client.admin.keyring` 同步到所有 MON 節點。
 - 設定 Ceph `mon public_network` 與 `global cluster_network`。
-- 將 inventory 內節點加入 `ceph orch host`，並套用 MON/MGR placement。
+- 將 MON 節點加入 `ceph orch host`，OSD 節點則在 `ceph orch host add` 時一併帶入 `datacenter/room/rack` location，並套用 MON/MGR placement。
 - 依 inventory 的 `ceph_osd_devices` 對應新增 OSD daemon。
-- 建立/調整 CRUSH 拓撲（datacenter/room/rack/host）並建立 replicated CRUSH rule（failure domain=rack）。
+- 依 host location 驗證 CRUSH 拓撲（datacenter/room/rack/host）並建立 replicated CRUSH rule（failure domain=rack）。
 
 ## 驗證方式
 

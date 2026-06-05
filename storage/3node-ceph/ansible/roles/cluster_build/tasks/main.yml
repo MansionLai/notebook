@@ -92,6 +92,22 @@
   run_once: true
   delegate_to: "{{ groups['ceph_mon'][0] }}"
 
+- name: Build location mappings from inventory (OSD hosts)
+  ansible.builtin.set_fact:
+    ceph_location_mappings: >-
+      {%- set ns = namespace(items=[]) -%}
+      {%- for host in groups['ceph_osd'] -%}
+      {%-   set _ = ns.items.append({
+              'hostname': host,
+              'datacenter': hostvars[host].datacenter | default(datacenter),
+              'room': hostvars[host].room | default(room),
+              'rack': hostvars[host].rack
+            }) -%}
+      {%- endfor -%}
+      {{ ns.items }}
+  run_once: true
+  delegate_to: "{{ groups['ceph_mon'][0] }}"
+
 - name: Ensure Ceph public network is configured
   ansible.builtin.command: ceph config set mon public_network {{ ceph_public_network_cidr }}
   run_once: true
@@ -102,10 +118,21 @@
   run_once: true
   delegate_to: "{{ groups['ceph_mon'][0] }}"
 
-- name: Add missing Ceph hosts to the orchestrator
+- name: Add missing MON hosts to the orchestrator
   ansible.builtin.command: ceph orch host add {{ item }} {{ hostvars[item].ceph_public_ip }}
-  loop: "{{ groups['ceph_nodes'] }}"
+  loop: "{{ groups['ceph_mon'] }}"
   when: item not in ceph_existing_hosts
+  run_once: true
+  delegate_to: "{{ groups['ceph_mon'][0] }}"
+
+- name: Add missing OSD hosts to the orchestrator with location
+  ansible.builtin.command: >
+    ceph orch host add
+    {{ item.hostname }}
+    {{ hostvars[item.hostname].ceph_public_ip }}
+    --location "datacenter={{ item.datacenter }} room={{ item.room }} rack={{ item.rack }}"
+  loop: "{{ ceph_location_mappings }}"
+  when: item.hostname not in ceph_existing_hosts
   run_once: true
   delegate_to: "{{ groups['ceph_mon'][0] }}"
 
@@ -149,24 +176,8 @@
   delegate_to: "{{ groups['ceph_mon'][0] }}"
 
 # =================================================================
-# SECTION 4: CRUSH Map Configuration (Only on first MON node)
+# SECTION 4: CRUSH rule setup and placement verification metadata
 # =================================================================
-
-- name: Build location mappings from inventory (simplified)
-  ansible.builtin.set_fact:
-    ceph_location_mappings: >-
-      {%- set ns = namespace(items=[]) -%}
-      {%- for host in groups['ceph_osd'] -%}
-      {%-   set _ = ns.items.append({
-              'hostname': host,
-              'datacenter': hostvars[host].datacenter | default(datacenter),
-              'room': hostvars[host].room | default(room),
-              'rack': hostvars[host].rack
-            }) -%}
-      {%- endfor -%}
-      {{ ns.items }}
-  run_once: true
-  delegate_to: "{{ groups['ceph_mon'][0] }}"
 
 - name: Extract unique datacenters from locations
   ansible.builtin.set_fact:
@@ -200,62 +211,6 @@
   run_once: true
   delegate_to: "{{ groups['ceph_mon'][0] }}"
 
-- name: Ensure datacenter buckets exist
-  ansible.builtin.command: ceph osd crush add-bucket {{ item }} datacenter
-  loop: "{{ ceph_unique_datacenters }}"
-  register: ceph_datacenter_bucket
-  failed_when:
-    - ceph_datacenter_bucket.rc != 0
-    - "'already exists' not in ceph_datacenter_bucket.stderr"
-  changed_when: "'already exists' not in ceph_datacenter_bucket.stderr"
-  run_once: true
-  delegate_to: "{{ groups['ceph_mon'][0] }}"
-
-- name: Ensure room buckets exist
-  ansible.builtin.command: ceph osd crush add-bucket {{ item.room }} room
-  loop: "{{ ceph_room_mappings }}"
-  register: ceph_room_bucket
-  failed_when:
-    - ceph_room_bucket.rc != 0
-    - "'already exists' not in ceph_room_bucket.stderr"
-  changed_when: "'already exists' not in ceph_room_bucket.stderr"
-  run_once: true
-  delegate_to: "{{ groups['ceph_mon'][0] }}"
-
-- name: Move datacenters under root=default
-  ansible.builtin.command: ceph osd crush move {{ item }} root=default
-  loop: "{{ ceph_unique_datacenters }}"
-  run_once: true
-  delegate_to: "{{ groups['ceph_mon'][0] }}"
-
-- name: Ensure rack buckets exist
-  ansible.builtin.command: ceph osd crush add-bucket {{ item.rack }} rack
-  loop: "{{ ceph_rack_mappings }}"
-  register: ceph_rack_bucket
-  failed_when:
-    - ceph_rack_bucket.rc != 0
-    - "'already exists' not in ceph_rack_bucket.stderr"
-  changed_when: "'already exists' not in ceph_rack_bucket.stderr"
-  run_once: true
-  delegate_to: "{{ groups['ceph_mon'][0] }}"
-
-- name: Move rooms under their datacenters
-  ansible.builtin.command: ceph osd crush move {{ item.room }} datacenter={{ item.datacenter }}
-  loop: "{{ ceph_room_mappings }}"
-  run_once: true
-  delegate_to: "{{ groups['ceph_mon'][0] }}"
-
-- name: Move racks under their rooms
-  ansible.builtin.command: ceph osd crush move {{ item.rack }} room={{ item.room }}
-  loop: "{{ ceph_rack_mappings }}"
-  run_once: true
-  delegate_to: "{{ groups['ceph_mon'][0] }}"
-
-- name: Move OSD hosts under their racks
-  ansible.builtin.command: ceph osd crush move {{ item.hostname }} rack={{ item.rack }}
-  loop: "{{ ceph_location_mappings }}"
-  run_once: true
-  delegate_to: "{{ groups['ceph_mon'][0] }}"
 
 - name: Ensure replicated CRUSH rule uses rack failure domain
   ansible.builtin.command: >
