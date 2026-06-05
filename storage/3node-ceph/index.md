@@ -56,7 +56,7 @@ ansible-playbook playbooks/site.yml
 
 | Phase | 主要系統變更 |
 |------|------|
-| Phase 1 | 安裝 baseline 套件、設定 hostname 與 `/etc/hosts`、啟用 `chrony`、關閉 `ufw`（若啟用中）、清除 OSD 磁碟簽章（`wipefs`） |
+| Phase 1 | 安裝 baseline 套件（`curl`、`wget`、`net-tools`、`vim`、`htop`、`lsof`、`chrony`、`netcat-openbsd`）、設定 hostname 與 `/etc/hosts`、啟用 `chrony`、關閉 `ufw`（若啟用中）、清除 OSD 磁碟簽章（`wipefs`） |
 | Phase 2 | 安裝 Ceph 前置套件、安裝並啟動 Docker、下載 `cephadm`、在 MON 節點安裝 `ceph-common`、停用 swap（含 `/etc/fstab`）、寫入 Ceph sysctl、配置 cephadm SSH 免密 |
 | Phase 3 | 在第一台 MON 執行 `cephadm bootstrap`（首次）、同步 `ceph.conf`/admin keyring 到所有 MON、設定 `public_network`/`cluster_network`、加入 orchestrator hosts、部署 MON/MGR/OSD、建立/調整 CRUSH 拓撲與 replicated rule |
 | Phase 4 | 建立 `k8s_rbd_pool`（若不存在）、設定 `size/min_size/crush_rule/pg_autoscale_mode`、啟用 RBD application、初始化 pool、建立測試 image |

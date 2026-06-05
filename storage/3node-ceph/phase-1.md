@@ -28,7 +28,7 @@ ansible-playbook playbooks/phase-1.yml
 
 ## 這個 Ansible 會修改哪些系統狀態
 
-- 安裝 `ceph_phase1_packages` 定義的 baseline 套件（含 apt cache update）。
+- 安裝 `ceph_phase1_packages` 定義的 baseline 套件（含 apt cache update）：`curl`、`wget`、`net-tools`、`vim`、`htop`、`lsof`、`chrony`、`netcat-openbsd`。
 - 設定每台節點 hostname，並覆寫 `/etc/hosts`（由 `hosts.j2` 產生）。
 - 啟用並啟動 `chrony` 服務。
 - 若節點有啟用 UFW，會執行 `ufw --force disable` 關閉防火牆。
