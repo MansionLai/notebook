@@ -8,19 +8,20 @@ nav_order: 4
 
 ## 概述
 
-本文檔提供逐步部署 Netbox 的完整指南，包括所有前置準備和驗證步驟。
+本文檔提供在 Azure VM K3s 叢集上逐步部署 NetBox 的完整指南，包括所有前置準備和驗證步驟。
 
 ## 前置準備
 
-- K3s 叢集已運行
+- Azure VM K3s 叢集已運行
 - kubectl 已配置
 - Helm 3 已安裝
-- 至少 30GB 可用存儲空間
+- 資源群組 `mansion_k3s_netbox` 已建立
+- 至少 30GB 可用儲存空間
 
 ## 第 1 步：添加 Helm Repository
 
 ```bash
-# 添加官方 Netbox Helm repo
+# 添加官方 NetBox Helm repo
 helm repo add netbox https://charts.netbox.oss.netboxlabs.com/
 
 # 更新 repo
@@ -48,7 +49,7 @@ helm pull netbox/netbox --untar
 
 # 創建自訂 values 文件
 cat > netbox-values.yaml << 'EOF'
-# Netbox 副本數
+# NetBox 副本數
 replicaCount: 1
 
 # Netbox 容器資源
@@ -68,7 +69,7 @@ postgresql:
     persistence:
       enabled: true
       size: 5Gi
-      storageClassName: local-path
+      storageClassName: local-path # Azure VM local-path 存儲類
   auth:
     username: netbox
     password: netbox
@@ -81,8 +82,8 @@ redis:
   auth:
     enabled: false
 
-# ⚠️ 最小化配置安全提醒
-# redis.auth.enabled: false 僅適用於「隔離的本機實驗環境」。
+# ⚠️ 配置安全提醒
+# redis.auth.enabled: false 僅適用於隔離測試環境。
 # 若部署在共享或多租戶叢集，必須改為 enabled: true，並以 Kubernetes Secret 管理密碼。
 
 # Service 配置
@@ -110,7 +111,7 @@ helm install netbox netbox/ \
 ## 第 5 步：執行實際部署
 
 ```bash
-# 部署 Netbox 及其依賴
+# 部署 NetBox 及其依賴
 helm install netbox netbox/ \
   -n netbox \
   -f netbox-values.yaml
@@ -212,7 +213,7 @@ kubectl get svc netbox -n netbox
 ### 步驟 8.1：創建超級用戶
 
 ```bash
-# 找到一個 Netbox pod
+# 找到一個 NetBox pod
 NETBOX_POD=$(kubectl get pod -n netbox -l app=netbox -o jsonpath='{.items[0].metadata.name}')
 
 # 在 pod 中執行初始化

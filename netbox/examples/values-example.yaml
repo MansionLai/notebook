@@ -1,7 +1,7 @@
-# Netbox Helm Chart 自訂配置示例
-# 用於生產環境部署
+# NetBox Helm Chart 自訂配置示例
+# 用於 Azure VM K3s 環境部署
 
-# Netbox 應用配置
+# NetBox 應用配置
 replicaCount: 3
 
 image:
@@ -27,7 +27,7 @@ postgresql:
     persistence:
       enabled: true
       size: 50Gi  # 根據需要調整大小
-      storageClassName: local-path
+      storageClassName: local-path  # Azure VM local-path 存儲類
   
   resources:
     limits:

@@ -10,7 +10,7 @@ nav_order: 99
 
 | 方案類型 | 說明 | 優點 | 缺點 | 適用情境 |
 |---|---|---|---|---|
-| 單向備援（主備） | 定期將 NetBox01 的資料庫、media、config 備份同步到 NetBox02，災難時手動切換 | 架構簡單、維護容易、資料一致性高 | 需手動切換、RPO 取決於備份頻率 | 跨區域備援、災難復原 |
+| 單向備援（主備） | 定期將 Azure VM 叢集 A 的資料庫、media、config 備份同步到 Azure VM 叢集 B，災難時手動切換 | 架構簡單、維護容易、資料一致性高 | 需手動切換、RPO 取決於備份頻率 | 跨區域備援、災難復原 |
 | 雙向同步（Active-Active） | 兩套 NetBox 互相同步資料，理論上可同時對外服務 | 理論上零停機、可分散讀取壓力 | NetBox 無原生支援，易有資料衝突與一致性問題，維護困難 | 嚴格高可用需求（不建議） |
 | 高可用（HA） | 多個 NetBox 實例共用同一 PostgreSQL 資料庫叢集，搭配負載平衡 | 自動故障切換、無需手動操作 | 需共用資料庫，跨區域困難，僅適合同區高可用 | 同區高可用、不中斷服務 |
 
@@ -18,7 +18,7 @@ nav_order: 99
 
 ## 1. Backup Best Practices
 
-> 目標環境：NetBox on Kubernetes、PostgreSQL + Redis（皆 3 replicas）、儲存層為同機房 NFS StorageClass，異地備份目標為 Nexus（HTTP/S）。
+> 目標環境：Azure VM 上的 NetBox on K3s、PostgreSQL + Redis（副本數可依環境設定）、儲存層為 Azure VM 本機磁碟 / local-path，異地備份目標為 Nexus（HTTP/S）。
 
 ### A. 備份範圍（單向備援主備）
 
@@ -114,16 +114,16 @@ kubectl -n netbox scale deploy netbox netbox-worker --replicas=3
 
 ### B. DR 模式（Option 3：跨叢集異地重建）
 
-- cluster1：主要服務（NetBox01）
-- cluster2：平時 standby（NetBox02），不建議 active-active
-- 兩邊都從同一個 Nexus 備份來源取檔；災難時在 cluster2 還原後切流量
+- cluster A：主要 Azure VM K3s 叢集
+- cluster B：平時 standby 的 Azure VM K3s 叢集，不建議 active-active
+- 兩邊都從同一個 Nexus 備份來源取檔；災難時在 cluster B 還原後切流量
 
 建議切換流程：
-1. 宣告 cluster1 故障、凍結寫入。
-2. 在 cluster2 部署相同 Helm chart（版本固定）。
-3. 在 cluster2 執行 restore job（指定最新可用備份版本）。
+1. 宣告 cluster A 故障、凍結寫入。
+2. 在 cluster B 部署相同 Helm chart（版本固定）。
+3. 在 cluster B 執行 restore job（指定最新可用備份版本）。
 4. 驗證 NetBox API/UI 與關鍵資料。
-5. 將 client/DNS/LB 指向 NetBox02。
+5. 將 client/DNS/LB 指向 cluster B。
 6. 事件後做 failback 規劃（避免雙向回寫）。
 
 ### C. 建議 SLO（初始值）

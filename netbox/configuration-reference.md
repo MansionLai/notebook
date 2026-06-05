@@ -7,13 +7,13 @@ nav_order: 5
 # 配置參考表
 
 > **Profile 標籤**
-> - **Minimal local-lab profile**：最小化實驗環境請以 [`deployment-steps.md`](./deployment-steps.md) 的精簡 values 與 [`README.md`](./README.md) 的最小 VM sizing 為基準。  
+> - **Azure VM K3s profile**：Azure VM 叢集請以 [`deployment-steps.md`](./deployment-steps.md) 的精簡 values 為基準。  
 > - **HA/production profile**：本文件多數默認值與生產配置段落（如副本與資源建議）偏向 HA/production 參考。  
-> ⚠️ 最小 VM profile 必須使用 `deployment-steps.md` 的降配值，不可混用 HA 預設。
+> ⚠️ Azure VM 規格較小時，必須使用 `deployment-steps.md` 的降配值，不可混用 HA 預設。
 
-本文檔提供 Netbox、PostgreSQL 和 Redis 的完整配置項速查表，方便向同事介紹或調整部署。
+本文檔提供 NetBox、PostgreSQL 和 Redis 的完整配置項速查表，方便向同事介紹或調整部署。
 
-## Netbox 配置參考
+## NetBox 配置參考
 
 ### 應用級別配置
 
@@ -55,7 +55,7 @@ nav_order: 5
 | `replicaCount` | 3 | PostgreSQL StatefulSet 副本數 |
 | `primary.persistence.size` | 10Gi | 數據庫存儲大小 |
 | `primary.persistence.enabled` | true | 是否啟用持久化存儲 |
-| `primary.persistence.storageClassName` | local-path | K3s 默認存儲類 |
+| `primary.persistence.storageClassName` | local-path | Azure VM 上的 K3s local-path 存儲類 |
 
 ### 認證配置
 
@@ -159,7 +159,7 @@ ingress:
 
 ## 環境變數配置
 
-Netbox 支持通過環境變數配置，在 ConfigMap 中設置：
+NetBox 支持通過環境變數配置，在 ConfigMap 中設置：
 
 ```yaml
 env:

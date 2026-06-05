@@ -6,7 +6,7 @@ nav_order: 6
 
 # 故障排查指南
 
-本文檔提供常見問題的診斷方法和解決方案。
+本文檔提供 Azure VM K3s + NetBox 常見問題的診斷方法和解決方案。
 
 ## 常見問題和解決方案
 
@@ -38,7 +38,7 @@ kubectl get pvc -n netbox
 
 # 原因 2：存儲類不存在
 #   檢查：kubectl get storageclass
-#   解決：使用 local-path storageClass（K3s 默認）
+#   解決：使用 local-path storageClass（Azure VM 上的 K3s 預設）
 
 # 原因 3：PVC 無法綁定
 #   檢查：kubectl get pvc -n netbox

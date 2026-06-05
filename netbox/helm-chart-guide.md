@@ -7,15 +7,15 @@ nav_order: 3
 # Helm Chart 深度指南
 
 > **Profile 標籤**
-> - **Minimal local-lab profile**：請以 [`deployment-steps.md`](./deployment-steps.md) 的精簡 values 與 [`README.md`](./README.md) 的最小 VM sizing 為準。  
+> - **Azure VM K3s profile**：請以 [`deployment-steps.md`](./deployment-steps.md) 的精簡 values 與本文件的 Helm 配置為準。  
 > - **HA/production profile**：本文件中的多副本與較高資源配置屬於 HA/production 參考。  
-> ⚠️ 使用最小化 VM 規格時，必須套用 `deployment-steps.md` 的降配值，**不可直接沿用 HA 預設值**。
+> ⚠️ 使用較小 Azure VM 規格時，必須同步降低 Helm resources 與 PVC 容量，**不可直接沿用 HA 預設值**。
 
 ## 概述
 
-本指南詳細解析官方 Netbox Helm chart 的結構，幫助你理解每個配置項的含義，並學會根據需要調整部署。
+本指南詳細解析官方 NetBox Helm chart 的結構，幫助你理解每個配置項的含義，並學會在 Azure VM K3s 叢集上調整部署。
 
-## Netbox Helm Chart 結構
+## NetBox Helm Chart 結構
 
 官方 Netbox Helm chart 地址：https://github.com/netbox-community/helm-charts
 
@@ -89,7 +89,7 @@ postgresql:
     persistence:
       enabled: true
       size: 10Gi  # 數據庫磁盤大小
-      storageClassName: local-path  # K3s 默認存儲類
+      storageClassName: local-path  # Azure VM 上的 K3s local-path 存儲類
   
   # PostgreSQL 容器資源
   resources:
@@ -119,7 +119,7 @@ redis:
   
   # Redis 持久化
   persistence:
-    enabled: false  # 會話丟失時會重新登錄，通常不需要持久化
+    enabled: false  # 會話可重建，通常不需要持久化
   
   # Redis 資源限制
   resources:

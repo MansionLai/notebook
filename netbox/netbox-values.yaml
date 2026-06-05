@@ -1,7 +1,7 @@
-# Netbox 副本數
+# NetBox 副本數
 replicaCount: 1
 
-# Netbox 容器資源
+# NetBox 容器資源
 resources:
   limits:
     cpu: 1000m
@@ -18,7 +18,7 @@ postgresql:
     persistence:
       enabled: true
       size: 5Gi
-      storageClassName: local-path
+      storageClassName: local-path  # Azure VM local-path 存儲類
   auth:
     username: netbox
     password: netbox
