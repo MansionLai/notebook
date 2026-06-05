@@ -42,6 +42,9 @@ ssh ubuntu@<mon-dc1-01-public-ip> "sudo ceph -s"
 ssh ubuntu@<mon-dc1-01-public-ip> "sudo ceph mon stat"
 ssh ubuntu@<mon-dc1-01-public-ip> "sudo ceph orch host ls"
 ssh ubuntu@<mon-dc1-01-public-ip> "sudo ceph osd tree"
+ssh ubuntu@<mon-dc1-01-public-ip> "sudo ceph osd crush tree --format json-pretty"
+ssh ubuntu@<mon-dc1-01-public-ip> "sudo ceph osd crush rule ls"
+ssh ubuntu@<mon-dc1-01-public-ip> "sudo ceph osd crush rule dump k8s_rbd_pool_rack"
 ```
 
 預期結果：
@@ -50,4 +53,6 @@ ssh ubuntu@<mon-dc1-01-public-ip> "sudo ceph osd tree"
 - OSD 節點已部署預期 OSD daemon
 - `public_network = 10.10.10.0/24`
 - `cluster_network = 172.10.10.0/24`
+- CRUSH tree 可看到 datacenter/room/rack/host 階層
+- `k8s_rbd_pool_rack` rule 存在，且 rule step 使用 `type rack`
 - PG 最終進入 `active+clean`

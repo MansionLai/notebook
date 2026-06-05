@@ -287,6 +287,75 @@
   run_once: true
   delegate_to: "{{ groups['ceph_mon'][0] }}"
 
+- name: Read CRUSH rule detail
+  ansible.builtin.command: ceph osd crush rule dump {{ ceph_rbd_crush_rule_name }} --format json
+  register: ceph_crush_rule_json
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ groups['ceph_mon'][0] }}"
+
+- name: Assert CRUSH rule uses rack failure domain
+  ansible.builtin.assert:
+    that:
+      - ceph_crush_rule_json.stdout is search('"type"\\s*:\\s*"rack"')
+    fail_msg: "CRUSH rule {{ ceph_rbd_crush_rule_name }} does not use rack as failure domain."
+  run_once: true
+  delegate_to: "{{ groups['ceph_mon'][0] }}"
+
+- name: Read CRUSH tree in JSON
+  ansible.builtin.command: ceph osd crush tree --format json
+  register: ceph_crush_tree_json
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ groups['ceph_mon'][0] }}"
+
+- name: Assert CRUSH hierarchy levels exist
+  ansible.builtin.assert:
+    that:
+      - ceph_crush_tree_json.stdout is search('"type"\\s*:\\s*"datacenter"')
+      - ceph_crush_tree_json.stdout is search('"type"\\s*:\\s*"room"')
+      - ceph_crush_tree_json.stdout is search('"type"\\s*:\\s*"rack"')
+      - ceph_crush_tree_json.stdout is search('"type"\\s*:\\s*"host"')
+    fail_msg: "CRUSH tree does not include expected datacenter/room/rack/host levels."
+  run_once: true
+  delegate_to: "{{ groups['ceph_mon'][0] }}"
+
+- name: Assert configured datacenter buckets exist
+  ansible.builtin.assert:
+    that:
+      - ceph_crush_tree_json.stdout is search('"name"\\s*:\\s*"' ~ item ~ '"')
+    fail_msg: "Missing datacenter bucket {{ item }} in CRUSH tree."
+  loop: "{{ ceph_unique_datacenters }}"
+  run_once: true
+  delegate_to: "{{ groups['ceph_mon'][0] }}"
+
+- name: Assert configured room buckets exist
+  ansible.builtin.assert:
+    that:
+      - ceph_crush_tree_json.stdout is search('"name"\\s*:\\s*"' ~ item.room ~ '"')
+    fail_msg: "Missing room bucket {{ item.room }} in CRUSH tree."
+  loop: "{{ ceph_room_mappings }}"
+  run_once: true
+  delegate_to: "{{ groups['ceph_mon'][0] }}"
+
+- name: Assert configured rack buckets exist
+  ansible.builtin.assert:
+    that:
+      - ceph_crush_tree_json.stdout is search('"name"\\s*:\\s*"' ~ item.rack ~ '"')
+    fail_msg: "Missing rack bucket {{ item.rack }} in CRUSH tree."
+  loop: "{{ ceph_rack_mappings }}"
+  run_once: true
+  delegate_to: "{{ groups['ceph_mon'][0] }}"
+
+- name: Assert OSD hosts are represented in CRUSH tree
+  ansible.builtin.assert:
+    that:
+      - ceph_crush_tree_json.stdout is search('"name"\\s*:\\s*"' ~ item.hostname ~ '"')
+    fail_msg: "Missing OSD host {{ item.hostname }} in CRUSH tree."
+  loop: "{{ ceph_location_mappings }}"
+  run_once: true
+  delegate_to: "{{ groups['ceph_mon'][0] }}"
+
 - name: Read Ceph daemon versions
   ansible.builtin.command: ceph versions --format json
   register: ceph_versions_json
