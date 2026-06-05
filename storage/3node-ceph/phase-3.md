@@ -26,6 +26,15 @@ cd storage/3node-ceph/ansible
 ansible-playbook playbooks/phase-3.yml
 ```
 
+## 這個 Ansible 會修改哪些系統狀態
+
+- 首次執行時，在第一台 MON 以 `cephadm bootstrap` 建立 Ceph cluster（若已存在 `/etc/ceph/ceph.conf` 則跳過 bootstrap）。
+- 將第一台 MON 的 `/etc/ceph/ceph.conf` 與 `ceph.client.admin.keyring` 同步到所有 MON 節點。
+- 設定 Ceph `mon public_network` 與 `global cluster_network`。
+- 將 inventory 內節點加入 `ceph orch host`，並套用 MON/MGR placement。
+- 依 inventory 的 `ceph_osd_devices` 對應新增 OSD daemon。
+- 建立/調整 CRUSH 拓撲（datacenter/room/rack/host）並建立 replicated CRUSH rule（failure domain=rack）。
+
 ## 驗證方式
 
 ```bash
@@ -42,4 +51,3 @@ ssh ubuntu@<mon-dc1-01-public-ip> "sudo ceph osd tree"
 - `public_network = 10.10.10.0/24`
 - `cluster_network = 172.10.10.0/24`
 - PG 最終進入 `active+clean`
-

@@ -27,6 +27,15 @@ cd storage/3node-ceph/ansible
 ansible-playbook playbooks/phase-5.yml
 ```
 
+## 這個 Ansible 會修改哪些系統狀態
+
+- 安裝並啟用 Docker（供 observability 容器/服務使用）。
+- 建立 `/etc/fluent-bit` 與 `/var/lib/fluent-bit`，渲染 `fluent-bit.conf`，並安裝 `fluent-bit.service`。
+- 安裝並啟用 `prometheus-node-exporter`（所有 ceph_nodes）。
+- 在 `ceph_mon` 節點建立 `/etc/prometheus-agent`，渲染 `prometheus.yml`，並安裝/啟用 `prometheus-agent.service`。
+- 在 `ceph_mon` 節點安裝並啟用 `ceph-exporter.service`。
+- 重新載入 systemd daemon，讓上述服務加入開機自啟並啟動。
+
 ## 驗證方式
 
 ```bash
@@ -41,4 +50,3 @@ ssh ubuntu@<osd-dc1-03-public-ip> "sudo systemctl status prometheus-node-exporte
 
 - 監控與日誌元件均為 active
 - Prometheus / OpenSearch 可查到 dc1 baseline 指標與日誌
-

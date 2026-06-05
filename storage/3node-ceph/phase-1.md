@@ -26,6 +26,14 @@ ansible-inventory --graph
 ansible-playbook playbooks/phase-1.yml
 ```
 
+## 這個 Ansible 會修改哪些系統狀態
+
+- 安裝 `ceph_phase1_packages` 定義的 baseline 套件（含 apt cache update）。
+- 設定每台節點 hostname，並覆寫 `/etc/hosts`（由 `hosts.j2` 產生）。
+- 啟用並啟動 `chrony` 服務。
+- 若節點有啟用 UFW，會執行 `ufw --force disable` 關閉防火牆。
+- 對 OSD 節點定義的 `ceph_osd_devices`，若偵測到既有檔案系統簽章，會執行 `wipefs --all --force` 清除簽章（破壞性操作）。
+
 ## 驗證方式
 
 ```bash
@@ -40,4 +48,3 @@ ansible ceph_osd -m command -a "lsblk"
 - 6 台節點 hostname / IP 正確
 - MON / OSD 分組正確
 - OSD 節點的 `ceph_osd_devices` 均存在且未被使用
-

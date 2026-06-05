@@ -24,6 +24,15 @@ cd storage/3node-ceph/ansible
 ansible-playbook playbooks/phase-2.yml
 ```
 
+## 這個 Ansible 會修改哪些系統狀態
+
+- 安裝 `ceph_phase2_packages` 前置套件，並確保 Docker 啟用且啟動。
+- 下載 `cephadm` 到 `/usr/local/bin/cephadm`（`0755`）。
+- 在 `ceph_mon` 節點（若尚未有 `ceph` CLI）新增 Ceph repo 並安裝 `ceph-common`。
+- 停用 swap（`swapoff -a`），並把 `/etc/fstab` 內 swap entry 註解，避免重開後再啟用。
+- 寫入 `/etc/sysctl.d/99-ceph-lab.conf` 並套用 `sysctl --system`。
+- 在第一台 MON 產生 cephadm SSH key，將公鑰佈署到所有 Ceph 節點，並寫入管理端 SSH config 以支援免密連線。
+
 ## 驗證方式
 
 ```bash
@@ -37,4 +46,3 @@ ansible ceph_nodes -m command -a "/usr/local/bin/cephadm version"
 - 六台都有 Docker 與 cephadm
 - 三台 MON 節點可執行 `ceph` CLI
 - cephadm 管理節點可 SSH 到 dc1 六台節點
-

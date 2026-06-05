@@ -24,6 +24,13 @@ cd storage/3node-ceph/ansible
 ansible-playbook playbooks/phase-4.yml
 ```
 
+## 這個 Ansible 會修改哪些系統狀態
+
+- 若 `k8s_rbd_pool` 不存在，建立 pool（使用設定中的 pg/pgp）。
+- 設定 pool 參數：`size`、`min_size`、`crush_rule`、`pg_autoscale_mode=off`。
+- 啟用 pool 的 `rbd` application，並在新建 pool 時執行 `rbd pool init`。
+- 若測試 image 不存在，建立 `ceph_test_image_name` 測試 image。
+
 ## 驗證方式
 
 ```bash
@@ -38,4 +45,3 @@ ssh ubuntu@<mon-dc1-01-public-ip> "sudo rbd ls k8s_rbd_pool"
 - pool `k8s_rbd_pool` 存在
 - `size=3`, `min_size=1`
 - 驗證 image 可建立
-
