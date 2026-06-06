@@ -36,7 +36,7 @@ permalink: /netbox/
 - 部署 PostgreSQL StatefulSet
 - 部署 Redis 緩存層
 - 驗證所有 pod 狀態
-- 配置 port-forward 訪問 Netbox UI
+- 配置 port-forward 訪問 NetBox UI（8080；若從 VM 外部連線需先放行 NSG）
 
 ### 5. [配置參考表](./configuration-reference.md)
 - NetBox pod 完整配置選項

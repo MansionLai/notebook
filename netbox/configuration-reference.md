@@ -45,6 +45,16 @@ nav_order: 5
 | Liveness | initialDelaySeconds | 120 | pod 啟動後等待時間 |
 | Liveness | periodSeconds | 10 | 檢查周期 |
 
+### NetBox 管理員帳號
+
+| 項目 | 說明 |
+|------|------|
+| `admin` 初始密碼 | **無法在 Helm values 直接設定** |
+| 建立方式 | 部署後在 NetBox pod 內執行 `python manage.py createsuperuser` |
+| 重設方式 | `python manage.py changepassword <username>` |
+| 已知限制 | Helm values 只管理 PostgreSQL / Redis 等基礎服務認證 |
+| 自動化固定密碼 | 需額外加 Kubernetes Secret + Helm hook Job，不是 chart 原生 values |
+
 ## PostgreSQL 配置參考
 
 ### 部署配置
@@ -164,7 +174,7 @@ NetBox 支持通過環境變數配置，在 ConfigMap 中設置：
 ```yaml
 env:
   NETBOX_ALLOWED_HOSTS: '*'
-  NETBOX_CSRF_TRUSTED_ORIGINS: 'http://localhost:8000'
+  NETBOX_CSRF_TRUSTED_ORIGINS: 'http://localhost:8080'
   NETBOX_DEBUG: 'False'
   NETBOX_MAX_PAGE_SIZE: '1000'
   NETBOX_PAGINATE_COUNT: '50'

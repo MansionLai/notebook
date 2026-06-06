@@ -107,6 +107,17 @@ postgresql:
     database: netbox
 ```
 
+> **注意**：這裡的 `password` 是 PostgreSQL 密碼，不是 NetBox GUI 的 `admin` 密碼。  
+> NetBox 管理員帳號必須在部署後用 `createsuperuser` 建立，不能在 Helm values 預先設定。
+
+如果一定要在 Helm deploy 時自動建立固定的 NetBox admin 密碼，做法是額外擴充 chart：
+
+1. 把 admin username / password / email 放到 Kubernetes Secret。
+2. 新增一個 `post-install,post-upgrade` Job 或 Helm hook。
+3. Job 先檢查 `admin` 是否已存在，再呼叫 `createsuperuser --noinput` 或 `changepassword`。
+
+這是 chart 外的擴充，不是官方 values 內建欄位。
+
 ### 第 3 部分：Redis 緩存配置
 
 ```yaml

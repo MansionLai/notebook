@@ -82,6 +82,18 @@ redis:
   auth:
     enabled: false
 
+# 注意：
+# 這份 values 只會設定 PostgreSQL / Redis 的 credentials，
+# 不包含 NetBox GUI 的 admin 初始密碼。
+# admin 帳號必須在部署後使用 `python manage.py createsuperuser`
+# 或 `python manage.py changepassword <username>` 來建立/重設。
+
+# 如果你要在 Helm deploy 時自動設定固定的 admin 密碼，
+# 需要額外加一個 post-install / post-upgrade Job（或 Helm hook）：
+# 1. 將 admin 帳密放進 Kubernetes Secret
+# 2. 讓 Job 讀取 Secret 後執行 createsuperuser / changepassword
+# 3. 讓 Job 保持 idempotent，避免重複部署失敗
+
 # ⚠️ 配置安全提醒
 # redis.auth.enabled: false 僅適用於隔離測試環境。
 # 若部署在共享或多租戶叢集，必須改為 enabled: true，並以 Kubernetes Secret 管理密碼。
@@ -186,10 +198,10 @@ exit
 
 ```bash
 # 轉發本地端口到 Netbox Service
-kubectl port-forward svc/netbox 8000:80 -n netbox
+kubectl port-forward svc/netbox 8080:80 -n netbox
 
 # 在瀏覽器中打開
-# http://localhost:8000
+# http://localhost:8080
 ```
 
 ### 選項 2：使用 NodePort（持久訪問）
@@ -204,8 +216,16 @@ kubectl edit svc netbox -n netbox
 # 查看分配的端口
 kubectl get svc netbox -n netbox
 
-# 預期輸出會顯示 PORT (例如 8080:31234/TCP)
-# 訪問：http://localhost:31234
+# 預期輸出會顯示 PORT (例如 80:31234/TCP)
+# 訪問：http://<cp-public-ip>:31234
+```
+
+### 選項 3：直接對外開 port-forward
+
+如果要從瀏覽器直接打 `http://<cp-public-ip>:8080`，請先在 Azure NSG 放行 `8080`，然後用：
+
+```bash
+kubectl port-forward --address 0.0.0.0 svc/netbox 8080:80 -n netbox
 ```
 
 ## 第 8 步：初始化 Netbox
@@ -230,7 +250,7 @@ kubectl exec -it $NETBOX_POD -n netbox -- \
 
 ```bash
 # 如果使用 port-forward
-# http://localhost:8000/
+# http://localhost:8080/
 
 # 登錄：
 # Username: admin
@@ -245,7 +265,7 @@ kubectl exec -it $NETBOX_POD -n netbox -- \
 - [ ] 可以登錄（admin 用戶）
 - [ ] 可以添加設備（Device > New Device）
 - [ ] 可以添加 IP 地址（IPAM > IP Addresses）
-- [ ] API 可訪問（http://localhost:8000/api/）
+- [ ] API 可訪問（http://localhost:8080/api/）
 - [ ] 實時搜索功能正常
 
 ### 性能檢查
@@ -287,7 +307,7 @@ kubectl top nodes
 └───────────────────────────────────────────────────────────┘
 
     │
-    └─► Mac localhost:8000 (port-forward)
+    └─► Mac localhost:8080 (port-forward)
 ```
 
 ## 故障排查常見命令

@@ -168,7 +168,7 @@ kubectl exec -it postgresql-0 -n netbox -- \
 **症狀：**
 ```bash
 # API 請求耗時長（> 5秒）
-curl -w "Time: %{time_total}s\n" http://localhost:8000/api/dcim/devices/
+curl -w "Time: %{time_total}s\n" http://localhost:8080/api/dcim/devices/
 ```
 
 **診斷步驟：**
@@ -196,7 +196,7 @@ kubectl exec -it redis-master-0 -n netbox -- \
 
 **症狀：**
 ```bash
-# curl: (7) Failed to connect to localhost port 8000
+# curl: (7) Failed to connect to localhost port 8080
 ```
 
 **診斷步驟：**
@@ -206,7 +206,7 @@ kubectl exec -it redis-master-0 -n netbox -- \
 ps aux | grep "port-forward"
 
 # 2. 重新啟動 port-forward
-kubectl port-forward svc/netbox 8000:80 -n netbox
+kubectl port-forward --address 0.0.0.0 svc/netbox 8080:80 -n netbox
 
 # 3. 查看 Service 狀態
 kubectl get svc -n netbox
@@ -219,6 +219,10 @@ kubectl run -it --image=alpine curl -- sh
 # 在 pod 內執行：
 # curl http://netbox:80/
 ```
+
+**提示：**
+- 若你要從 VM 外部直接訪問 `http://<cp-public-ip>:8080`，Azure NSG 必須允許 `8080/TCP`
+- 若只在 control plane VM 本機測試，則可用預設 `kubectl port-forward svc/netbox 8080:80 -n netbox`
 
 ### 問題 8：登錄失敗
 

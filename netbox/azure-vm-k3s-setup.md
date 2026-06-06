@@ -43,7 +43,7 @@ az group create \
 ```bash
 RG=mansion_k3s_netbox
 LOC=japaneast
-ADMIN_USER=azureuser
+ADMIN_USER=ubuntu
 SSH_KEY=~/.ssh/id_rsa.pub
 IMAGE=Ubuntu2204
 
@@ -85,7 +85,7 @@ az vm create \
 ## 第 3 步：安裝 K3s control plane
 
 ```bash
-ssh azureuser@<cp-public-ip>
+ssh ubuntu@<cp-public-ip>
 
 curl -sfL https://get.k3s.io | sh -s - server \
   --write-kubeconfig-mode 644 \
@@ -97,7 +97,7 @@ sudo cat /var/lib/rancher/k3s/server/node-token
 ## 第 4 步：安裝 worker
 
 ```bash
-ssh azureuser@<worker-01-public-ip>
+ssh ubuntu@<worker-01-public-ip>
 
 K3S_URL="https://<cp-private-or-public-ip>:6443"
 K3S_TOKEN="<node-token>"
@@ -110,7 +110,7 @@ curl -sfL https://get.k3s.io | K3S_URL=$K3S_URL K3S_TOKEN=$K3S_TOKEN sh -
 
 ```bash
 mkdir -p ~/.kube
-scp azureuser@<cp-public-ip>:/etc/rancher/k3s/k3s.yaml ~/.kube/netbox-k3s.yaml
+scp ubuntu@<cp-public-ip>:/etc/rancher/k3s/k3s.yaml ~/.kube/netbox-k3s.yaml
 python3 - <<'PY'
 from pathlib import Path
 path = Path.home() / ".kube" / "netbox-k3s.yaml"
@@ -128,6 +128,26 @@ kubectl get pods -A
 ```
 
 預期看到 1 個 control plane、2 個 worker 都是 `Ready`。
+
+## NetBox GUI 存取
+
+如果你要從 VM 外部直接打開 NetBox GUI，先確認 NSG 已放行 `8080`，再用：
+
+```bash
+kubectl -n netbox port-forward --address 0.0.0.0 svc/netbox 8080:80
+```
+
+然後在瀏覽器開：
+
+```text
+http://<cp-public-ip>:8080
+```
+
+如果只想在 control plane VM 本機看頁面，維持預設即可：
+
+```bash
+kubectl -n netbox port-forward svc/netbox 8080:80
+```
 
 ## K3s 叢集拓撲圖
 
