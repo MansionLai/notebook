@@ -41,6 +41,23 @@ kubectl create namespace netbox
 kubectl get namespace netbox
 ```
 
+### 重新練習時的 Rollback 到 Step 2
+
+如果你已經做完 step3~step4、想回到只有叢集和 namespace 的狀態：
+
+```bash
+# 移除 Helm release
+helm -n netbox uninstall netbox
+
+# 如果你也想清掉 step3 產生的本地檔案
+rm -rf netbox/
+rm -f netbox-values.yaml
+
+# 保留 namespace 繼續重練；如果要重建才刪掉
+# kubectl delete namespace netbox
+# kubectl create namespace netbox
+```
+
 ## 第 3 步：準備 Values 配置文件
 
 ```bash
@@ -88,11 +105,14 @@ redis:
 # admin 帳號必須在部署後使用 `python manage.py createsuperuser`
 # 或 `python manage.py changepassword <username>` 來建立/重設。
 
-# 如果你要在 Helm deploy 時自動設定固定的 admin 密碼，
-# 需要額外加一個 post-install / post-upgrade Job（或 Helm hook）：
-# 1. 將 admin 帳密放進 Kubernetes Secret
-# 2. 讓 Job 讀取 Secret 後執行 createsuperuser / changepassword
-# 3. 讓 Job 保持 idempotent，避免重複部署失敗
+# 官方 OCI chart 也支援在 install 時直接設定 superuser：
+# helm install netbox oci://ghcr.io/netbox-community/netbox-chart/netbox \
+#   -n netbox \
+#   --set superuser.password="您的自訂密碼" \
+#   --set superuser.apiToken="您的自訂Token"
+#
+# 這個方式會在部署時建立 NetBox superuser，
+# 適合你想在 step3~step4 練習 Helm 安裝時直接帶入 admin 密碼的情境。
 
 # ⚠️ 配置安全提醒
 # redis.auth.enabled: false 僅適用於隔離測試環境。
@@ -112,9 +132,11 @@ cat netbox-values.yaml
 
 ```bash
 # 模擬部署以驗證配置
-helm install netbox netbox/ \
+helm install netbox oci://ghcr.io/netbox-community/netbox-chart/netbox \
   -n netbox \
   -f netbox-values.yaml \
+  --set superuser.password="您的自訂密碼" \
+  --set superuser.apiToken="您的自訂Token" \
   --dry-run --debug
 
 # 如果沒有錯誤，輸出會顯示會被創建的所有資源
@@ -124,9 +146,11 @@ helm install netbox netbox/ \
 
 ```bash
 # 部署 NetBox 及其依賴
-helm install netbox netbox/ \
+helm install netbox oci://ghcr.io/netbox-community/netbox-chart/netbox \
   -n netbox \
-  -f netbox-values.yaml
+  -f netbox-values.yaml \
+  --set superuser.password="您的自訂密碼" \
+  --set superuser.apiToken="您的自訂Token"
 
 # 等待 2-3 分鐘讓 pod 啟動
 sleep 180

@@ -15,6 +15,10 @@ nav_order: 3
 
 本指南詳細解析官方 NetBox Helm chart 的結構，幫助你理解每個配置項的含義，並學會在 Azure VM K3s 叢集上調整部署。
 
+> **Chart 來源提醒**
+> - 本地 `netbox-values.yaml` 用來描述 Azure VM K3s 的資源與 PostgreSQL/Redis 設定。
+> - 官方 OCI chart `oci://ghcr.io/netbox-community/netbox-chart/netbox` 額外支援 `superuser.password` / `superuser.apiToken`，可在 install 時直接建立 NetBox superuser。
+
 ## NetBox Helm Chart 結構
 
 官方 Netbox Helm chart 地址：https://github.com/netbox-community/helm-charts
@@ -108,15 +112,7 @@ postgresql:
 ```
 
 > **注意**：這裡的 `password` 是 PostgreSQL 密碼，不是 NetBox GUI 的 `admin` 密碼。  
-> NetBox 管理員帳號必須在部署後用 `createsuperuser` 建立，不能在 Helm values 預先設定。
-
-如果一定要在 Helm deploy 時自動建立固定的 NetBox admin 密碼，做法是額外擴充 chart：
-
-1. 把 admin username / password / email 放到 Kubernetes Secret。
-2. 新增一個 `post-install,post-upgrade` Job 或 Helm hook。
-3. Job 先檢查 `admin` 是否已存在，再呼叫 `createsuperuser --noinput` 或 `changepassword`。
-
-這是 chart 外的擴充，不是官方 values 內建欄位。
+> 若你使用官方 OCI chart，可以在 `helm install` 時直接用 `superuser.password` / `superuser.apiToken` 建立 superuser；本地 values 只負責 PostgreSQL / Redis 等基礎服務。
 
 ### 第 3 部分：Redis 緩存配置
 

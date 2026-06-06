@@ -49,11 +49,11 @@ nav_order: 5
 
 | 項目 | 說明 |
 |------|------|
-| `admin` 初始密碼 | **無法在 Helm values 直接設定** |
-| 建立方式 | 部署後在 NetBox pod 內執行 `python manage.py createsuperuser` |
+| `admin` 初始密碼 | 官方 OCI chart 可用 `superuser.password` 在 install 時設定 |
+| 建立方式 | 使用官方 OCI chart 的 `superuser.password` / `superuser.apiToken`，或部署後執行 `python manage.py createsuperuser` |
 | 重設方式 | `python manage.py changepassword <username>` |
-| 已知限制 | Helm values 只管理 PostgreSQL / Redis 等基礎服務認證 |
-| 自動化固定密碼 | 需額外加 Kubernetes Secret + Helm hook Job，不是 chart 原生 values |
+| 已知限制 | 本地 `netbox-values.yaml` 只管理 PostgreSQL / Redis 等基礎服務認證 |
+| 其他說明 | 若使用本地 chart/fork，需自行確認是否支援 `superuser.*` 參數 |
 
 ## PostgreSQL 配置參考
 
