@@ -129,25 +129,6 @@ kubectl get pods -A
 
 預期看到 1 個 control plane、2 個 worker 都是 `Ready`。
 
-## NetBox GUI 存取
-
-如果你要從 VM 外部直接打開 NetBox GUI，先確認 NSG 已放行 `8080`，再用：
-
-```bash
-kubectl -n netbox port-forward --address 0.0.0.0 svc/netbox 8080:80
-```
-
-然後在瀏覽器開：
-
-```text
-http://<cp-public-ip>:8080
-```
-
-如果只想在 control plane VM 本機看頁面，維持預設即可：
-
-```bash
-kubectl -n netbox port-forward svc/netbox 8080:80
-```
 
 ## K3s 叢集拓撲圖
 
