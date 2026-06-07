@@ -13,12 +13,26 @@ nav_order: 6
 | 方案 | 運作方式 | 優點 | 缺點 | 適用情境 |
 |---|---|---|---|---|
 | **IaC 重建 + 資料還原 (`pg_dump`)** | 使用 GitLab IaC 重建環境，手動匯入資料庫 | 極度乾淨、不依賴舊環境、易於升級 | 需維護還原腳本，資料庫還原時間稍長 | **推薦**：災難復原、版本升級 |
-| **Kubernetes 快照 (Velero)** | 備份 PVC、Secrets、ConfigMaps 與資源 | 自動化程度高、可還原整個 Namespace | 依賴 K8s 環境，若叢集損毀需先重建叢集 | 叢集內局部故障、快速整組回滾 |
+| **Kubernetes 快照 (Velero)** | 備份 PVC、Secrets、ConfigMaps 與資源 | 自動化程度高、可還原整個 Namespace | 需高權限 (Cluster Admin)；依賴 K8s 環境 | 叢集內局部故障、快速整組回滾 |
 | **資料庫單向複製 (僅供 DR)** | 使用 PostgreSQL 串流複製 (Streaming Replication) 將資料由主庫同步到備份庫 | 資料同步時延極低 | **非自動切換**，需人工提升備份庫為 Primary；若操作錯誤極易導致資料遺失 | **進階災備**：嚴格的 RPO 要求 |
 
 ---
 
 ## 策略分析
+
+### 1. IaC 重建 + 資料還原 (推薦)
+這是您目前偏好的方式。架構穩定性最高，且不會有「帶入舊環境配置錯誤」的問題。
+- **重建環境**：透過 GitLab 中的 `values.yaml` 與 `helm install` 快速拉起全新的叢集。
+- **恢復資料**：使用 `pg_dump` 邏輯備份 SQL 資料。因為這是標準 SQL，即便從 v1.6.4 升級到 v2.x 也能成功。
+
+### 2. Kubernetes 原生方案 (Velero)
+Velero 是 K8s 社群的黃金標準。
+- **權限要求**：由於 Velero 需要存取叢集內所有 Namespace 的資源與系統層級的 `CustomResourceDefinitions` (CRDs) 與 `PersistentVolume` 物件，它 **必須具備叢集管理員 (Cluster Admin) 或極高權限的 ServiceAccount**。這在嚴格合規的企業環境下是需要特別考量的權限邊界。
+- **儲存選擇**：不強制依賴公有雲。
+- **企業內部/地端環境方案 (On-Premises)**：
+    - **MinIO**：輕量、部署快速，企業內部標準 S3 方案。
+    - **Ceph (RADOS Gateway)**：若機房已有 Ceph，可直接利用其 S3 RGW 介面作為備份後端。
+- **優勢**：當您的 `netbox-superuser` Secret 或 `media` 資料夾非常複雜時，Velero 可以一鍵還原 Namespace 的所有狀態。
 
 ### 3. 資料庫單向複製 (進階 DR)
 這並非 NetBox 的「高可用 (HA)」方案。這是一個「異地災難復原 (DR)」手段。
