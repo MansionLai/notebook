@@ -1,7 +1,7 @@
 ---
 title: NetBox Backup and Disaster Recovery
 parent: Netbox
-nav_order: 99
+nav_order: 6
 ---
 
 # NetBox Backup and Disaster Recovery

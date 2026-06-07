@@ -1,7 +1,7 @@
 ---
 title: 故障排查指南
 parent: Netbox
-nav_order: 6
+nav_order: 5
 ---
 
 # 故障排查指南

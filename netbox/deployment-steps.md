@@ -1,7 +1,7 @@
 ---
 title: 完整部署步驟
 parent: Netbox
-nav_order: 4
+nav_order: 3
 ---
 
 # 完整部署步驟
@@ -9,6 +9,29 @@ nav_order: 4
 ## 概述
 
 本文檔提供在 Azure VM K3s 叢集上逐步部署 NetBox 的完整指南，包括所有前置準備和驗證步驟。
+
+## NetBox Helm Chart 結構
+
+官方 Netbox Helm chart 地址：https://github.com/netbox-community/helm-charts
+
+### 目錄結構
+
+```
+netbox/
+├── Chart.yaml              # Chart 元數據
+├── values.yaml             # 默認配置值（最重要）
+├── charts/                 # 依賴 chart
+│   ├── postgresql/         # PostgreSQL chart
+│   └── redis/              # Redis chart
+├── templates/              # Kubernetes 資源模板
+│   ├── deployment.yaml     # Netbox Deployment
+│   ├── service.yaml        # Service 配置
+│   ├── configmap.yaml      # 配置文件
+│   ├── secret.yaml         # 敏感信息
+│   ├── ingress.yaml        # Ingress 配置
+│   └── statefulset.yaml    # PostgreSQL StatefulSet
+└── README.md               # 使用文檔
+```
 
 ## 前置準備
 
@@ -31,41 +54,50 @@ helm repo update
 helm repo list
 ```
 
-## 第 2 步：創建命名空間
+## 第 2 步：創建命名空間與 Secret
 
 ```bash
 # 創建專用命名空間
 kubectl create namespace netbox
 
-# 驗證
-kubectl get namespace netbox
+# 建立 Superuser 憑證 Secret (安全建議方式)
+# 注意：這會建立一個名為 netbox-superuser 的 Secret，供 Helm Chart 引用
+kubectl create secret generic netbox-superuser \
+  --from-literal=password='您的自訂密碼' \
+  --from-literal=apiToken='您的自訂Token' \
+  -n netbox
 ```
 
 ### 重新練習時的 Rollback 到 Step 2
 
-如果你已經做完 step3~step4、想回到只有叢集和 namespace 的狀態：
+如果你已經做完 step3~step5、想回到只有叢集和 namespace 的狀態：
 
 ```bash
 # 移除 Helm release
 helm -n netbox uninstall netbox
 
+# 移除 Secret
+kubectl delete secret netbox-superuser -n netbox
+
 # 如果你也想清掉 step3 產生的本地檔案
 rm -rf netbox/
 rm -f netbox-values.yaml
-
-# 保留 namespace 繼續重練；如果要重建才刪掉
-# kubectl delete namespace netbox
-# kubectl create namespace netbox
 ```
 
 ## 第 3 步：準備 Values 配置文件
 
 ```bash
-# 拉取官方 chart 以查看默認值
+# 拉取官方 chart 以查看默認值 (僅作參考)
 helm pull netbox/netbox --untar
 
 # 創建自訂 values 文件
 cat > netbox-values.yaml << 'EOF'
+# Superuser 配置 (引用預先建立的 Secret)
+superuser:
+  name: admin
+  email: admin@example.com
+  existingSecret: netbox-superuser
+
 # NetBox 副本數
 replicaCount: 1
 
@@ -73,10 +105,10 @@ replicaCount: 1
 resources:
   limits:
     cpu: 1000m
-    memory: 1Gi
+    memory: 2Gi # 提高內存以防止 Migration 時 OOM
   requests:
     cpu: 500m
-    memory: 512Mi
+    memory: 1Gi
 
 # PostgreSQL 配置
 postgresql:
@@ -86,7 +118,7 @@ postgresql:
     persistence:
       enabled: true
       size: 5Gi
-      storageClassName: local-path # Azure VM local-path 存儲類
+      storageClassName: local-path
   auth:
     username: netbox
     password: netbox
@@ -98,25 +130,6 @@ redis:
   architecture: standalone
   auth:
     enabled: false
-
-# 注意：
-# 這份 values 只會設定 PostgreSQL / Redis 的 credentials，
-# 不包含 NetBox GUI 的 admin 初始密碼。
-# admin 帳號必須在部署後使用 `python manage.py createsuperuser`
-# 或 `python manage.py changepassword <username>` 來建立/重設。
-
-# 官方 OCI chart 也支援在 install 時直接設定 superuser：
-# helm install netbox oci://ghcr.io/netbox-community/netbox-chart/netbox \
-#   -n netbox \
-#   --set superuser.password="您的自訂密碼" \
-#   --set superuser.apiToken="您的自訂Token"
-#
-# 這個方式會在部署時建立 NetBox superuser，
-# 適合你想在 step3~step4 練習 Helm 安裝時直接帶入 admin 密碼的情境。
-
-# ⚠️ 配置安全提醒
-# redis.auth.enabled: false 僅適用於隔離測試環境。
-# 若部署在共享或多租戶叢集，必須改為 enabled: true，並以 Kubernetes Secret 管理密碼。
 
 # Service 配置
 service:
@@ -135,11 +148,7 @@ cat netbox-values.yaml
 helm install netbox oci://ghcr.io/netbox-community/netbox-chart/netbox \
   -n netbox \
   -f netbox-values.yaml \
-  --set superuser.password="您的自訂密碼" \
-  --set superuser.apiToken="您的自訂Token" \
   --dry-run --debug
-
-# 如果沒有錯誤，輸出會顯示會被創建的所有資源
 ```
 
 ## 第 5 步：執行實際部署
@@ -148,12 +157,10 @@ helm install netbox oci://ghcr.io/netbox-community/netbox-chart/netbox \
 # 部署 NetBox 及其依賴
 helm install netbox oci://ghcr.io/netbox-community/netbox-chart/netbox \
   -n netbox \
-  -f netbox-values.yaml \
-  --set superuser.password="您的自訂密碼" \
-  --set superuser.apiToken="您的自訂Token"
+  -f netbox-values.yaml
 
-# 等待 2-3 分鐘讓 pod 啟動
-sleep 180
+# 等待 3-5 分鐘讓 pod 啟動（初次部署會執行資料庫 Migration，需較長時間）
+kubectl get pods -n netbox -w
 ```
 
 ## 第 6 步：驗證部署
@@ -252,33 +259,19 @@ kubectl get svc netbox -n netbox
 kubectl port-forward --address 0.0.0.0 svc/netbox 8080:80 -n netbox
 ```
 
-## 第 8 步：初始化 Netbox
+## 第 8 步：初始化 Netbox（可選，若已在 Step 2 建立 Secret 則跳過）
 
-### 步驟 8.1：創建超級用戶
+如果您在 Step 2 & 3 已經使用了 `existingSecret`，NetBox 在啟動時會自動建立該管理員帳號。
+
+### 如果需要手動重設密碼：
 
 ```bash
 # 找到一個 NetBox pod
-NETBOX_POD=$(kubectl get pod -n netbox -l app=netbox -o jsonpath='{.items[0].metadata.name}')
+NETBOX_POD=$(kubectl get pod -n netbox -l app.kubernetes.io/name=netbox -o jsonpath='{.items[0].metadata.name}')
 
-# 在 pod 中執行初始化
+# 在 pod 中執行密碼修改
 kubectl exec -it $NETBOX_POD -n netbox -- \
-  python manage.py createsuperuser
-
-# 按照提示輸入：
-# Username: admin
-# Email: admin@example.com
-# Password: (設定強密碼)
-```
-
-### 步驟 8.2：訪問 Web UI
-
-```bash
-# 如果使用 port-forward
-# http://localhost:8080/
-
-# 登錄：
-# Username: admin
-# Password: (你設定的密碼)
+  python manage.py changepassword admin
 ```
 
 ## 第 9 步：功能驗證
@@ -297,68 +290,19 @@ kubectl exec -it $NETBOX_POD -n netbox -- \
 ```bash
 # 檢查 pod 資源使用
 kubectl top pods -n netbox
-
-# 檢查節點資源使用
-kubectl top nodes
-```
-
-## 部署架構圖
-
-```
-┌───────────────────────────────────────────────────────────┐
-│                   K3s Cluster                             │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐ │
-│  │           netbox namespace                          │ │
-│  │                                                       │ │
-│  │  Netbox Service (ClusterIP，僅提供 Web/API)         │ │
-│  │  └─ netbox-pod-1                                    │ │
-│  │                                                       │ │
-│  │  netbox-worker-pod-1（背景工作 Pod，非 Service 端點）│ │
-│  │         │                                            │ │
-│  │         └──► PostgreSQL Service                     │ │
-│  │         │    ├─ postgresql-0 (Primary)              │ │
-│  │         │                                            │ │
-│  │         │         │                                  │ │
-│  │         │         └─► PersistentVolume (5Gi)        │ │
-│  │         │                                            │ │
-│  │         └──► Redis Service                          │ │
-│  │              ├─ redis-master-0                      │ │
-│  │              └─ (standalone)                        │ │
-│  │                                                       │ │
-│  └─────────────────────────────────────────────────────┘ │
-│                                                             │
-└───────────────────────────────────────────────────────────┘
-
-    │
-    └─► Mac localhost:8080 (port-forward)
 ```
 
 ## 故障排查常見命令
 
 ### 資源不足排查（優先順序）
 
-1. **內存不足 (OOMKilled)**：Netbox 在執行 `manage.py migrate` 時非常消耗內存，建議限制至少設為 `1Gi` (本指南已更新為 `2Gi` 以確保 100% 成功)。
+1. **內存不足 (OOMKilled)**：Netbox 在執行 `manage.py migrate` 時非常消耗內存，建議限制至少設為 `2Gi` 以確保 成功。
 2. 檢查 netbox-worker 的記憶體使用量是否過高。
-3. 如果節點顯示 `Insufficient cpu`，請檢查是否有多個 pod 競爭同一個節點（特別是 bound 到特定節點的 PVC）。
 
 ```bash
 # 查看部署狀態
 kubectl get deployment -n netbox
 
-# 查看完整事件日誌
-kubectl get events -n netbox --sort-by='.lastTimestamp'
-
-# 獲取某個 pod 的完整日誌
-kubectl logs netbox-xxx -n netbox --all-containers=true
-
-# 進入 pod 進行調試
-kubectl exec -it netbox-xxx -n netbox -- /bin/bash
-
 # 清理部署（如需重新開始）
 helm uninstall netbox -n netbox
 ```
-
-## 下一步
-
-閱讀 [configuration-reference.md](./configuration-reference.md) 了解完整的配置選項。
