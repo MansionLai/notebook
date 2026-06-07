@@ -77,8 +77,10 @@ vi netbox/values.yaml
 | 項目 | 搜尋關鍵字 | 建議設定值 | 說明 |
 | :--- | :--- | :--- | :--- |
 | **超級管理員** | `superuser:` | `existingSecret: "netbox-superuser"` | 引用 Step 2 建立的 Secret |
-| **核心記憶體** | `resources:` | `memory: 2Gi` | 確保初次 Migration 成功 |
-| **Worker 記憶體** | `worker:` 下的 `resources:` | `memory: 1Gi` | 背景任務所需記憶體 |
+| **NetBox 記憶體** | 第一個 `resources:` | `memory: 2Gi` | 核心 Web 服務，Migration 需較大記憶體 |
+| **Worker 記憶體** | `worker:` 下的 `resources:` | `memory: 1Gi` | 背景任務（如 Webhooks）所需記憶體 |
+| **資料庫記憶體** | `postgresql:` 下的 `resources:` | `memory: 1Gi` | PostgreSQL 資料庫核心記憶體 |
+| **Redis 記憶體** | `redis:` 下的 `resources:` | `memory: 512Mi` | Redis 快取層所需記憶體 |
 | **資料庫儲存類** | `postgresql:` 下的 `storageClassName:` | `"local-path"` | K3s 預設儲存類 |
 | **資料庫大小** | `postgresql:` 下的 `size:` | `5Gi` | 測試環境建議值 |
 
