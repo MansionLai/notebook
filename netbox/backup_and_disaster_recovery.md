@@ -26,7 +26,11 @@ nav_order: 6
 - **恢復資料**：使用 `pg_dump` 邏輯備份 SQL 資料。因為這是標準 SQL，即便從 v1.6.4 升級到 v2.x 也能成功。
 
 ### 2. Kubernetes 原生方案 (Velero)
-Velero 是 K8s 社群的黃金標準，它不僅備份資料庫（如果結合 Restic 或 CSI Snapshot），還能一併備份 `Secrets` 和 `PVCs`。
+Velero 是 K8s 社群的黃金標準。
+- **儲存選擇**：不強制依賴公有雲。
+- **企業內部/地端環境方案 (On-Premises)**：
+    - **MinIO**：輕量、部署快速，企業內部標準 S3 方案。
+    - **Ceph (RADOS Gateway)**：若機房已有 Ceph，可直接利用其 S3 RGW 介面作為備份後端。
 - **優勢**：當您的 `netbox-superuser` Secret 或 `media` 資料夾非常複雜時，Velero 可以一鍵還原 Namespace 的所有狀態。
 - **侷限**：如果您的叢集基礎設施壞得很徹底（例如 K3s 本身毀損），您需要先重建 K3s，才能安裝 Velero，再執行 `velero restore`。這與您「IaC 快速重建」的目標一致。
 
@@ -41,7 +45,7 @@ Velero 是 K8s 社群的黃金標準，它不僅備份資料庫（如果結合 R
 3.  **Velero**：負責「自動化備份 K8s 原生配置」(PVC, Secrets)。
 
 ### 實施建議：
-*   **平時**：配置 Velero 自動備份 `netbox` Namespace 到 Azure Blob Storage。
+*   **平時**：配置 Velero 自動備份 `netbox` Namespace 到 **S3-Compatible 儲存 (例如地端的 MinIO)**。
 *   **災難時**：
     1. 執行 IaC 重建基礎設施。
     2. 若只需還原 NetBox Namespace，直接執行 `velero restore`（速度最快）。
@@ -58,10 +62,16 @@ kubectl exec -it netbox-postgresql-primary-0 -n netbox -- \
   pg_dump -U netbox -d netbox -Fc > netbox-db-backup.dump
 ```
 
-### 使用 Velero 備份 (前提：已安裝 Velero)
+### 使用 Velero 備份 (S3-Compatible 範例)
+在安裝 Velero 時，指向您的內網 S3 儲存（如 MinIO）：
+
 ```bash
-# 備份 netbox namespace
-velero backup create netbox-backup --include-namespaces netbox
+velero install \
+  --provider aws \
+  --plugins velero/velero-plugin-for-aws:v1.10.0 \
+  --bucket <minio-bucket-name> \
+  --secret-file ./credentials-velero \
+  --backup-location-config region=minio,s3ForcePathStyle=true,s3Url=http://<minio-internal-url>:9000
 ```
 
 ### 驗證建議
