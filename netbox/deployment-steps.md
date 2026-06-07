@@ -66,23 +66,66 @@ kubectl create secret generic netbox-superuser \
 
 ## 第 3 步：配置本地 Values 檔案
 
-您可以直接修改 `netbox/values.yaml` 中的預設值。請使用編輯器（如 `vi` 或 `nano`）搜尋並修改以下關鍵配置：
+您可以直接修改 `netbox/values.yaml` 中的預設值。請使用編輯器（如 `vi` 或 `nano`）搜尋並替換以下關鍵配置：
 
 ```bash
 vi netbox/values.yaml
 ```
 
-### 關鍵修改清單：
+### 3.1 超級管理員與存儲設定
+請搜尋對應關鍵字並修改：
+*   **搜尋 `superuser:`**：將 `existingSecret` 設為 `"netbox-superuser"`。
+*   **搜尋 `postgresql:` 下的 `persistence:`**：
+    *   `storageClassName: "local-path"`
+    *   `size: 5Gi`
 
-| 項目 | 搜尋關鍵字 | 建議設定值 | 說明 |
-| :--- | :--- | :--- | :--- |
-| **超級管理員** | `superuser:` | `existingSecret: "netbox-superuser"` | 引用 Step 2 建立的 Secret |
-| **NetBox 記憶體** | 第一個 `resources:` | `memory: 2Gi` | 核心 Web 服務，Migration 需較大記憶體 |
-| **Worker 記憶體** | `worker:` 下的 `resources:` | `memory: 1Gi` | 背景任務（如 Webhooks）所需記憶體 |
-| **資料庫記憶體** | `postgresql:` 下的 `resources:` | `memory: 1Gi` | PostgreSQL 資料庫核心記憶體 |
-| **Redis 記憶體** | `redis:` 下的 `resources:` | `memory: 512Mi` | Redis 快取層所需記憶體 |
-| **資料庫儲存類** | `postgresql:` 下的 `storageClassName:` | `"local-path"` | K3s 預設儲存類 |
-| **資料庫大小** | `postgresql:` 下的 `size:` | `5Gi` | 測試環境建議值 |
+### 3.2 組件資源限制 (CPU/Memory)
+請搜尋各組件下的 `resources: {}` 並替換為以下格式：
+
+#### 1. NetBox 核心 (搜尋第一個 `resources:`)
+```yaml
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+```
+
+#### 2. NetBox Worker (搜尋 `worker:` 下的 `resources:`)
+```yaml
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+```
+
+#### 3. PostgreSQL (搜尋 `postgresql:` 下的 `resources:`)
+```yaml
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+```
+
+#### 4. Redis (搜尋 `redis:` 下的 `resources:`)
+```yaml
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 200m
+    memory: 512Mi
+```
+
 
 ## 第 4 步：驗證配置（Dry Run）
 
