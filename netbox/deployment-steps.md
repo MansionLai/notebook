@@ -52,6 +52,8 @@ openssl rand -hex 20
 ```
 
 ### 2.2 建立命名空間與 Secret
+> ⚠️ **注意**：Secret 中的 Key 名稱必須精確為 `password` 與 `api_token` (小寫底線)，否則 Pod 會因為找不到 Key 而卡在 Init 狀態。
+
 ```bash
 # 創建專用命名空間
 kubectl create namespace netbox
@@ -60,7 +62,7 @@ kubectl create namespace netbox
 # 將下方 '您的自訂Token' 替換為剛才產生的 40 字元字串
 kubectl create secret generic netbox-superuser \
   --from-literal=password='您的自訂密碼' \
-  --from-literal=apiToken='您的自訂Token' \
+  --from-literal=api_token='您的自訂Token' \
   -n netbox
 ```
 
