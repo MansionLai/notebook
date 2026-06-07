@@ -15,7 +15,7 @@ permalink: /netbox/
 
 ### 1. [Netbox 架構詳解](./architecture.md)
 - Netbox 核心系統架構（UI層、業務邏輯層、數據層）
-- PostgreSQL 和 Redis 的角色
+- PostgreSQL 和 Valkey 的角色
 - 整體數據流和通信機制
 - 架構圖和流程圖
 
@@ -29,14 +29,14 @@ permalink: /netbox/
 - 官方 Netbox Helm chart 結構解析
 - 逐步部署 Netbox Helm chart
 - 部署 PostgreSQL StatefulSet
-- 部署 Redis 緩存層
+- 部署 Valkey 緩存層
 - 驗證所有 pod 狀態
 - 配置 port-forward 訪問 NetBox UI（8080；若從 VM 外部連線需先放行 NSG）
 
 ### 4. [配置參考表](./configuration-reference.md)
 - NetBox pod 完整配置選項
 - PostgreSQL StatefulSet 配置
-- Redis 配置
+- Valkey 配置
 - 網絡和存儲配置
 - 適合作為速查手冊
 
@@ -44,7 +44,7 @@ permalink: /netbox/
 - 常見部署問題和解決方案
 - Pod 日誌查詢方法
 - 數據庫連接診斷
-- Redis 緩存驗證
+- Valkey 緩存驗證
 - 性能監控和優化建議
 
 ### 6. [備份與災難復原](./backup_and_disaster_recovery.md)
@@ -62,7 +62,6 @@ permalink: /netbox/
 | 2. 部署與驗證 | 第 4-7 天 | 掌握 Helm 結構、完成部署與驗證 | deployment-steps.md, troubleshooting.md |
 | 3. 文檔精通 | 第 8+ 天 | 精熟配置選項，可向同事介紹 | architecture.md, configuration-reference.md |
 
-
 ## 🏗️ 系統要求
 
 - **Azure subscription**
@@ -78,10 +77,11 @@ permalink: /netbox/
 本指南包含以下圖表幫助理解系統：
 
 - **架構圖** — Azure VM 3 節點 K3s 叢集和 pod 分布
-- **數據流圖** — Netbox、PostgreSQL、Redis 的通信
+- **數據流圖** — Netbox、PostgreSQL、Valkey 的通信
 - **Helm 部署流程** — Chart 到 Kubernetes resources 的轉換
 - **故障處置機制圖** — Azure VM 與 K8s 服務恢復流程
 - **配置參考表** — 所有重要設置的快速查詢
+
 
 ---
 

@@ -22,7 +22,7 @@ netbox/
 ├── values.yaml             # 默認配置值（最重要）
 ├── charts/                 # 依賴 chart
 │   ├── postgresql/         # PostgreSQL chart
-│   └── redis/              # Redis chart
+│   └── valkey/             # Valkey chart (取代 Redis)
 ├── templates/              # Kubernetes 資源模板
 └── README.md               # 使用文檔
 ```
@@ -72,17 +72,14 @@ kubectl create secret generic netbox-superuser \
 vi netbox/values.yaml
 ```
 
-### 3.1 超級管理員與存儲設定
-請搜尋對應關鍵字並修改：
+### 3.1 超級管理員
+請搜尋關鍵字並修改：
 *   **搜尋 `superuser:`**：將 `existingSecret` 設為 `"netbox-superuser"`。
-*   **搜尋 `postgresql:` 下的 `persistence:`**：
-    *   `storageClassName: "local-path"`
-    *   `size: 5Gi`
 
-### 3.2 組件資源限制 (CPU/Memory)
-請搜尋各組件下的 `resources: {}` 並替換為以下格式：
+### 3.2 組件資源與存儲設定 (需手動新增/替換)
+由於原始 `values.yaml` 可能未列出所有子組件配置，請搜尋對應父節點（如 `postgresql:`），並在其下方 **手動新增或替換** 為以下完整的 YAML 區塊：
 
-#### 1. NetBox 核心 (搜尋第一個 `resources:`)
+#### 1. NetBox 核心 (搜尋第一個 `resources: {}`)
 ```yaml
 resources:
   requests:
@@ -93,7 +90,7 @@ resources:
     memory: 2Gi
 ```
 
-#### 2. NetBox Worker (搜尋 `worker:` 下的 `resources:`)
+#### 2. NetBox Worker (搜尋 `worker:` 下的 `resources: {}`)
 ```yaml
 resources:
   requests:
@@ -104,27 +101,41 @@ resources:
     memory: 1Gi
 ```
 
-#### 3. PostgreSQL (搜尋 `postgresql:` 下的 `resources:`)
+#### 3. PostgreSQL (搜尋 `postgresql:`，在其下方新增 `primary` 區塊)
 ```yaml
-resources:
-  requests:
-    cpu: 200m
-    memory: 512Mi
-  limits:
-    cpu: 500m
-    memory: 1Gi
+postgresql:
+  enabled: true
+  auth:
+    username: netbox
+    database: netbox
+  primary:
+    persistence:
+      enabled: true
+      storageClassName: "local-path"
+      size: 5Gi
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
 ```
 
-#### 4. Redis (搜尋 `redis:` 下的 `resources:`)
+#### 4. Valkey (原 Redis，搜尋 `valkey:`，在其下方新增 `primary` 區塊)
 ```yaml
-resources:
-  requests:
-    cpu: 100m
-    memory: 256Mi
-  limits:
-    cpu: 200m
-    memory: 512Mi
+valkey:
+  enabled: true
+  primary:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 200m
+        memory: 512Mi
 ```
+
 
 
 ## 第 4 步：驗證配置（Dry Run）
@@ -160,7 +171,48 @@ kubectl get pods -n netbox
 # netbox-xxx                    1/1     Running   0          2m
 # netbox-worker-xxx             1/1     Running   0          2m
 # postgresql-0                  1/1     Running   0          3m
-# redis-master-0                1/1     Running   0          3m
+# valkey-primary-0              1/1     Running   0          3m
+```
+
+### 步驟 6.2：詳細檢查 Pod 詳情
+
+```bash
+# 查看某個 pod 詳情
+kubectl describe pod netbox-xxx -n netbox
+
+# 查看 pod 日誌
+kubectl logs netbox-xxx -n netbox
+```
+
+### 步驟 6.3：檢查 PostgreSQL 連接
+
+```bash
+# 進入 PostgreSQL pod
+kubectl exec -it postgresql-0 -n netbox -- bash
+
+# 在 pod 內連接數據庫 (密碼預設為 netbox)
+psql -U netbox -d netbox
+
+# 驗證數據庫
+\l  # 列出所有數據庫
+\dt  # 列出所有表
+
+# 退出
+exit
+```
+
+### 步驟 6.4：檢查 Valkey 連接
+
+```bash
+# 進入 Valkey pod
+kubectl exec -it valkey-primary-0 -n netbox -- valkey-cli
+
+# 檢查服務狀態
+INFO server
+DBSIZE  # 查看存儲的 key 數量
+
+# 退出
+exit
 ```
 
 ## 第 7 步：配置外部訪問
