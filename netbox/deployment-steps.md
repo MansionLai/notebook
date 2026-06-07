@@ -112,15 +112,18 @@ worker:
       memory: 1Gi
 ```
 
-#### 3. PostgreSQL (搜尋 `postgresql:`，新增 `architecture`、`primary` 與 `readReplicas` 區塊)
+#### 3. PostgreSQL (搜尋 `postgresql:`，新增 `auth` 與 `existingSecret` 配置)
 ```yaml
 postgresql:
   enabled: true
-  # 必須設定為 replication 才能啟動多個 Pod
-  architecture: "replication"
   auth:
     username: netbox
     database: netbox
+    # 使用 Secret 管理密碼 (避免明文寫入 values.yaml)
+    existingSecret: "netbox-postgresql-secret"
+    secretKeys:
+      userPasswordKey: "password"
+  architecture: "replication"
   primary:
     persistence:
       enabled: true
@@ -134,7 +137,6 @@ postgresql:
         cpu: 500m
         memory: 1Gi
   readReplicas:
-    # 設定為 1 會產生 1 個 Replica Pod (加上 Primary 總共 2 個)
     replicaCount: 1
     resources:
       requests:
