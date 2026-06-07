@@ -76,11 +76,12 @@ vi netbox/values.yaml
 請搜尋關鍵字並修改：
 *   **搜尋 `superuser:`**：將 `existingSecret` 設為 `"netbox-superuser"`。
 
-### 3.2 組件資源與存儲設定 (需手動新增/替換)
-由於原始 `values.yaml` 可能未列出所有子組件配置，請搜尋對應父節點（如 `postgresql:`），並在其下方 **手動新增或替換** 為以下完整的 YAML 區塊：
+### 3.2 組件資源、副本數與存儲設定 (需手動新增/替換)
+> ⚠️ **重要提醒**：當 `replicaCount > 1` 時，若 Pod 分散在不同節點，必須使用 **ReadWriteMany (RWX)** 類型的儲存（如 Azure File 或 NFS）才能共享 Media 檔案。本實驗使用 `local-path` (RWO)，副本數設為 2 可能導致磁碟掛載衝突或資料不一致。
 
-#### 1. NetBox 核心 (搜尋第一個 `resources: {}`)
+#### 1. NetBox 核心 (搜尋第一個 `replicaCount:` 與 `resources: {}`)
 ```yaml
+replicaCount: 2
 resources:
   requests:
     cpu: 500m
@@ -90,24 +91,28 @@ resources:
     memory: 2Gi
 ```
 
-#### 2. NetBox Worker (搜尋 `worker:` 下的 `resources: {}`)
+#### 2. NetBox Worker (搜尋 `worker:` 下的 `replicaCount:` 與 `resources: {}`)
 ```yaml
-resources:
-  requests:
-    cpu: 200m
-    memory: 512Mi
-  limits:
-    cpu: 500m
-    memory: 1Gi
+worker:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
 ```
 
-#### 3. PostgreSQL (搜尋 `postgresql:`，在其下方新增 `primary` 區塊)
+#### 3. PostgreSQL (搜尋 `postgresql:`，新增 `primary` 區塊與 `replicaCount`)
 ```yaml
 postgresql:
   enabled: true
   auth:
     username: netbox
     database: netbox
+  # 設定為 1 會產生 1 Primary + 1 Replica = 2 Pods
+  replicaCount: 1 
   primary:
     persistence:
       enabled: true
@@ -122,7 +127,7 @@ postgresql:
         memory: 1Gi
 ```
 
-#### 4. Valkey (原 Redis，搜尋 `valkey:`，在其下方新增 `primary` 區塊)
+#### 4. Valkey (搜尋 `valkey:`，新增 `primary` 區塊與 `replicaCount`)
 ```yaml
 valkey:
   enabled: true
@@ -134,6 +139,9 @@ valkey:
       limits:
         cpu: 200m
         memory: 512Mi
+  replica:
+    # 設定為 1 會產生 1 Primary + 1 Replica = 2 Pods
+    replicaCount: 1 
 ```
 
 
