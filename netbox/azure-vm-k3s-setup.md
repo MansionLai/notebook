@@ -65,6 +65,11 @@ az vm open-port \
   --name netbox-k3s-cp-01 \
   --port 6443
 
+az vm open-port \
+  --resource-group $RG \
+  --name netbox-k3s-cp-01 \
+  --port 8080
+
 az vm create \
   --resource-group $RG \
   --name netbox-k3s-worker-01 \
