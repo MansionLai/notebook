@@ -24,34 +24,18 @@ netbox/
 │   ├── postgresql/         # PostgreSQL chart
 │   └── redis/              # Redis chart
 ├── templates/              # Kubernetes 資源模板
-│   ├── deployment.yaml     # Netbox Deployment
-│   ├── service.yaml        # Service 配置
-│   ├── configmap.yaml      # 配置文件
-│   ├── secret.yaml         # 敏感信息
-│   ├── ingress.yaml        # Ingress 配置
-│   └── statefulset.yaml    # PostgreSQL StatefulSet
 └── README.md               # 使用文檔
 ```
 
-## 前置準備
-
-- Azure VM K3s 叢集已運行
-- kubectl 已配置
-- Helm 3 已安裝
-- 資源群組 `mansion_k3s_netbox` 已建立
-- 至少 30GB 可用儲存空間
-
-## 第 1 步：添加 Helm Repository
+## 第 1 步：添加 Helm Repository 並拉取 Chart
 
 ```bash
 # 添加官方 NetBox Helm repo
 helm repo add netbox https://charts.netbox.oss.netboxlabs.com/
-
-# 更新 repo
 helm repo update
 
-# 驗證
-helm repo list
+# 拉取官方原始碼至本地進行修改
+helm pull netbox/netbox --untar
 ```
 
 ## 第 2 步：創建命名空間與 Secret
@@ -80,86 +64,30 @@ kubectl create secret generic netbox-superuser \
   -n netbox
 ```
 
-### 重新練習時的 Rollback 到 Step 2
+## 第 3 步：配置本地 Values 檔案
 
-如果你已經做完 step3~step5、想回到只有叢集和 namespace 的狀態：
-
-```bash
-# 移除 Helm release
-helm -n netbox uninstall netbox
-
-# 移除 Secret
-kubectl delete secret netbox-superuser -n netbox
-
-# 如果你也想清掉 step3 產生的本地檔案
-rm -rf netbox/
-rm -f netbox-values.yaml
-```
-
-## 第 3 步：準備 Values 配置文件
+您可以直接修改 `netbox/values.yaml` 中的預設值。請使用編輯器（如 `vi` 或 `nano`）搜尋並修改以下關鍵配置：
 
 ```bash
-# 拉取官方 chart 以查看默認值 (僅作參考)
-helm pull netbox/netbox --untar
-
-# 創建自訂 values 文件
-cat > netbox-values.yaml << 'EOF'
-# Superuser 配置 (引用預先建立的 Secret)
-superuser:
-  name: admin
-  email: admin@example.com
-  existingSecret: netbox-superuser
-
-# NetBox 副本數
-replicaCount: 1
-
-# Netbox 容器資源
-resources:
-  limits:
-    cpu: 1000m
-    memory: 2Gi # 提高內存以防止 Migration 時 OOM
-  requests:
-    cpu: 500m
-    memory: 1Gi
-
-# PostgreSQL 配置
-postgresql:
-  enabled: true
-  architecture: standalone
-  primary:
-    persistence:
-      enabled: true
-      size: 5Gi
-      storageClassName: local-path
-  auth:
-    username: netbox
-    password: netbox
-    database: netbox
-
-# Redis 配置
-redis:
-  enabled: true
-  architecture: standalone
-  auth:
-    enabled: false
-
-# Service 配置
-service:
-  type: ClusterIP
-  port: 80
-  targetPort: 8001
-EOF
-
-cat netbox-values.yaml
+vi netbox/values.yaml
 ```
+
+### 關鍵修改清單：
+
+| 項目 | 搜尋關鍵字 | 建議設定值 | 說明 |
+| :--- | :--- | :--- | :--- |
+| **超級管理員** | `superuser:` | `existingSecret: "netbox-superuser"` | 引用 Step 2 建立的 Secret |
+| **核心記憶體** | `resources:` | `memory: 2Gi` | 確保初次 Migration 成功 |
+| **Worker 記憶體** | `worker:` 下的 `resources:` | `memory: 1Gi` | 背景任務所需記憶體 |
+| **資料庫儲存類** | `postgresql:` 下的 `storageClassName:` | `"local-path"` | K3s 預設儲存類 |
+| **資料庫大小** | `postgresql:` 下的 `size:` | `5Gi` | 測試環境建議值 |
 
 ## 第 4 步：驗證配置（Dry Run）
 
 ```bash
-# 模擬部署以驗證配置
-helm install netbox oci://ghcr.io/netbox-community/netbox-chart/netbox \
+# 指向本地 ./netbox 資料夾進行模擬部署
+helm install netbox ./netbox \
   -n netbox \
-  -f netbox-values.yaml \
   --dry-run --debug
 ```
 
@@ -167,9 +95,8 @@ helm install netbox oci://ghcr.io/netbox-community/netbox-chart/netbox \
 
 ```bash
 # 部署 NetBox 及其依賴
-helm install netbox oci://ghcr.io/netbox-community/netbox-chart/netbox \
-  -n netbox \
-  -f netbox-values.yaml
+helm install netbox ./netbox \
+  -n netbox
 
 # 等待 3-5 分鐘讓 pod 啟動（初次部署會執行資料庫 Migration，需較長時間）
 kubectl get pods -n netbox -w
@@ -191,91 +118,21 @@ kubectl get pods -n netbox
 # redis-master-0                1/1     Running   0          3m
 ```
 
-### 步驟 6.2：詳細檢查 Pod 詳情
-
-```bash
-# 查看某個 pod 詳情
-kubectl describe pod netbox-xxx -n netbox
-
-# 查看 pod 日誌
-kubectl logs netbox-xxx -n netbox
-
-# 監控日誌輸出
-kubectl logs -f netbox-xxx -n netbox
-```
-
-### 步驟 6.3：檢查 PostgreSQL 連接
-
-```bash
-# 進入 PostgreSQL pod
-kubectl exec -it postgresql-0 -n netbox -- bash
-
-# 在 pod 內連接數據庫
-psql -U netbox -d netbox
-
-# 驗證數據庫
-\l  # 列出所有數據庫
-\dt  # 列出所有表
-
-# 退出
-exit
-```
-
-### 步驟 6.4：檢查 Redis 連接
-
-```bash
-# 進入 Redis master pod
-kubectl exec -it redis-master-0 -n netbox -- redis-cli
-
-# 檢查 Redis 狀態
-INFO server
-DBSIZE  # 查看存儲的 key 數量
-
-# 退出
-exit
-```
-
 ## 第 7 步：配置外部訪問
 
-### 選項 1：使用 Port Forward（快速測試）
+### 使用 Port Forward 直接對外開放
 
-```bash
-# 轉發本地端口到 Netbox Service
-kubectl port-forward svc/netbox 8080:80 -n netbox
-
-# 在瀏覽器中打開
-# http://localhost:8080
-```
-
-### 選項 2：使用 NodePort（持久訪問）
-
-編輯 service 類型：
-
-```bash
-kubectl edit svc netbox -n netbox
-
-# 將 type: ClusterIP 改為 type: NodePort
-
-# 查看分配的端口
-kubectl get svc netbox -n netbox
-
-# 預期輸出會顯示 PORT (例如 80:31234/TCP)
-# 訪問：http://<cp-public-ip>:31234
-```
-
-### 選項 3：直接對外開 port-forward
-
-如果要從瀏覽器直接打 `http://<cp-public-ip>:8080`，請先在 Azure NSG 放行 `8080`，然後用：
+如果要從瀏覽器直接打 `http://<VM-Public-IP>:8080`，請先在 Azure NSG 放行 `8080`，然後用：
 
 ```bash
 kubectl port-forward --address 0.0.0.0 svc/netbox 8080:80 -n netbox
 ```
 
-## 第 8 步：初始化 Netbox（可選，若已在 Step 2 建立 Secret 則跳過）
+## 第 8 步：初始化與維護
 
-如果您在 Step 2 & 3 已經使用了 `existingSecret`，NetBox 在啟動時會自動建立該管理員帳號。
+### 手動重設管理員密碼
 
-### 如果需要手動重設密碼：
+如果您需要手動修改密碼：
 
 ```bash
 # 找到一個 NetBox pod
@@ -286,35 +143,9 @@ kubectl exec -it $NETBOX_POD -n netbox -- \
   python manage.py changepassword admin
 ```
 
-## 第 9 步：功能驗證
+## 故障排查
 
-### 驗證清單
-
-- [ ] Web UI 可訪問
-- [ ] 可以登錄（admin 用戶）
-- [ ] 可以添加設備（Device > New Device）
-- [ ] 可以添加 IP 地址（IPAM > IP Addresses）
-- [ ] API 可訪問（http://localhost:8080/api/）
-- [ ] 實時搜索功能正常
-
-### 性能檢查
-
-```bash
-# 檢查 pod 資源使用
-kubectl top pods -n netbox
-```
-
-## 故障排查常見命令
-
-### 資源不足排查（優先順序）
-
-1. **內存不足 (OOMKilled)**：Netbox 在執行 `manage.py migrate` 時非常消耗內存，建議限制至少設為 `2Gi` 以確保 成功。
-2. 檢查 netbox-worker 的記憶體使用量是否過高。
-
-```bash
-# 查看部署狀態
-kubectl get deployment -n netbox
-
-# 清理部署（如需重新開始）
-helm uninstall netbox -n netbox
-```
+### 資源不足 (OOMKilled)
+如果 Netbox Pod 一直重啟且狀態顯示為 `OOMKilled`，代表 `values.yaml` 中的 `memory` 給得不夠。
+*   檢查 `netbox/values.yaml` 中的 `resources.limits.memory` 是否已設為 `2Gi`。
+*   修改後執行 `helm upgrade netbox ./netbox -n netbox`。
