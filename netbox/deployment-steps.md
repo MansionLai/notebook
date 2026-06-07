@@ -56,12 +56,24 @@ helm repo list
 
 ## 第 2 步：創建命名空間與 Secret
 
+### 2.1 產生 API Token
+NetBox 的 API Token 有嚴格的長度與格式限制：
+*   **長度**：必須至少 **40 個字元**。
+*   **格式**：僅限 **十六進位 (Hexadecimal)** 字元 (`0-9`, `a-f`)。
+
+建議使用 `openssl` 產生一個隨機 Token：
+```bash
+# 產生 40 個字元的隨機 Hex 字串
+openssl rand -hex 20
+```
+
+### 2.2 建立命名空間與 Secret
 ```bash
 # 創建專用命名空間
 kubectl create namespace netbox
 
-# 建立 Superuser 憑證 Secret (安全建議方式)
-# 注意：這會建立一個名為 netbox-superuser 的 Secret，供 Helm Chart 引用
+# 建立 Superuser 憑證 Secret
+# 將下方 '您的自訂Token' 替換為剛才產生的 40 字元字串
 kubectl create secret generic netbox-superuser \
   --from-literal=password='您的自訂密碼' \
   --from-literal=apiToken='您的自訂Token' \
