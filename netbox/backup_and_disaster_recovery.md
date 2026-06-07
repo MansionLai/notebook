@@ -58,17 +58,28 @@ Velero 是 K8s 社群的黃金標準。
     3. 若遇特殊架構變更導致 Velero 無法還原，則改用 `pg_dump` 手動執行資料庫還原（最穩健）。
 
 ---
-
 ## 附錄：指令參考
 
 ### 使用 pg_dump 備份
 ```bash
-# 備份 PostgreSQL
-kubectl exec -it netbox-postgresql-primary-0 -n netbox -- \
-  pg_dump -U netbox -d netbox -Fc > netbox-db-backup.dump
+# 備份 PostgreSQL (在管理機執行)
+kubectl -n netbox exec netbox-postgresql-primary-0 -- \
+  bash -c "PGPASSWORD='您的密碼' pg_dump -U netbox -d netbox -Fc" > netbox-db-backup.dump
+```
+
+### 使用 pg_restore 還原
+```bash
+# 1. 將備份檔傳入 Pod
+kubectl -n netbox cp netbox-db-backup.dump netbox-postgresql-primary-0:/tmp/netbox.dump
+
+# 2. 執行還原 (參數 -c 表示在還原前先清除舊資料庫物件，確保乾淨還原)
+kubectl -n netbox exec -it netbox-postgresql-primary-0 -- \
+  bash -c "PGPASSWORD='您的密碼' pg_restore -U netbox -d netbox -v -c /tmp/netbox.dump"
 ```
 
 ### 使用 Velero 備份 (S3-Compatible 範例)
+（內容不變...）
+
 在安裝 Velero 時，指向您的內網 S3 儲存（如 MinIO）：
 
 ```bash
