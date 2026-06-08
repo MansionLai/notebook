@@ -54,6 +54,7 @@ Velero 是 K8s 社群的黃金標準。
 | **B. 分站 Push 備份** | 各 Site 本地執行 `pg_dump` 後，將備份推送至 Central 統一的 S3/MinIO | 權限隔離、Site 網路中斷時容錯高 | 各 Site 需保存 S3 存取金鑰 | 叢集規模大、重視安全權限邊界 |
 | **C. pgBackRest 倉庫** | Central 建立 pgBackRest Repo，各 Site DB 透過 TLS 傳輸 WAL 與增量備份 | 支援增量備份與時間點還原 (PITR)、省頻寬 | 配置最複雜，需維運 DB Agent | 資料庫龐大、對 RPO 要求極高 |
 | **D. 中央唯讀匯總副本** | 利用 PostgreSQL 邏輯複製 (Logical Replication) 即時將各 Site 資料同步至 Central 庫 | 資料即時同步、便於中央進行跨站唯讀查詢 | 需網絡持續連線、Schema 變更維護成本高 | 重視即時災備、需跨站匯總查詢 |
+| **E. 中央異地串流副本** | 將各 Site 的串流複製 (Streaming Replication) 終端延伸至 Central 叢集建立溫備 (Standby) | **RPO 趨近於零**、災難發生時可於中央快速提升 (Promote) 接管 | 對頻寬與延遲要求較高、僅能 1:1 複製 | **頂級災備 (Advanced DR)**：極端縮短復原時間 |
 
 ---
 
@@ -81,6 +82,16 @@ pg_dump -U netbox -d netbox -Fc | mc pipe central-minio/netbox-backups/site-a/db
 #### 4. 中央唯讀匯總副本 (Logical Replication)
 各 Site 的 PostgreSQL 作為 **Publisher**，Central 端的大型 PostgreSQL 作為 **Subscriber**，訂閱各分站的表結構。
 * **特點**：Central 隨時保有一份與分站近乎同步的唯讀資料，備份作業只需在 Central 本地對匯總庫進行即可。
+
+#### 5. 中央異地串流副本 (Streaming Replication DR Hub) - 整合進階 DR
+這是將「資料庫單向複製」與「多叢集架構」深度整合的方案。在 Central 叢集為每個 Site 預留一個 `postgresql-dr` 實例：
+
+*   **同步機制**：Site Primary DB 透過物理流複製 (Physical Streaming Replication) 持續將 WAL 傳送至 Central 的 Standby Pod。
+*   **優勢**：
+    *   **秒級 RPO**：異地同步延遲通常在秒級甚至毫秒級。
+    *   **集中化災備**：中央管理機房即為所有分站的「救命草」，當分站 K8s 徹底毀滅時，中央可立即將 Standby 提升為 Primary，並暫時掛載 NetBox UI 提供服務。
+*   **部署實務**：建議在 Central 使用 `StatefulSet` 配合 `storageClassName` 對接持久磁碟，確保存放分站的物理副本。
+
 
 ---
 
