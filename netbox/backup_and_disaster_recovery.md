@@ -1,149 +1,108 @@
 ---
-title: NetBox Backup and Disaster Recovery
+title: NetBox 多叢集備份與災難復原 (Central-to-Site)
 parent: Netbox
 nav_order: 6
 ---
 
-# NetBox Backup and Disaster Recovery
+# NetBox 多叢集備份與災難復原架構 (Central-to-Site)
 
-本指南探討 NetBox 在 Kubernetes 環境下的三種災難復原策略，協助您達成「快速重建」與「資料回復」的目標。
-
-## 方案比較表
-
-| 方案 | 運作方式 | 優點 | 缺點 | 適用情境 |
-|---|---|---|---|---|
-| **IaC 重建 + 資料還原 (`pg_dump`)** | 使用 GitLab IaC 重建環境，手動匯入資料庫 | 極度乾淨、不依賴舊環境、易於升級 | 需維護還原腳本；若備份頻率不足，災難時會有資料遺失 (RPO 較高) | **推薦**：災難復原、版本升級 |
-| **Kubernetes 快照 (Velero)** | 備份 PVC、Secrets、ConfigMaps 與資源 | 自動化程度高、可還原整個 Namespace | 需高權限 (Cluster Admin)；依賴 K8s 環境 | 叢集內局部故障、快速整組回滾 |
-| **資料庫單向複製 (僅供 DR)** | 使用 PostgreSQL 串流複製 (Streaming Replication) 將資料由主庫同步到備份庫 | 資料同步時延極低 | **非自動切換**，需人工提升備份庫為 Primary；若操作錯誤極易導致資料遺失 | **進階災備**：嚴格的 RPO 要求 |
+本指南專為 **「中央 (Central K8s) 控管多個分站 (Site K8s)」** 的架構所設計。在此情境下，每個 Site 皆獨立部署 NetBox，而中央叢集負責統一的資料備份、監控與異地災備 (DR)。
 
 ---
 
-## 策略分析
+## 1. 核心架構前提
 
-### 1. IaC 重建 + 資料還原 (推薦)
-這是您目前偏好的方式。架構穩定性最高，且不會有「帶入舊環境配置錯誤」的問題。
-- **重建環境**：透過 GitLab 中的 `values.yaml` 與 `helm install` 快速拉起全新的叢集。
-- **恢復資料**：使用 `pg_dump` 邏輯備份 SQL 資料。因為這是標準 SQL，即便從 v1.6.4 升級到 v2.x 也能成功。
-
-### 2. Kubernetes 原生方案 (Velero)
-Velero 是 K8s 社群的黃金標準。
-- **權限要求**：由於 Velero 需要存取叢集內所有 Namespace 的資源與系統層級的 `CustomResourceDefinitions` (CRDs) 與 `PersistentVolume` 物件，它 **必須具備叢集管理員 (Cluster Admin) 或極高權限的 ServiceAccount**。這在嚴格合規的企業環境下是需要特別考量的權限邊界。
-- **儲存選擇**：不強制依賴公有雲。
-- **企業內部/地端環境方案 (On-Premises)**：
-    - **MinIO**：輕量、部署快速，企業內部標準 S3 方案。
-    - **Ceph (RADOS Gateway)**：若機房已有 Ceph，可直接利用其 S3 RGW 介面作為備份後端。
-- **優勢**：當您的 `netbox-superuser` Secret 或 `media` 資料夾非常複雜時，Velero 可以一鍵還原 Namespace 的所有狀態。
-
-### 3. 資料庫單向複製 (進階 DR)
-這並非 NetBox 的「高可用 (HA)」方案。這是一個「異地災難復原 (DR)」手段。
-- **重要警示**：NetBox 的架構嚴格依賴單一主資料庫，不具備多寫入同步機制。單向複製 **不能** 當作 Active-Active 架構使用。
-- **風險**：若在未正確停止 Primary 的情況下提升 (Promote) 備份庫，極易造成 **Split-Brain (腦裂)**，導致資料損毀。
-- **實務建議**：除非您有極高的 RPO 要求且有極強的 PostgreSQL 維運能力，否則請優先採用 **方案 1 (IaC+pg_dump)**。
+*   **中央叢集 (Central K8s)**：擁有存取各 Site K8s API 的權限，具備大容量儲存 (如 MinIO/Ceph) 或專屬資料庫。
+*   **分站叢集 (Site K8s)**：獨立運行 NetBox 服務與 PostgreSQL 資料庫。
+*   **設計目標**：在不影響分站效能的前提下，達成資料集中化與 RPO/RTO 的最佳平衡。
 
 ---
 
-## 多叢集 (Central-to-Site) 備份架構方案
+## 2. 備份與災備方案比較表
 
-在 **「中央有一套 Central K8s，可存取各分站 Site K8s，且各 Site 皆獨立部署 NetBox」** 的架構前提下，有以下四種備份設計方案可供選擇：
-
-### 多叢集方案比較表
-
-| 方案 | 運作方式 | 優點 | 缺點 | 適用情境 |
+| 方案類型 | 技術手段 | RPO (資料遺失量) | 優點 | 適用情境 |
 | :--- | :--- | :--- | :--- | :--- |
-| **A. 中央 Pull 備份** | Central 透過 `kubeconfig` 遠端對各 Site 執行 `pg_dump` 並拉回 Central 儲存 | 集中式管理、Site 端免設定憑證與排程 | Central 需高權限 (Exec)、網路傳輸量大 | Site 數量少、重視中央統一管控 |
-| **B. 分站 Push 備份** | 各 Site 本地執行 `pg_dump` 後，將備份推送至 Central 統一的 S3/MinIO | 權限隔離、Site 網路中斷時容錯高 | 各 Site 需保存 S3 存取金鑰 | 叢集規模大、重視安全權限邊界 |
-| **C. pgBackRest 倉庫** | Central 建立 pgBackRest Repo，各 Site DB 透過 TLS 傳輸 WAL 與增量備份 | 支援增量備份與時間點還原 (PITR)、省頻寬 | 配置最複雜，需維運 DB Agent | 資料庫龐大、對 RPO 要求極高 |
-| **D. 中央唯讀匯總副本** | 利用 PostgreSQL 邏輯複製 (Logical Replication) 即時將各 Site 資料同步至 Central 庫 | 資料即時同步、便於中央進行跨站唯讀查詢 | 需網絡持續連線、Schema 變更維護成本高 | 重視即時災備、需跨站匯總查詢 |
-| **E. 中央異地串流副本** | 將各 Site 的串流複製 (Streaming Replication) 終端延伸至 Central 叢集建立溫備 (Standby) | **RPO 趨近於零**、災難發生時可於中央快速提升 (Promote) 接管 | 對頻寬與延遲要求較高、僅能 1:1 複製 | **頂級災備 (Advanced DR)**：極端縮短復原時間 |
+| **A. 集中式拉取 (Pull)** | `pg_dump` via `kubectl exec` | 高 (取決於排程) | Site 端零配置、中央統一管控 | 站點數量少、初階集中管理 |
+| **B. 分站推送 (Push)** | `pg_dump` to Central S3 | 中 (取決於排程) | 權限邊界清晰、網路容錯高 | 大規模叢集、重視安全隔離 |
+| **C. WAL 增量倉庫** | pgBackRest Repo | **極低** (PITR) | 支援時間點還原、節省 WAN 頻寬 | 大型資料庫、對 RPO 要求極高 |
+| **D. 邏輯匯總副本** | Logical Replication | 秒級 | 便於中央進行跨站唯讀匯總查詢 | 重視即時查詢與輕量災備 |
+| **E. 異地串流溫備** | Streaming Replication | **趨近於零** | **災難接管速度最快** (溫備模式) | **進階災備**：關鍵業務不可中斷 |
 
 ---
 
-### 詳細方案說明
+## 3. 方案詳解與實施架構
 
-#### 1. 中央 Pull 備份 (Centralized Pull Backup)
-在 Central K8s 部署 CronJob，利用 Kubernetes Secret 保存的各站 `kubeconfig`：
-```bash
-# Central CronJob 遠端備份 Site A 範例
-kubectl --kubeconfig=/etc/kubeconfigs/site-a-config exec -n netbox netbox-postgresql-primary-0 -- \
-  bash -c "PGPASSWORD='pwd' pg_dump -U netbox -d netbox -Fc" > /backups/site-a-$(date +%F).dump
-```
+### A. 中央 Pull 備份 (Centralized Pull)
+在 Central K8s 部署 CronJob，利用 Secret 保存的各站 `kubeconfig` 遠端下指令。
+*   **機制**：`kubectl --kubeconfig=site-a exec pg_pod -- pg_dump`
+*   **建議**：僅適用於 Site 數量 < 5 的環境。
 
-#### 2. 分站 Push 備份 (Decentralized Push to Central Storage)
-在 Central 部署 MinIO 作為 S3-Compatible 儲存。各 Site 本地部署備份 Job，直接將備份推送至專屬的 Bucket Prefix：
-```bash
-# Site A 本地 Job 備份並上傳
-pg_dump -U netbox -d netbox -Fc | mc pipe central-minio/netbox-backups/site-a/db-latest.dump
-```
+### B. 分站 Push 備份 (Decentralized Push)
+在 Central 部署 MinIO 作為 S3 儲存。各 Site 本地部署備份 Job。
+*   **機制**：`pg_dump | mc pipe central-minio/site-a/`
+*   **優勢**：即便中央叢集短暫維護，分站仍可繼續執行本地備份並排隊推送。
 
-#### 3. pgBackRest 中央備份倉庫
-在 Central 運行 pgBackRest Dedicated Repo 服務。各 Site PostgreSQL 的 `postgresql.conf` 設定 `archive_command`：
-* **特點**：每次備份只傳輸變更的 WAL 日誌，大幅降低 WAN（廣域網路）的流量消耗。
+### C. pgBackRest 集中化倉庫 (Recommended for Scale)
+在 Central 建立專屬的 pgBackRest Repo Server，各站資料庫作為 Client。
+*   **特點**：
+    *   **增量傳輸**：僅傳送變更的資料塊，對 WAN 友善。
+    *   **自我修復**：具備強大的校驗功能。
 
-#### 4. 中央唯讀匯總副本 (Logical Replication)
-各 Site 的 PostgreSQL 作為 **Publisher**，Central 端的大型 PostgreSQL 作為 **Subscriber**，訂閱各分站的表結構。
-* **特點**：Central 隨時保有一份與分站近乎同步的唯讀資料，備份作業只需在 Central 本地對匯總庫進行即可。
+### D. 中央邏輯匯總副本 (Logical Aggregate)
+各 Site PostgreSQL 作為 Publisher，Central 一台大型 PostgreSQL 作為 Subscriber。
+*   **特點**：中央擁有一份「活的」資料，除備份外，還可用於開發 Grafana 報表監控各站 IP 使用率。
 
-#### 5. 中央異地串流副本 (Streaming Replication DR Hub) - 整合進階 DR
-這是將「資料庫單向複製」與「多叢集架構」深度整合的方案。在 Central 叢集為每個 Site 預留一個 `postgresql-dr` 實例：
-
-*   **同步機制**：Site Primary DB 透過物理流複製 (Physical Streaming Replication) 持續將 WAL 傳送至 Central 的 Standby Pod。
-*   **優勢**：
-    *   **秒級 RPO**：異地同步延遲通常在秒級甚至毫秒級。
-    *   **集中化災備**：中央管理機房即為所有分站的「救命草」，當分站 K8s 徹底毀滅時，中央可立即將 Standby 提升為 Primary，並暫時掛載 NetBox UI 提供服務。
-*   **部署實務**：建議在 Central 使用 `StatefulSet` 配合 `storageClassName` 對接持久磁碟，確保存放分站的物理副本。
-
+### E. 中央異地串流副本 (DR Hub / Warm Standby)
+在 Central 叢集為每個 Site 預留一個 `postgresql-dr` 實例。
+*   **機制**：Site Primary DB 物理流複製至 Central Standby Pod。
+*   **DR 切換**：當 Site A 整座機房毀滅時，於中央執行 `pg_ctl promote`，並將中央的 NetBox UI 指向此庫，達成秒級接管。
 
 ---
 
-## 災難復原工作流程 (建議最佳實踐)
+## 4. 災難復原工作流程 (DR Workflow)
 
-針對您希望「快速重建 + Restore 設定與資料」的需求，推薦 **混合策略**：
+針對「快速重建 + Restore 資料」的需求，我們採用 **「IaC + 資料庫還原」** 的混合策略。
 
-1.  **IaC (GitLab)**：負責「環境定義」(K8s Resources, Helm Values)。
-2.  **邏輯備份 (`pg_dump`)**：負責「應用資料」(NetBox 業務資料)。
-3.  **Velero**：負責「自動化備份 K8s 原生配置」(PVC, Secrets)。
+### 第一階段：基礎設施重建 (The Outer Shell)
+1.  **GitLab IaC**：透過 Helm 與 GitLab CI/CD 在新環境（或中央備援區）拉起 NetBox 基礎組件。
+2.  **Velero Restore**：若有備份 K8s 原生物件（Secrets, ConfigMaps, PVC），使用 Velero 快速恢復 Namespace 狀態。
 
-### 實施建議：
-*   **平時**：配置 Velero 自動備份 `netbox` Namespace 到 **S3-Compatible 儲存 (例如地端的 MinIO)**。
-*   **災難時**：
-    1. 執行 IaC 重建基礎設施。
-    2. 若只需還原 NetBox Namespace，直接執行 `velero restore`（速度最快）。
-    3. 若遇特殊架構變更導致 Velero 無法還原，則改用 `pg_dump` 手動執行資料庫還原（最穩健）。
+### 第二階段：資料注入 (The Heart)
+根據備份方案選擇還原路徑：
+*   **方案 A/B**：使用 `pg_restore` 匯入 `.dump` 檔案。
+*   **方案 C**：使用 `pgbackrest restore` 執行時間點還原。
+*   **方案 E**：直接提升 (Promote) 中央的 Standby Pod 為新 Primary。
 
 ---
-## 附錄：指令參考
 
-### 使用 pg_dump 備份
+## 5. 附錄：關鍵指令參考
+
+### 集中式遠端備份 (Pull Example)
 ```bash
-# 備份 PostgreSQL (在管理機執行)
-kubectl -n netbox exec netbox-postgresql-primary-0 -- \
-  bash -c "PGPASSWORD='您的密碼' pg_dump -U netbox -d netbox -Fc" > netbox-db-backup.dump
+# 在中央叢集執行，對 Site-A 進行備份
+kubectl --kubeconfig=/etc/kubeconfigs/site-a-config \
+  exec -n netbox netbox-postgresql-primary-0 -- \
+  bash -c "PGPASSWORD='pwd' pg_dump -U netbox -d netbox -Fc" > site-a-backup.dump
 ```
 
-### 使用 pg_restore 還原
+### 異地溫備提升 (Promote DR Pod)
 ```bash
-# 1. 將備份檔傳入 Pod
-kubectl -n netbox cp netbox-db-backup.dump netbox-postgresql-primary-0:/tmp/netbox.dump
-
-# 2. 執行還原 (參數 -c 表示在還原前先清除舊資料庫物件，確保乾淨還原)
-kubectl -n netbox exec -it netbox-postgresql-primary-0 -- \
-  bash -c "PGPASSWORD='您的密碼' pg_restore -U netbox -d netbox -v -c /tmp/netbox.dump"
+# 當分站故障，在中央提升備援庫
+kubectl -n dr-namespace exec netbox-postgresql-dr-site-a-0 -- \
+  bash -c "pg_ctl promote -D /bitnami/postgresql/data"
 ```
 
-### 使用 Velero 備份 (S3-Compatible 範例)
-（內容不變...）
-
-在安裝 Velero 時，指向您的內網 S3 儲存（如 MinIO）：
-
+### Velero 備份指定站點配置
 ```bash
-velero install \
-  --provider aws \
-  --plugins velero/velero-plugin-for-aws:v1.10.0 \
-  --bucket <minio-bucket-name> \
-  --secret-file ./credentials-velero \
-  --backup-location-config region=minio,s3ForcePathStyle=true,s3Url=http://<minio-internal-url>:9000
+velero backup create site-a-netbox-config \
+  --include-namespaces netbox \
+  --selector "app.kubernetes.io/instance=netbox"
 ```
 
-### 驗證建議
-*   **每月演練**：不建議僅依賴備份檔，請確保 `deployment-steps.md` 中的「重建步驟」在每個季度至少執行一次測試。
-*   **Secret 管理**：確保您的 `netbox-superuser` Secret 關鍵內容（如 `api_token`）同樣備份在安全的地方（例如 GitLab CI/CD Variable 或 Vault）。
+---
+
+## 6. 管理與驗證建議
+
+1.  **分層儲存**：備份檔應至少保留一份於中央叢集的持久儲存，並非同步一份至冷儲存（如 Azure Blob Archive）。
+2.  **定時演練**：每季度選定一個 Site 進行「中央接管演練」，確保 DR 流程在壓力下依然有效。
+3.  **監控指標**：在 Prometheus 中監控「備份成功率」與「流複製延遲時間 (Replication Lag)」。
