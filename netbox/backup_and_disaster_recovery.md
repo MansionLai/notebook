@@ -58,15 +58,18 @@ nav_order: 6
 ### B. pgBackRest 集中化倉庫 (推薦大規模使用)
 在中央部署 pgBackRest Repo 服務。各分站資料庫 Pod 只需配置 `archive_command` 指向中央服務。
 *   **優勢**：pgBackRest 是在應用層運作，不需要 `kubectl exec` 權限，只需網路埠 (TLS) 連通即可。
+*   **實施門檻**：⚠️ **較高**。預設的 NetBox/PostgreSQL 鏡像通常不含 pgBackRest 工具，需自行構建自定義鏡像或掛載 Sidecar 容器，不建議初學者優先採用。
 
 ### C. 中央邏輯匯總副本 (Logical Aggregate)
 在中央部署一套 PostgreSQL 作為 Subscriber，各分站 PostgreSQL 開放連接權限作為 Publisher。
 *   **權限要求**：只需資料庫層級的 `REPLICATION` 角色權限，不涉及 K8s 節點管理或高階 API 存取。
+*   **實施門檻**：**中等**。需確保分站資料庫開啟 `wal_level = logical`（可透過 Helm values 的 `postgresql.primary.extendedConfiguration` 設定）。
 
 ### D. 中央異地串流副本 (DR Hub / Warm Standby - 進階方案)
 在中央部署分站的備援 Pod (Standby)。
 *   **機制**：中央的 Standby Pod 主動連向分站的 Primary DB 拉取串流日誌。
 *   **部署實務**：只需在中央部署普通的 StatefulSet，並在配置中填入分站資料庫的連線字串。
+*   **實施門檻**：**中等**。最符合 Bitnami PostgreSQL 預設架構，且能達成極佳的 RPO。
 
 ---
 
