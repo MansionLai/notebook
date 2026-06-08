@@ -37,40 +37,36 @@ nav_order: 6
 
 | 方案類型 | 技術手段 | RPO (資料遺失) | RTO (恢復速度) | 優點 |
 | :--- | :--- | :--- | :--- | :--- |
-| **A. 集中式拉取 (Pull)** | `pg_dump` | 高 (取決於排程) | 中 (需手動還原) | 零配置、中央管控 |
-| **B. 分站推送 (Push)** | `pg_dump` to S3 | 中 (取決於排程) | 中 (需手動還原) | 權限隔離、網路容錯 |
-| **C. WAL 增量倉庫** | pgBackRest | **極低** (可 PITR) | 快 (自動化還原) | 支援時間點還原、省頻寬 |
-| **D. 邏輯匯總副本** | Logical Replication | 秒級 | 快 (僅需切換連接) | 活資料、便於跨站查詢 |
-| **E. 異地串流溫備** | Streaming Replication | **趨近於零** | **極快** (溫備切換) | **災難接管首選** |
+| **A. 分站推送 (Push)** | `pg_dump` to Central S3 | 中 (取決於排程) | 中 (需手動還原) | 權限隔離、網路容錯 |
+| **B. WAL 增量倉庫** | pgBackRest | **極低** (可 PITR) | 快 (自動化還原) | 支援時間點還原、省頻寬 |
+| **C. 邏輯匯總副本** | Logical Replication | 秒級 | 快 (僅需切換連接) | 活資料、便於跨站查詢 |
+| **D. 異地串流溫備** | Streaming Replication | **趨近於零** | **極快** (溫備切換) | **災難接管首選** |
 
 ---
 
-## 4. 方案詳解與實施架構
+## 4. 方案詳解與實施架構 (User Role 友善方案)
 
-### A. 中央 Pull 備份 (Centralized Pull)
-在 Central K8s 部署 CronJob，利用 Secret 保存的各站 `kubeconfig` 遠端下指令。
-*   **機制**：`kubectl --kubeconfig=site-a exec pg_pod -- pg_dump`
-*   **建議**：僅適用於 Site 數量 < 5 的環境。
+在「具備應用部署權限，但無 Cluster-Admin 權限」的前提下，備份邏輯必須從「中央拉取」轉向「分站推送」或「資料庫層級同步」。
 
-### B. 分站 Push 備份 (Decentralized Push)
-在 Central 部署 MinIO 作為 S3 儲存。各 Site 本地部署備份 Job。
-*   **機制**：`pg_dump | mc pipe central-minio/site-a/`
-*   **優勢**：即便中央叢集短暫維護，分站仍可繼續執行本地備份並排隊推送。
+### A. 分站推送備份 (Decentralized Push - 最易實施)
+在分站 NetBox 所在的 Namespace 部署一個 CronJob。
+*   **機制**：
+    1.  CronJob 在分站本地執行 `pg_dump`。
+    2.  利用分站擁有的網路權限，將備份檔推送至中央叢集的 S3 (如 MinIO) 或其他儲存終端。
+*   **安全性**：不需跨叢集 `kubeconfig`，分站只需持有中央儲存的 Access Key。
 
-### C. pgBackRest 集中化倉庫 (Recommended for Scale)
-在 Central 建立專屬的 pgBackRest Repo Server，各站資料庫作為 Client。
-*   **特點**：
-    *   **增量傳輸**：僅傳送變更的資料塊，對 WAN 友善。
-    *   **自我修復**：具備強大的校驗功能。
+### B. pgBackRest 集中化倉庫 (推薦大規模使用)
+在中央部署 pgBackRest Repo 服務。各分站資料庫 Pod 只需配置 `archive_command` 指向中央服務。
+*   **優勢**：pgBackRest 是在應用層運作，不需要 `kubectl exec` 權限，只需網路埠 (TLS) 連通即可。
 
-### D. 中央邏輯匯總副本 (Logical Aggregate)
-各 Site PostgreSQL 作為 Publisher，Central 一台大型 PostgreSQL 作為 Subscriber。
-*   **特點**：中央擁有一份「活的」資料，除備份外，還可用於開發 Grafana 報表監控各站 IP 使用率。
+### C. 中央邏輯匯總副本 (Logical Aggregate)
+在中央部署一套 PostgreSQL 作為 Subscriber，各分站 PostgreSQL 開放連接權限作為 Publisher。
+*   **權限要求**：只需資料庫層級的 `REPLICATION` 角色權限，不涉及 K8s 節點管理或高階 API 存取。
 
-### E. 中央異地串流副本 (DR Hub / Warm Standby)
-在 Central 叢集為每個 Site 預留一個 `postgresql-dr` 實例。
-*   **機制**：Site Primary DB 物理流複製至 Central Standby Pod。
-*   **DR 切換**：當 Site A 整座機房毀滅時，於中央執行 `pg_ctl promote`，並將中央的 NetBox UI 指向此庫，達成秒級接管。
+### D. 中央異地串流副本 (DR Hub / Warm Standby - 進階方案)
+在中央部署分站的備援 Pod (Standby)。
+*   **機制**：中央的 Standby Pod 主動連向分站的 Primary DB 拉取串流日誌。
+*   **部署實務**：只需在中央部署普通的 StatefulSet，並在配置中填入分站資料庫的連線字串。
 
 ---
 
