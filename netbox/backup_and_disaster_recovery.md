@@ -29,8 +29,6 @@ nav_order: 6
     *   **定義**：從災難發生到**服務恢復正常運作**所需的時間。
     *   **範例**：若重建環境需要 4 小時，還原資料庫需要 2 小時，則 RTO 為 6 小時。
 
-**原則**：RPO/RTO 越短，技術難度與成本通常越高。
-
 ---
 
 ## 3. 備份與災備方案比較表
@@ -39,14 +37,13 @@ nav_order: 6
 | :--- | :--- | :--- | :--- | :--- |
 | **A. 分站推送 (Push)** | `pg_dump` to Central S3 | 中 (取決於排程) | 中 (需手動還原) | 權限隔離、網路容錯 |
 | **B. WAL 增量倉庫** | pgBackRest | **極低** (可 PITR) | 快 (自動化還原) | 支援時間點還原、省頻寬 |
-| **C. 邏輯匯總副本** | Logical Replication | 秒級 | 快 (僅需切換連接) | 活資料、便於跨站查詢 |
-| **D. 異地串流溫備** | Streaming Replication | **趨近於零** | **極快** (溫備切換) | **災難接管首選** |
+| **C. 異地串流溫備** | Streaming Replication | **趨近於零** | **極快** (溫備切換) | **災難接管首選方案** |
 
 ---
 
 ## 4. 方案詳解與實施架構 (User Role 友善方案)
 
-在「具備應用部署權限，但無 Cluster-Admin 權限」的前提下，備份邏輯必須從「中央拉取」轉向「分站推送」或「資料庫層級同步」。
+在「具備應用部署權限，但無 Cluster-Admin 權限」的前提下，我們排除「中央拉取」與「邏輯複製」(經實測有 Sequence 不同步問題)，專注於以下可靠方案：
 
 ### A. 分站推送備份 (Decentralized Push - 最易實施)
 在分站 NetBox 所在的 Namespace 部署一個 CronJob。
@@ -58,22 +55,17 @@ nav_order: 6
 ### B. pgBackRest 集中化倉庫 (推薦大規模使用)
 在中央部署 pgBackRest Repo 服務。各分站資料庫 Pod 只需配置 `archive_command` 指向中央服務。
 *   **優勢**：pgBackRest 是在應用層運作，不需要 `kubectl exec` 權限，只需網路埠 (TLS) 連通即可。
-*   **實施門檻**：⚠️ **較高**。預設的 NetBox/PostgreSQL 鏡像通常不含 pgBackRest 工具，需自行構建自定義鏡像或掛載 Sidecar 容器，不建議初學者優先採用。
+*   **實施門檻**：⚠️ **較高**。預設的 NetBox/PostgreSQL 鏡像通常不含 pgBackRest 工具，需自行構建自定義鏡像或掛載 Sidecar 容器。
 
-### C. 中央邏輯匯總副本 (Logical Aggregate)
-在中央部署一套 PostgreSQL 作為 Subscriber，各分站 PostgreSQL 開放連接權限作為 Publisher。
-*   **權限要求**：只需資料庫層級的 `REPLICATION` 角色權限，不涉及 K8s 節點管理或高階 API 存取。
-*   **實施門檻**：**中等**。需確保分站資料庫開啟 `wal_level = logical`（可透過 Helm values 的 `postgresql.primary.extendedConfiguration` 設定）。
-
-### D. 中央異地串流副本 (DR Hub / Warm Standby - 進階方案)
+### C. 中央異地串流副本 (DR Hub / Warm Standby - 強烈推薦)
 在中央部署分站的備援 Pod (Standby)。
 *   **機制**：中央的 Standby Pod 主動連向分站的 Primary DB 拉取串流日誌。
 *   **部署實務**：只需在中央部署普通的 StatefulSet，並在配置中填入分站資料庫的連線字串。
-*   **實施門檻**：**中等**。最符合 Bitnami PostgreSQL 預設架構，且能達成極佳的 RPO。
+*   **優勢**：物理級同步，包含 Schema 與 Sequence，災難發生時一鍵 `promote` 即可接管，無需修復資料。
 
 ---
 
-## 4. 災難復原工作流程 (DR Workflow)
+## 5. 災難復原工作流程 (DR Workflow)
 
 針對「快速重建 + Restore 資料」的需求，我們採用 **「IaC + 資料庫還原」** 的混合策略。
 
@@ -83,21 +75,13 @@ nav_order: 6
 
 ### 第二階段：資料注入 (The Heart)
 根據備份方案選擇還原路徑：
-*   **方案 A/B**：使用 `pg_restore` 匯入 `.dump` 檔案。
-*   **方案 C**：使用 `pgbackrest restore` 執行時間點還原。
-*   **方案 E**：直接提升 (Promote) 中央的 Standby Pod 為新 Primary。
+*   **方案 A**：使用 `pg_restore` 匯入 `.dump` 檔案。
+*   **方案 B**：使用 `pgbackrest restore` 執行時間點還原。
+*   **方案 C**：直接提升 (Promote) 中央的 Standby Pod 為新 Primary。
 
 ---
 
-## 5. 附錄：關鍵指令參考
-
-### 集中式遠端備份 (Pull Example)
-```bash
-# 在中央叢集執行，對 Site-A 進行備份
-kubectl --kubeconfig=/etc/kubeconfigs/site-a-config \
-  exec -n netbox netbox-postgresql-primary-0 -- \
-  bash -c "PGPASSWORD='pwd' pg_dump -U netbox -d netbox -Fc" > site-a-backup.dump
-```
+## 6. 附錄：關鍵指令參考
 
 ### 異地溫備提升 (Promote DR Pod)
 ```bash
@@ -115,8 +99,8 @@ velero backup create site-a-netbox-config \
 
 ---
 
-## 6. 管理與驗證建議
+## 7. 管理與驗證建議
 
-1.  **分層儲存**：備份檔應至少保留一份於中央叢集的持久儲存，並非同步一份至冷儲存（如 Azure Blob Archive）。
-2.  **定時演練**：每季度選定一個 Site 進行「中央接管演練」，確保 DR 流程在壓力下依然有效。
+1.  **分層儲存**：備份檔應至少保留一份於中央叢集的持久儲存，並同步一份至冷儲存。
+2.  **定時演練**：每季度選定一個 Site 進行「中央接管演練」，確保 DR 流程有效。
 3.  **監控指標**：在 Prometheus 中監控「備份成功率」與「流複製延遲時間 (Replication Lag)」。
