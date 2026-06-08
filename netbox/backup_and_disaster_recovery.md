@@ -12,7 +12,7 @@ nav_order: 6
 
 | 方案 | 運作方式 | 優點 | 缺點 | 適用情境 |
 |---|---|---|---|---|
-| **IaC 重建 + 資料還原 (`pg_dump`)** | 使用 GitLab IaC 重建環境，手動匯入資料庫 | 極度乾淨、不依賴舊環境、易於升級 | 需維護還原腳本，資料庫還原時間稍長 | **推薦**：災難復原、版本升級 |
+| **IaC 重建 + 資料還原 (`pg_dump`)** | 使用 GitLab IaC 重建環境，手動匯入資料庫 | 極度乾淨、不依賴舊環境、易於升級 | 需維護還原腳本；若備份頻率不足，災難時會有資料遺失 (RPO 較高) | **推薦**：災難復原、版本升級 |
 | **Kubernetes 快照 (Velero)** | 備份 PVC、Secrets、ConfigMaps 與資源 | 自動化程度高、可還原整個 Namespace | 需高權限 (Cluster Admin)；依賴 K8s 環境 | 叢集內局部故障、快速整組回滾 |
 | **資料庫單向複製 (僅供 DR)** | 使用 PostgreSQL 串流複製 (Streaming Replication) 將資料由主庫同步到備份庫 | 資料同步時延極低 | **非自動切換**，需人工提升備份庫為 Primary；若操作錯誤極易導致資料遺失 | **進階災備**：嚴格的 RPO 要求 |
 
@@ -39,6 +39,48 @@ Velero 是 K8s 社群的黃金標準。
 - **重要警示**：NetBox 的架構嚴格依賴單一主資料庫，不具備多寫入同步機制。單向複製 **不能** 當作 Active-Active 架構使用。
 - **風險**：若在未正確停止 Primary 的情況下提升 (Promote) 備份庫，極易造成 **Split-Brain (腦裂)**，導致資料損毀。
 - **實務建議**：除非您有極高的 RPO 要求且有極強的 PostgreSQL 維運能力，否則請優先採用 **方案 1 (IaC+pg_dump)**。
+
+---
+
+## 多叢集 (Central-to-Site) 備份架構方案
+
+在 **「中央有一套 Central K8s，可存取各分站 Site K8s，且各 Site 皆獨立部署 NetBox」** 的架構前提下，有以下四種備份設計方案可供選擇：
+
+### 多叢集方案比較表
+
+| 方案 | 運作方式 | 優點 | 缺點 | 適用情境 |
+| :--- | :--- | :--- | :--- | :--- |
+| **A. 中央 Pull 備份** | Central 透過 `kubeconfig` 遠端對各 Site 執行 `pg_dump` 並拉回 Central 儲存 | 集中式管理、Site 端免設定憑證與排程 | Central 需高權限 (Exec)、網路傳輸量大 | Site 數量少、重視中央統一管控 |
+| **B. 分站 Push 備份** | 各 Site 本地執行 `pg_dump` 後，將備份推送至 Central 統一的 S3/MinIO | 權限隔離、Site 網路中斷時容錯高 | 各 Site 需保存 S3 存取金鑰 | 叢集規模大、重視安全權限邊界 |
+| **C. pgBackRest 倉庫** | Central 建立 pgBackRest Repo，各 Site DB 透過 TLS 傳輸 WAL 與增量備份 | 支援增量備份與時間點還原 (PITR)、省頻寬 | 配置最複雜，需維運 DB Agent | 資料庫龐大、對 RPO 要求極高 |
+| **D. 中央唯讀匯總副本** | 利用 PostgreSQL 邏輯複製 (Logical Replication) 即時將各 Site 資料同步至 Central 庫 | 資料即時同步、便於中央進行跨站唯讀查詢 | 需網絡持續連線、Schema 變更維護成本高 | 重視即時災備、需跨站匯總查詢 |
+
+---
+
+### 詳細方案說明
+
+#### 1. 中央 Pull 備份 (Centralized Pull Backup)
+在 Central K8s 部署 CronJob，利用 Kubernetes Secret 保存的各站 `kubeconfig`：
+```bash
+# Central CronJob 遠端備份 Site A 範例
+kubectl --kubeconfig=/etc/kubeconfigs/site-a-config exec -n netbox netbox-postgresql-primary-0 -- \
+  bash -c "PGPASSWORD='pwd' pg_dump -U netbox -d netbox -Fc" > /backups/site-a-$(date +%F).dump
+```
+
+#### 2. 分站 Push 備份 (Decentralized Push to Central Storage)
+在 Central 部署 MinIO 作為 S3-Compatible 儲存。各 Site 本地部署備份 Job，直接將備份推送至專屬的 Bucket Prefix：
+```bash
+# Site A 本地 Job 備份並上傳
+pg_dump -U netbox -d netbox -Fc | mc pipe central-minio/netbox-backups/site-a/db-latest.dump
+```
+
+#### 3. pgBackRest 中央備份倉庫
+在 Central 運行 pgBackRest Dedicated Repo 服務。各 Site PostgreSQL 的 `postgresql.conf` 設定 `archive_command`：
+* **特點**：每次備份只傳輸變更的 WAL 日誌，大幅降低 WAN（廣域網路）的流量消耗。
+
+#### 4. 中央唯讀匯總副本 (Logical Replication)
+各 Site 的 PostgreSQL 作為 **Publisher**，Central 端的大型 PostgreSQL 作為 **Subscriber**，訂閱各分站的表結構。
+* **特點**：Central 隨時保有一份與分站近乎同步的唯讀資料，備份作業只需在 Central 本地對匯總庫進行即可。
 
 ---
 
