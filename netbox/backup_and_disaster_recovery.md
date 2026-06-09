@@ -54,6 +54,11 @@ nav_order: 6
 
 ### B. pgBackRest 集中化倉庫 (推薦大規模使用)
 在中央部署 pgBackRest Repo 服務。各分站資料庫 Pod 只需配置 `archive_command` 指向中央服務。
+
+*   **運作原理**：
+    1.  **WAL 歸檔 (WAL Archiving)**：分站資料庫將每次異動產生的 Write-Ahead Log (WAL) 檔案，即時推送到中央的 pgBackRest Repo (或指定的 S3 儲存)。
+    2.  **增量/差異備份 (Incremental/Delta Backups)**：除了一開始的完整備份，後續的備份 pgBackRest 只會比對並傳輸修改過的資料塊 (Block-level)，極大程度節省了網路頻寬與備份時間。
+    3.  **時間點還原 (PITR)**：因為擁有連續的 WAL 日誌，當災難發生時，您可以將資料庫還原到「過去的任意一秒鐘」，避免人為誤刪造成的無法挽回的損失。
 *   **優勢**：pgBackRest 是在應用層運作，不需要 `kubectl exec` 權限，只需網路埠 (TLS) 連通即可。
 *   **實施門檻**：⚠️ **較高**。預設的 NetBox/PostgreSQL 鏡像通常不含 pgBackRest 工具，需自行構建自定義鏡像或掛載 Sidecar 容器。
 
