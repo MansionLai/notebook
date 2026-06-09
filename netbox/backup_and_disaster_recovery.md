@@ -76,15 +76,15 @@ nav_order: 6
 
 ```mermaid
 graph TD
-    subgraph Site A [分站 Site-A K8s]
+    subgraph SiteA [分站 Site-A K8s]
         UI_A[NetBox App] -->|Read/Write| DB_A[(PostgreSQL Primary)]
     end
 
-    subgraph Site B [分站 Site-B K8s]
+    subgraph SiteB [分站 Site-B K8s]
         UI_B[NetBox App] -->|Read/Write| DB_B[(PostgreSQL Primary)]
     end
 
-    subgraph Central DR Hub [中央備援叢集 Central K8s]
+    subgraph CentralDRHub [中央備援叢集 Central K8s]
         direction TB
         DB_DR_A[(DB Standby Site-A)]
         DB_DR_B[(DB Standby Site-B)]
@@ -101,8 +101,8 @@ graph TD
 
     classDef central fill:#f9f,stroke:#333,stroke-width:2px;
     classDef site fill:#ccf,stroke:#333,stroke-width:2px;
-    class Central DR Hub central;
-    class Site A,Site B site;
+    class CentralDRHub central;
+    class SiteA,SiteB site;
 ```
 
 ### 5.2 從 Crash 到 Rollback 的完整生命週期
