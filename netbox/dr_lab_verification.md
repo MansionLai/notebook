@@ -58,7 +58,56 @@ Backup completed successfully.
 
 ---
 
-## 4. 實戰結論 (方案 A)
+## 4. 災難恢復演練 (Restore Procedure)
+
+假設 Site-A 遭遇毀滅性故障且已完成 K3s 叢集重建，以下是從 Nexus 恢復 NetBox 資料的標準流程：
+
+### 4.1 環境準備
+1.  **重新部署 NetBox**: 使用原有的 Helm `values.yaml` 重新安裝 NetBox。
+2.  **暫停應用寫入**: 為了確保資料一致性，建議將 NetBox App 副本數設為 0。
+    ```bash
+    kubectl scale deployment netbox -n netbox --replicas=0
+    kubectl scale deployment netbox-worker -n netbox --replicas=0
+    ```
+
+### 4.2 下載備份檔案
+在 Site-A 的 Control Plane 節點執行，從 Nexus 下載指定的備份檔：
+```bash
+BACKUP_NAME="netbox-backup-202606091332.sql.gz"
+curl -u backup-user:NetboxBackup123! \
+  -O "http://20.46.161.104:30081/repository/netbox-backups/$BACKUP_NAME"
+```
+
+### 4.3 執行資料庫還原
+我們將下載的壓縮檔解壓並透過 `psql` 灌回資料庫：
+
+1. **取得資料庫密碼**:
+   ```bash
+   DB_PASSWORD=$(kubectl get secret netbox-postgresql -n netbox -o jsonpath='{.data.password}' | base64 -d)
+   ```
+
+2. **清空舊資料 (Drop & Create)**:
+   ```bash
+   # 進入 DB Pod 執行
+   kubectl exec -it netbox-postgresql-primary-0 -n netbox -- bash -c "DROPDB_PASSWORD=$DB_PASSWORD dropdb -h localhost -U netbox netbox && createdb -h localhost -U netbox netbox"
+   ```
+
+3. **匯入 SQL 數據**:
+   ```bash
+   gunzip -c $BACKUP_NAME | kubectl exec -i netbox-postgresql-primary-0 -n netbox -- bash -c "PGPASSWORD=$DB_PASSWORD psql -h localhost -U netbox -d netbox"
+   ```
+
+### 4.4 恢復服務
+1.  **重啟 Pod**:
+    ```bash
+    kubectl scale deployment netbox -n netbox --replicas=1
+    kubectl scale deployment netbox-worker -n netbox --replicas=1
+    ```
+2.  **驗證**: 登入 NetBox Web UI，確認所有 Site、Device 等資料已正確恢復。
+
+---
+
+## 5. 實戰結論 (方案 A)
 1. **可行性 (Feasibility)**: **100% 成功**。透過 NodePort 暴露 Nexus 並使用標準 `curl` 上傳非常穩定。
 2. **優點**: 
    - 無需 Cloud Provider 的 S3 權限，完全自主控管。
