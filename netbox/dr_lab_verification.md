@@ -57,6 +57,38 @@ Backup completed successfully.
 ### 4.1 實作設定
 成功讓中央叢集的 Pod 跨網際網路與分站叢集同步。
 
+#### 資料流與連線流架構圖
+```mermaid
+graph TD
+    subgraph SiteA [分站 Site-A K8s]
+        UI_A[NetBox App] -->|Read/Write| DB_A[(PostgreSQL Primary)]
+    end
+
+    subgraph SiteB [分站 Site-B K8s]
+        UI_B[NetBox App] -->|Read/Write| DB_B[(PostgreSQL Primary)]
+    end
+
+    subgraph CentralDRHub [中央備援叢集 Central K8s]
+        direction TB
+        DB_DR_A[(DB Standby Site-A)]
+        DB_DR_B[(DB Standby Site-B)]
+        
+        UI_DR_A[Emergency NetBox App - Site A] -.->|Failover Read/Write| DB_DR_A
+    end
+
+    %% 連線流與資料流
+    DB_DR_A == "1. 主動連線 (TCP 5432)" ==> DB_A
+    DB_A -. "2. WAL 物理流複製 (即時)" .-> DB_DR_A
+    
+    DB_DR_B == "1. 主動連線 (TCP 5432)" ==> DB_B
+    DB_B -. "2. WAL 物理流複製 (即時)" .-> DB_DR_B
+
+    classDef central fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef site fill:#ccf,stroke:#333,stroke-width:2px;
+    class CentralDRHub central;
+    class SiteA,SiteB site;
+```
+
 1.  **分站端 (Primary)**: 將 PostgreSQL Service 透過 `NodePort` (30398) 暴露。
 2.  **中央端 (Standby)**: 建立 `Endpoints` 與 `Service` 指向 Site-A 的 Public IP。設定 `architecture: replication`。
 3.  **同步驗證**: 中央端的 `read-0` Pod 啟動後，成功執行 `pg_basebackup` 並進入 `started streaming WAL` 狀態。在 Site-A 新增一筆記錄，Central-DR 在 **1 秒內**即同步完成。

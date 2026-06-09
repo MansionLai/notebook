@@ -79,6 +79,39 @@ nav_order: 6
 ### C. 中央異地串流副本 (DR Hub / Warm Standby - 強烈推薦)
 在中央部署分站的備援 Pod (Standby)。
 *   **機制**：中央的 Standby Pod 主動連向分站的 Primary DB 拉取串流日誌。
+
+#### 4.1 資料流與連線流架構圖
+```mermaid
+graph TD
+    subgraph SiteA [分站 Site-A K8s]
+        UI_A[NetBox App] -->|Read/Write| DB_A[(PostgreSQL Primary)]
+    end
+
+    subgraph SiteB [分站 Site-B K8s]
+        UI_B[NetBox App] -->|Read/Write| DB_B[(PostgreSQL Primary)]
+    end
+
+    subgraph CentralDRHub [中央備援叢集 Central K8s]
+        direction TB
+        DB_DR_A[(DB Standby Site-A)]
+        DB_DR_B[(DB Standby Site-B)]
+        
+        UI_DR_A[Emergency NetBox App - Site A] -.->|Failover Read/Write| DB_DR_A
+    end
+
+    %% 連線流與資料流
+    DB_DR_A == "1. 主動連線 (TCP 5432)" ==> DB_A
+    DB_A -. "2. WAL 物理流複製 (即時)" .-> DB_DR_A
+    
+    DB_DR_B == "1. 主動連線 (TCP 5432)" ==> DB_B
+    DB_B -. "2. WAL 物理流複製 (即時)" .-> DB_DR_B
+
+    classDef central fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef site fill:#ccf,stroke:#333,stroke-width:2px;
+    class CentralDRHub central;
+    class SiteA,SiteB site;
+```
+
 *   **部署實務**：只需在中央部署普通的 StatefulSet，並在配置中填入分站資料庫的連線字串。
 *   **優勢**：物理級同步，包含 Schema 與 Sequence，災難發生時一鍵 `promote` 即可接管，無需修復資料。
 *   **缺點 (規模化限制)**：必須維持 **1:1 的實例映射**。若有 20 個分站，中央叢集就必須建立 20 套獨立的 PostgreSQL Standby 實例。這會導致中央叢集的資源消耗 (CPU/Memory/PVC) 與維運複雜度隨著分站數量線性暴增。
