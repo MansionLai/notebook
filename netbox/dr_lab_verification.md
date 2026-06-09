@@ -78,6 +78,77 @@ nav_order: 7
 *   **複雜度**: **中等**。需處理跨叢集的 NodePort 路由。
 *   **RPO/RTO**: RPO **趨近於 0**，RTO 為 **秒級**。
 
+### 4.4 多叢集架構與災難接管流程
+
+#### 常見疑問：中央一台 PostgreSQL 可以同時備份多個 Site 嗎？
+**答案是不行。** 
+因為「串流複製 (Streaming Replication)」是**物理資料塊級別 (Physical Block-level)** 的同步。一台 Standby 資料庫必須是一台 Primary 資料庫的完美二進制鏡像。
+*   **正確架構**：在 Central K8s 叢集中，您需要為**每一個 Site 部署一個獨立的 PostgreSQL StatefulSet**（例如 `db-dr-site-a`, `db-dr-site-b`）。雖然是多個資料庫實例，但它們都運行在同一個 Central K8s 叢集與同一套儲存資源上，達到集中管理的目的。
+
+#### 4.4.1 資料流與連線流架構圖
+
+```mermaid
+graph TD
+    subgraph SiteA [分站 Site-A K8s]
+        UI_A[NetBox App] -->|Read/Write| DB_A[(PostgreSQL Primary)]
+    end
+
+    subgraph SiteB [分站 Site-B K8s]
+        UI_B[NetBox App] -->|Read/Write| DB_B[(PostgreSQL Primary)]
+    end
+
+    subgraph CentralDRHub [中央備援叢集 Central K8s]
+        direction TB
+        DB_DR_A[(DB Standby Site-A)]
+        DB_DR_B[(DB Standby Site-B)]
+        
+        UI_DR_A[Emergency NetBox App - Site A] -.->|Failover Read/Write| DB_DR_A
+    end
+
+    %% 連線流與資料流
+    DB_DR_A == "1. 主動連線 (TCP 5432)" ==> DB_A
+    DB_A -. "2. WAL 物理流複製 (即時)" .-> DB_DR_A
+    
+    DB_DR_B == "1. 主動連線 (TCP 5432)" ==> DB_B
+    DB_B -. "2. WAL 物理流複製 (即時)" .-> DB_DR_B
+
+    classDef central fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef site fill:#ccf,stroke:#333,stroke-width:2px;
+    class CentralDRHub central;
+    class SiteA,SiteB site;
+```
+
+#### 4.4.2 從 Crash 到 Rollback 的完整生命週期
+
+當 Site-A 發生毀滅性故障時，以下是標準的應變與復原(Rollback)流程：
+
+**階段一：災難發生與緊急接管 (Failover)**
+1.  **Site-A 離線**：分站機房斷電或 K8s 叢集崩潰，NetBox 服務中斷。
+2.  **中斷同步**：Central-DR 上的 `DB Standby Site-A` 會偵測到連線中斷，保留最後一刻的資料狀態。
+3.  **提升為主庫 (Promote)**：
+    *   在 Central-DR 執行指令：`kubectl exec db-dr-site-a-0 -- pg_ctl promote -D /bitnami/postgresql/data`
+    *   此時 `DB Standby Site-A` 脫離唯讀模式，成為獨立的 Primary 庫。
+4.  **啟動緊急 UI**：
+    *   在 Central-DR 啟動一個預先設定好的 NetBox App Pod，將資料庫連線指向已提升的 `DB Standby Site-A`。
+    *   更新公司內部 DNS (或修改 Load Balancer) 將 User 流量導向 Central-DR 的緊急 NetBox 服務。
+    *   **結果**：服務在數分鐘內恢復，用戶可繼續正常寫入/讀取 NetBox 資料。
+
+**階段二：分站重建與資料倒回 (Rollback / Failback)**
+當 Site-A 機房修復，我們需要將這段期間在 Central-DR 寫入的新資料「倒回」給 Site-A。
+
+1.  **重建 Site-A 環境**：
+    *   透過 IaC (Helm/GitLab) 在 Site-A 重新部署全新的 K8s 叢集與空殼 NetBox/PostgreSQL。
+2.  **Central 匯出資料**：
+    *   因為 Central 已經成為新的資料源頭，我們在 Central 執行 `pg_dump`，將包含災難期間新數據的資料庫完整匯出。
+3.  **Site-A 匯入資料**：
+    *   將 dump 檔傳輸至 Site-A，並使用 `pg_restore` 灌入 Site-A 剛建好的全新 PostgreSQL 中。
+4.  **重置同步關係 (Resync)**：
+    *   修改 Central-DR `DB Standby Site-A` 的設定，將其降級回 Standby 模式，並重新指向復活後的 Site-A Primary。
+    *   Central-DR 會透過 `pg_basebackup` 重新拉取 Site-A 的基準資料，恢復原有的異地串流溫備架構。
+5.  **DNS 切換回歸**：
+    *   關閉 Central-DR 上的緊急 NetBox App。
+    *   將 DNS 重新指向 Site-A，完成完整的災備生命週期 (Failover -> Failback)。
+
 ---
 
 ## 5. 總結建議
