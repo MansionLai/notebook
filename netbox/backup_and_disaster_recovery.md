@@ -61,7 +61,7 @@ nav_order: 6
 
 #### 實施步驟：
 1.  **中央站點 (Central-DR)**:
-    - 執行 `setup_nexus.sh` 安裝 Nexus。
+    - 執行 `setup_nexus.sh` 安裝 Nexus.
     - 登入 Nexus UI，創建一個類型為 `raw (hosted)` 的 Repository，命名為 `netbox-backups`。
     - 創建一個專用帳號 (如 `backup-user`) 並賦予上傳權限。
 2.  **分站站點 (Site-A)**:
@@ -72,26 +72,7 @@ nav_order: 6
 在中央部署 pgBackRest Repo 服務。各分站資料庫 Pod 只需配置 `archive_command` 指向中央服務。
 
 #### 資料流與連線流架構圖 (Option B)
-```mermaid
-graph LR
-    subgraph SiteA [分站 Site-A K8s]
-        DB_B[(PostgreSQL)]
-    end
-    
-    subgraph Central [中央 Central-DR]
-        PBR[pgBackRest Repo]
-        S3[(S3/Disk Storage)]
-    end
-
-    DB_B -- "1. WAL Archive (Continuous)" --> PBR
-    PBR -- "2. Block-level Backup (Scheduled)" --> DB_B
-    PBR -- "3. Persistence" --> S3
-    
-    classDef central fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef site fill:#ccf,stroke:#333,stroke-width:2px;
-    class Central central;
-    class SiteA site;
-```
+![Option B Architecture](./diagrams/netbox-dr-option-b.png)
 
 *   **運作原理**：
     1.  **WAL 歸檔 (WAL Archiving)**：分站資料庫將每次異動產生的 Write-Ahead Log (WAL) 檔案，即時推送到中央的 pgBackRest Repo (或指定的 S3 儲存)。
@@ -117,7 +98,6 @@ graph LR
 
 ## 5. 附錄：關鍵指令參考
 
-
 ### 異地溫備提升 (Promote DR Pod)
 ```bash
 # 當分站故障，在中央提升備援庫
@@ -130,16 +110,6 @@ kubectl -n dr-namespace exec netbox-postgresql-dr-site-a-0 -- \
 velero backup create site-a-netbox-config \
   --include-namespaces netbox \
   --selector "app.kubernetes.io/instance=netbox"
-```
-
----
-
-## 6. 管理與驗證建議
-
-1.  **分層儲存**：備份檔應至少保留一份於中央叢集的持久儲存，並同步一份至冷儲存。
-2.  **定時演練**：每季度選定一個 Site 進行「中央接管演練」，確保 DR 流程有效。
-3.  **監控指標**：在 Prometheus 中監控「備份成功率」與「流複製延遲時間 (Replication Lag)」。
-rnetes.io/instance=netbox"
 ```
 
 ---
