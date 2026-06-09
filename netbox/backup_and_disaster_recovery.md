@@ -50,6 +50,28 @@ nav_order: 6
 *   **機制**：
     1.  CronJob 在分站本地執行 `pg_dump` 並進行 `gzip` 壓縮。
     2.  利用 `curl` 將備份檔透過 REST API 推送至中央 (Central-DR) 的 **Nexus Raw Repository**。
+
+#### 資料流與連線流架構圖 (Option A)
+```mermaid
+graph LR
+    subgraph SiteA [分站 Site-A K8s]
+        DB_A[(PostgreSQL)]
+        CJ[CronJob: netbox-backup]
+    end
+    
+    subgraph Central [中央 Central-DR]
+        NX[Nexus Repository]
+    end
+
+    CJ -- "1. pg_dump (Local)" --> DB_A
+    CJ -- "2. push (REST API / HTTP PUT)" --> NX
+    
+    classDef central fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef site fill:#ccf,stroke:#333,stroke-width:2px;
+    class Central central;
+    class SiteA site;
+```
+
 *   **安全性**：不需跨叢集 `kubeconfig`，分站只需持有 Nexus 的上傳帳密。
 *   **實作參考**：
     - [Nexus 安裝腳本 (VM)](./setup_nexus.sh)
@@ -66,6 +88,28 @@ nav_order: 6
 
 ### B. pgBackRest 集中化倉庫 (推薦大規模使用)
 在中央部署 pgBackRest Repo 服務。各分站資料庫 Pod 只需配置 `archive_command` 指向中央服務。
+
+#### 資料流與連線流架構圖 (Option B)
+```mermaid
+graph LR
+    subgraph SiteA [分站 Site-A K8s]
+        DB_B[(PostgreSQL)]
+    end
+    
+    subgraph Central [中央 Central-DR]
+        PBR[pgBackRest Repo]
+        S3[(S3/Disk Storage)]
+    end
+
+    DB_B -- "1. WAL Archive (Continuous)" --> PBR
+    PBR -- "2. Block-level Backup (Scheduled)" --> DB_B
+    PBR -- "3. Persistence" --> S3
+    
+    classDef central fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef site fill:#ccf,stroke:#333,stroke-width:2px;
+    class Central central;
+    class SiteA site;
+```
 
 *   **運作原理**：
     1.  **WAL 歸檔 (WAL Archiving)**：分站資料庫將每次異動產生的 Write-Ahead Log (WAL) 檔案，即時推送到中央的 pgBackRest Repo (或指定的 S3 儲存)。

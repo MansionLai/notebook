@@ -22,6 +22,27 @@
 
 這是目前最穩定且易於實施的方案。
 
+#### 資料流與連線流架構圖 (Option A)
+```mermaid
+graph LR
+    subgraph SiteA [分站 Site-A K8s]
+        DB_A[(PostgreSQL)]
+        CJ[CronJob: netbox-backup]
+    end
+    
+    subgraph Central [中央 Central-DR]
+        NX[Nexus Repository]
+    end
+
+    CJ -- "1. pg_dump (Local)" --> DB_A
+    CJ -- "2. push (REST API / HTTP PUT)" --> NX
+    
+    classDef central fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef site fill:#ccf,stroke:#333,stroke-width:2px;
+    class Central central;
+    class SiteA site;
+```
+
 ### 2.1 實作組件
 *   **Nexus 倉庫**: `netbox-backups` (Raw, hosted)
 *   **上傳帳號**: `backup-user` / `NetboxBackup123!`
@@ -40,6 +61,28 @@ Backup completed successfully.
 ---
 
 ## 3. 方案 B：pgBackRest 集中化倉庫 實測
+
+#### 資料流與連線流架構圖 (Option B)
+```mermaid
+graph LR
+    subgraph SiteA [分站 Site-A K8s]
+        DB_B[(PostgreSQL)]
+    end
+    
+    subgraph Central [中央 Central-DR]
+        PBR[pgBackRest Repo]
+        S3[(S3/Disk Storage)]
+    end
+
+    DB_B -- "1. WAL Archive (Continuous)" --> PBR
+    PBR -- "2. Block-level Backup (Scheduled)" --> DB_B
+    PBR -- "3. Persistence" --> S3
+    
+    classDef central fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef site fill:#ccf,stroke:#333,stroke-width:2px;
+    class Central central;
+    class SiteA site;
+```
 
 ### 3.1 實作挑戰
 1.  **環境限制**: 雖然 Bitnami PostgreSQL 容器內建有 `pgbackrest` 二進制檔，但其預設是以非 root 使用者 (uid 1001) 運行。
