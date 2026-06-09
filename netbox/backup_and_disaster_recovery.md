@@ -48,9 +48,21 @@ nav_order: 6
 ### A. 分站推送備份 (Decentralized Push - 最易實施)
 在分站 NetBox 所在的 Namespace 部署一個 CronJob。
 *   **機制**：
-    1.  CronJob 在分站本地執行 `pg_dump`。
-    2.  利用分站擁有的網路權限，將備份檔推送至中央叢集的 S3 (如 MinIO) 或其他儲存終端。
-*   **安全性**：不需跨叢集 `kubeconfig`，分站只需持有中央儲存的 Access Key。
+    1.  CronJob 在分站本地執行 `pg_dump` 並進行 `gzip` 壓縮。
+    2.  利用 `curl` 將備份檔透過 REST API 推送至中央 (Central-DR) 的 **Nexus Raw Repository**。
+*   **安全性**：不需跨叢集 `kubeconfig`，分站只需持有 Nexus 的上傳帳密。
+*   **實作參考**：
+    - [Nexus 安裝腳本 (VM)](./setup_nexus.sh)
+    - [NetBox 備份 CronJob 範本](./netbox-backup-cronjob.yaml)
+
+#### 實施步驟：
+1.  **中央站點 (Central-DR)**:
+    - 執行 `setup_nexus.sh` 安裝 Nexus。
+    - 登入 Nexus UI，創建一個類型為 `raw (hosted)` 的 Repository，命名為 `netbox-backups`。
+    - 創建一個專用帳號 (如 `backup-user`) 並賦予上傳權限。
+2.  **分站站點 (Site-A)**:
+    - 建立 `nexus-credentials` Secret 儲存帳密。
+    - 部署 `netbox-backup-cronjob.yaml`，並修改 `NEXUS_URL` 指向中央站點 IP。
 
 ### B. pgBackRest 集中化倉庫 (推薦大規模使用)
 在中央部署 pgBackRest Repo 服務。各分站資料庫 Pod 只需配置 `archive_command` 指向中央服務。

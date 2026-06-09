@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: netbox-backup
+  namespace: netbox
+spec:
+  schedule: "0 2 * * *" # Every day at 2 AM
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backup
+            image: bitnami/postgresql:16 # Matches common NetBox deployments
+            env:
+            - name: PGHOST
+              value: netbox-postgresql # Verify service name
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              value: netbox
+            - name: PGUSER
+              value: netbox
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: netbox-postgresql-secret # Default secret from Helm chart
+                  key: password
+            - name: NEXUS_URL
+              value: "http://<NEXUS-IP>:8081/repository/netbox-backups"
+            - name: NEXUS_USER
+              value: "backup-user"
+            - name: NEXUS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nexus-credentials
+                  key: password
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              BACKUP_FILE="netbox-backup-$(date +%Y%m%d%H%M).sql.gz"
+              echo "Starting backup to $BACKUP_FILE..."
+              pg_dump -h $PGHOST -U $PGUSER $PGDATABASE | gzip > /tmp/$BACKUP_FILE
+              
+              echo "Uploading to Nexus..."
+              # Nexus Raw repository upload via PUT
+              curl -v -u "$NEXUS_USER:$NEXUS_PASSWORD" \
+                --upload-file /tmp/$BACKUP_FILE \
+                "$NEXUS_URL/$BACKUP_FILE"
+              
+              echo "Backup completed successfully."
+          restartPolicy: OnFailure
