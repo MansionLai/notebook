@@ -60,7 +60,9 @@ nav_order: 6
     2.  **增量/差異備份 (Incremental/Delta Backups)**：除了一開始的完整備份，後續的備份 pgBackRest 只會比對並傳輸修改過的資料塊 (Block-level)，極大程度節省了網路頻寬與備份時間。
     3.  **時間點還原 (PITR)**：因為擁有連續的 WAL 日誌，當災難發生時，您可以將資料庫還原到「過去的任意一秒鐘」，避免人為誤刪造成的無法挽回的損失。
 *   **優勢**：pgBackRest 是在應用層運作，不需要 `kubectl exec` 權限，只需網路埠 (TLS) 連通即可。
-*   **實施門檻**：⚠️ **較高**。預設的 NetBox/PostgreSQL 鏡像通常不含 pgBackRest 工具，需自行構建自定義鏡像或掛載 Sidecar 容器。
+*   **實施門檻**：⚠️ **極高 (不建議 User Role 採用)**。
+    *   **預設限制**：NetBox 依賴的 Bitnami PostgreSQL 鏡像基於極簡與安全設計 (以非 root `uid 1001` 運行)。雖然可能內含 pgBackRest 執行檔，但完全沒有預先設定，也缺乏將 WAL 寫入 S3/Repo 的環境權限。
+    *   **改造複雜**：若要強行使用，必須打破「單一容器」原則。您需要自行撰寫 Dockerfile 製作 Custom Image 植入設定，或是透過 Helm 撰寫複雜的 Sidecar 容器並共用磁碟 (`/bitnami/postgresql/data`)，這超出了一般應用部署權限 (User Role) 的能力範圍。
 
 ### C. 中央異地串流副本 (DR Hub / Warm Standby - 強烈推薦)
 在中央部署分站的備援 Pod (Standby)。
