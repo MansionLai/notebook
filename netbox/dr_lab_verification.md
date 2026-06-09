@@ -23,25 +23,7 @@
 這是目前最穩定且易於實施的方案。
 
 #### 資料流與連線流架構圖 (Option A)
-```mermaid
-graph LR
-    subgraph SiteA [分站 Site-A K8s]
-        DB_A[(PostgreSQL)]
-        CJ[CronJob: netbox-backup]
-    end
-    
-    subgraph Central [中央 Central-DR]
-        NX[Nexus Repository]
-    end
-
-    CJ -- "1. pg_dump (Local)" --> DB_A
-    CJ -- "2. push (REST API / HTTP PUT)" --> NX
-    
-    classDef central fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef site fill:#ccf,stroke:#333,stroke-width:2px;
-    class Central central;
-    class SiteA site;
-```
+![Option A Architecture](./diagrams/netbox-dr-option-a.png)
 
 ### 2.1 實作組件
 *   **Nexus 倉庫**: `netbox-backups` (Raw, hosted)
@@ -100,37 +82,8 @@ graph LR
 ### 4.1 實作設定
 成功讓中央叢集的 Pod 跨網際網路與分站叢集同步。
 
-#### 資料流與連線流架構圖
-```mermaid
-graph TD
-    subgraph SiteA [分站 Site-A K8s]
-        UI_A[NetBox App] -->|Read/Write| DB_A[(PostgreSQL Primary)]
-    end
-
-    subgraph SiteB [分站 Site-B K8s]
-        UI_B[NetBox App] -->|Read/Write| DB_B[(PostgreSQL Primary)]
-    end
-
-    subgraph CentralDRHub [中央備援叢集 Central K8s]
-        direction TB
-        DB_DR_A[(DB Standby Site-A)]
-        DB_DR_B[(DB Standby Site-B)]
-        
-        UI_DR_A[Emergency NetBox App - Site A] -.->|Failover Read/Write| DB_DR_A
-    end
-
-    %% 連線流與資料流
-    DB_DR_A == "1. 主動連線 (TCP 5432)" ==> DB_A
-    DB_A -. "2. WAL 物理流複製 (即時)" .-> DB_DR_A
-    
-    DB_DR_B == "1. 主動連線 (TCP 5432)" ==> DB_B
-    DB_B -. "2. WAL 物理流複製 (即時)" .-> DB_DR_B
-
-    classDef central fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef site fill:#ccf,stroke:#333,stroke-width:2px;
-    class CentralDRHub central;
-    class SiteA,SiteB site;
-```
+#### 資料流與連線流架構圖 (Option C)
+![Option C Architecture](./diagrams/netbox-dr-option-c.png)
 
 1.  **分站端 (Primary)**: 將 PostgreSQL Service 透過 `NodePort` (30398) 暴露。
 2.  **中央端 (Standby)**: 建立 `Endpoints` 與 `Service` 指向 Site-A 的 Public IP。設定 `architecture: replication`。
@@ -171,5 +124,8 @@ graph TD
 針對 **「User Role 權限」** 以及 **「多叢集 Central-to-Site 架構」**：
 
 1.  **常規備份首選**: **方案 A (分站推送)**。透過 Nexus 管理備份檔案，設定簡單、不依賴公有雲，足以應付 90% 的災難。
+2.  **進階災備首選**: **方案 C (異地串流溫備)**。若企業對 RPO/RTO 有極致要求（如數據零遺失），應採用此方案，但需注意中央叢集的資源壓力。
+3.  **應避免**: 方案 B (pgBackRest) 或 邏輯複製。前者實施門檻過高，後者有 Sequence 不同步問題。
+exus 管理備份檔案，設定簡單、不依賴公有雲，足以應付 90% 的災難。
 2.  **進階災備首選**: **方案 C (異地串流溫備)**。若企業對 RPO/RTO 有極致要求（如數據零遺失），應採用此方案，但需注意中央叢集的資源壓力。
 3.  **應避免**: 方案 B (pgBackRest) 或 邏輯複製。前者實施門檻過高，後者有 Sequence 不同步問題。

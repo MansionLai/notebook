@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 500">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2563eb" />
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+  <rect width="100%" height="100%" fill="#ffffff" />
+  <!-- Site-A -->
+  <rect x="40" y="80" width="380" height="340" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="2" />
+  <text x="50" y="70" font-family="Helvetica" font-size="16" font-weight="bold" fill="#374151">Site-A (Primary)</text>
+  <rect x="130" y="180" width="200" height="100" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="3" filter="url(#shadow)" />
+  <text x="230" y="230" font-family="Helvetica" font-size="18" font-weight="bold" text-anchor="middle" fill="#1e293b">Primary DB</text>
+  <rect x="200" y="250" width="60" height="18" rx="4" fill="#dcfce7" />
+  <text x="230" y="263" font-family="Helvetica" font-size="10" font-weight="bold" text-anchor="middle" fill="#166534">Read/Write</text>
+  <!-- Central-DR -->
+  <rect x="540" y="80" width="380" height="340" rx="10" fill="#fffefc" stroke="#fde68a" stroke-width="2" />
+  <text x="550" y="70" font-family="Helvetica" font-size="16" font-weight="bold" fill="#374151">Central-DR (Warm Standby)</text>
+  <rect x="630" y="180" width="200" height="100" rx="8" fill="#ffffff" stroke="#d97706" stroke-width="3" filter="url(#shadow)" />
+  <text x="730" y="230" font-family="Helvetica" font-size="18" font-weight="bold" text-anchor="middle" fill="#1e293b">Standby DB</text>
+  <rect x="700" y="250" width="60" height="18" rx="4" fill="#fef9c3" />
+  <text x="730" y="263" font-family="Helvetica" font-size="10" font-weight="bold" text-anchor="middle" fill="#854d0e">Read-Only</text>
+  <!-- Replication Arrow -->
+  <path d="M 330,230 L 630,230" stroke="#2563eb" stroke-width="4" marker-end="url(#arrowhead)" fill="none" />
+  <rect x="420" y="210" width="120" height="30" rx="4" fill="#ffffff" stroke="#2563eb" stroke-width="1" />
+  <text x="480" y="230" font-family="Helvetica" font-size="12" font-weight="bold" text-anchor="middle" fill="#2563eb">Streaming Replication</text>
+  <text x="480" y="245" font-family="Helvetica" font-size="10" text-anchor="middle" fill="#64748b">(TCP 5432)</text>
+</svg>

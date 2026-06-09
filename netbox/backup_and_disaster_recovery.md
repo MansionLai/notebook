@@ -52,25 +52,7 @@ nav_order: 6
     2.  利用 `curl` 將備份檔透過 REST API 推送至中央 (Central-DR) 的 **Nexus Raw Repository**。
 
 #### 資料流與連線流架構圖 (Option A)
-```mermaid
-graph LR
-    subgraph SiteA [分站 Site-A K8s]
-        DB_A[(PostgreSQL)]
-        CJ[CronJob: netbox-backup]
-    end
-    
-    subgraph Central [中央 Central-DR]
-        NX[Nexus Repository]
-    end
-
-    CJ -- "1. pg_dump (Local)" --> DB_A
-    CJ -- "2. push (REST API / HTTP PUT)" --> NX
-    
-    classDef central fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef site fill:#ccf,stroke:#333,stroke-width:2px;
-    class Central central;
-    class SiteA site;
-```
+![Option A Architecture](./diagrams/netbox-dr-option-a.png)
 
 *   **安全性**：不需跨叢集 `kubeconfig`，分站只需持有 Nexus 的上傳帳密。
 *   **實作參考**：
@@ -124,37 +106,8 @@ graph LR
 在中央部署分站的備援 Pod (Standby)。
 *   **機制**：中央的 Standby Pod 主動連向分站的 Primary DB 拉取串流日誌。
 
-#### 4.1 資料流與連線流架構圖
-```mermaid
-graph TD
-    subgraph SiteA [分站 Site-A K8s]
-        UI_A[NetBox App] -->|Read/Write| DB_A[(PostgreSQL Primary)]
-    end
-
-    subgraph SiteB [分站 Site-B K8s]
-        UI_B[NetBox App] -->|Read/Write| DB_B[(PostgreSQL Primary)]
-    end
-
-    subgraph CentralDRHub [中央備援叢集 Central K8s]
-        direction TB
-        DB_DR_A[(DB Standby Site-A)]
-        DB_DR_B[(DB Standby Site-B)]
-        
-        UI_DR_A[Emergency NetBox App - Site A] -.->|Failover Read/Write| DB_DR_A
-    end
-
-    %% 連線流與資料流
-    DB_DR_A == "1. 主動連線 (TCP 5432)" ==> DB_A
-    DB_A -. "2. WAL 物理流複製 (即時)" .-> DB_DR_A
-    
-    DB_DR_B == "1. 主動連線 (TCP 5432)" ==> DB_B
-    DB_B -. "2. WAL 物理流複製 (即時)" .-> DB_DR_B
-
-    classDef central fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef site fill:#ccf,stroke:#333,stroke-width:2px;
-    class CentralDRHub central;
-    class SiteA,SiteB site;
-```
+#### 資料流與連線流架構圖 (Option C)
+![Option C Architecture](./diagrams/netbox-dr-option-c.png)
 
 *   **部署實務**：只需在中央部署普通的 StatefulSet，並在配置中填入分站資料庫的連線字串。
 *   **優勢**：物理級同步，包含 Schema 與 Sequence，災難發生時一鍵 `promote` 即可接管，無需修復資料。
@@ -177,6 +130,16 @@ kubectl -n dr-namespace exec netbox-postgresql-dr-site-a-0 -- \
 velero backup create site-a-netbox-config \
   --include-namespaces netbox \
   --selector "app.kubernetes.io/instance=netbox"
+```
+
+---
+
+## 6. 管理與驗證建議
+
+1.  **分層儲存**：備份檔應至少保留一份於中央叢集的持久儲存，並同步一份至冷儲存。
+2.  **定時演練**：每季度選定一個 Site 進行「中央接管演練」，確保 DR 流程有效。
+3.  **監控指標**：在 Prometheus 中監控「備份成功率」與「流複製延遲時間 (Replication Lag)」。
+rnetes.io/instance=netbox"
 ```
 
 ---
