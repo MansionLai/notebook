@@ -132,7 +132,64 @@ ceph orch host label rm <hostname> _admin
 ceph orch host ls --host-pattern <hostname> --format yaml
 ```
 
-## 風險與最佳實務
+## 底層原理：Paxos 儲存區與 Source of Truth
+
+當我們提到 Ceph 的「共識儲存」或「Paxos 儲存區」時，技術上是指 Monitor (MON) 內部維護的一套具備強一致性的 Key-Value 資料庫。
+
+### 1. 它是什麼樣的 DB？
+- **實體層**：底層使用 **RocksDB**。每個 MON 節點的磁碟上都有一個 `store.db` 目錄（路徑通常在 `/var/lib/ceph/<fsid>/mon.<hostname>/store.db`）。
+- **邏輯層 (Paxos)**：雖然每個 MON 都有自己的 RocksDB，但 Ceph 透過 **Paxos 演算法** 確保這些 RocksDB 裡的內容在整個集群中是完全同步的。這就是為什麼不論你連向哪一台 MON，看到的 `ceph.conf` 或金鑰都是一樣的。
+
+### 2. Cephadm 如何取得這些資訊？
+`cephadm` 並非直接讀取磁碟上的 RocksDB 檔案，而是透過 **ceph-mgr** 進行調度：
+1. **內部請求**：運行在 `ceph-mgr` 內的 `cephadm` 模組，會透過內部 API 向 MON 集群發送 `mon_command`（類似我們執行的 `ceph config dump`）。
+2. **數據封裝**：MON 從其 Paxos 狀態機中提取最新的 **MonMap** (IP 位址) 與 **Config Database** (參數)，並封裝成純文字格式回傳給 MGR。
+3. **分發寫入**：MGR 拿到內容後，透過 SSH 登入目標節點，將內容寫入檔案。
+
+---
+
+## 檔案更新觸發情境
+
+`/etc/ceph/ceph.conf` 與 `ceph.client.admin.keyring` 不會無故刷新，它們主要在以下情境會被 `cephadm` 強制更新：
+
+| 異動類型 | 觸發動作 | 受影響檔案 |
+| :--- | :--- | :--- |
+| **MON 拓樸變更** | `ceph orch apply mon` (擴充或縮減節點) | `ceph.conf` (更新 `mon_host` 列表) |
+| **全域設定變更** | `ceph config set global <key> <value>` | `ceph.conf` (若該參數屬於必備參數) |
+| **主機標籤變更** | `ceph orch host label add <host> _admin` | 該節點新增兩個檔案 |
+| **定期調解 (Reconcile)** | `cephadm` 預設的巡檢週期 (通常為每小時) | 所有 `_admin` 節點 (確保檔案無漂移) |
+| **手動觸發** | `ceph orch host rescan <hostname>` | 強制該節點立即同步 |
+
+---
+
+## 如何手動查看「真相」(Source of Truth)？
+
+如果您想繞過磁碟檔案，直接查看 Paxos 儲存區裡的內容，請使用以下標準指令：
+
+### 1. 查看設定檔母本 (Config Database)
+不要看 `/etc/ceph/ceph.conf`，而是執行：
+```bash
+ceph config dump
+```
+這會列出所有儲存在 MON 數據庫中的非預設參數。
+
+### 2. 查看管理員金鑰母本 (Auth Database)
+不要看 `ceph.client.admin.keyring` 檔案，而是執行：
+```bash
+ceph auth get client.admin
+```
+這會直接從 MON 的 `auth` 模組中提取金鑰與 Caps。
+
+### 3. 進階：離線查看 (僅限災難復原)
+如果所有 MON 都掛了，無法執行上述指令，資深維運人員會使用 `ceph-monstore-tool` 來直接讀取 RocksDB：
+```bash
+# 警告：此操作需停止 MON daemon
+ceph-monstore-tool /var/lib/ceph/<fsid>/mon.<id>/ get config
+```
+
+---
+
+## 風諧與最佳實務
 
 - 避免將 `_admin` 只綁在單一節點；至少保留多個可管理節點，降低節點故障時的操作風險。
 - 變更 label 前先確認目前維運流程是否依賴該節點（例如自動化腳本、SRE jump host 路徑）。
