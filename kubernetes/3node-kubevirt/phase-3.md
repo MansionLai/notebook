@@ -66,17 +66,25 @@ CEPH_ADMIN_KEY="<admin_key>"   # ceph auth get-key client.admin
 
 ### Step 3-2-2：建立 ceph-external-cluster namespace 與 secret
 
+> 💡 **為什麼需要這麼多個 Secret？（功能分離與最小權限原則）**
+> 雖然在 Lab 中我們都填入 `client.admin` 的金鑰，但 Rook 設計了不同的「門禁卡」位置，讓生產環境可以針對不同組件設定不同權限：
+> - **ConfigMap (`mon-endpoints`)**：外部叢集的「通訊錄」，告訴 Rook 去哪裡找 Monitor。
+> - **Secret (`mon`)**：外部叢集的「身分證」，包含 FSID 與基礎連線資訊。
+> - **Secret (`operator-creds`)**：Operator 的「管理員權限」，用來查詢叢集狀態與建立資源。
+> - **Secret (`csi-rbd-*`)**：CSI 驅動的「作業權限」，專門用來建立 (Provisioner) 與掛載 (Node) 磁碟。
+
 ```bash
 kubectl create namespace ceph-external-cluster
 
-# rook external cluster: monitor endpoints configmap
+# 1. 外部叢集通訊錄 (Address Book)
+# maxMonId: 告訴 Rook 最後一個 Mon 的編號 (a=0, b=1, c=2)，供程式邏輯追蹤用。
 kubectl create configmap rook-ceph-mon-endpoints \
   --from-literal=data="${CEPH_MON_DATA}" \
   --from-literal=maxMonId="2" \
   --from-literal=mapping="{}" \
   -n ceph-external-cluster
 
-# rook external cluster: mon secret（fsid + admin/user key）
+# 2. 叢集基礎資訊與連線 Secret
 kubectl create secret generic rook-ceph-mon \
   --type="kubernetes.io/rook" \
   --from-literal=cluster-name=ceph-external-cluster \
@@ -87,14 +95,15 @@ kubectl create secret generic rook-ceph-mon \
   --from-literal=ceph-secret="${CEPH_ADMIN_KEY}" \
   -n ceph-external-cluster
 
-# operator creds（external mode 需要）
+# 3. Operator 管理員憑證 (Admin Identity)
 kubectl create secret generic rook-ceph-operator-creds \
   --type="kubernetes.io/rook" \
   --from-literal=userID=client.admin \
   --from-literal=userKey="${CEPH_ADMIN_KEY}" \
   -n ceph-external-cluster
 
-# CSI RBD secrets（供 StorageClass 使用）
+# 4. CSI 儲存驅動憑證 (Worker Identities)
+# 分為 Node (掛載) 與 Provisioner (建立/刪除)，分開是為了未來能做精細權限控管。
 kubectl create secret generic rook-csi-rbd-node \
   --type="kubernetes.io/rook" \
   --from-literal=userID=client.admin \
