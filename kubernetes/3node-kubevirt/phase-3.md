@@ -121,6 +121,14 @@ kubectl create secret generic rook-csi-rbd-provisioner \
 
 ### Step 3-2-3：部署 CephCluster（External 模式）
 
+> 💡 **連動機制說明（約定優於配置）：**
+> 你會發現 YAML 裡並沒有指定前面建立的 Secret 或 ConfigMap 名稱。這是因為當 `external.enable` 設為 `true` 時，Rook Operator 會自動在該 **namespace** 下尋找固定名稱的資源：
+> 1. 看到 `external: true` → 觸發外部模式邏輯。
+> 2. 自動去該 Namespace 找名為 **`rook-ceph-mon-endpoints`** 的 ConfigMap。
+> 3. 自動去該 Namespace 找名為 **`rook-ceph-mon`** 與 **`rook-ceph-operator-creds`** 的 Secret。
+> 
+> **結論**：名稱絕對不能打錯，因為 Operator 是靠「約定名稱」來自動對號入座的。
+
 ```yaml
 # /tmp/ceph-external-cluster.yaml
 apiVersion: ceph.rook.io/v1
