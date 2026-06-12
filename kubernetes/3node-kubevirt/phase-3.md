@@ -20,6 +20,11 @@ permalink: /kubernetes/3node-kubevirt/phase-3/
 
 ### Step 3-1-1：部署 Rook-Ceph CRD 與 Operator
 
+> 💡 **理解這三個檔案的角色（大樓維修比喻）：**
+> - **`crds.yaml`**：大樓的新規則手冊（定義了什麼叫 CephCluster）。
+> - **`common.yaml`**：成立「電梯維修部」(Namespace)、製作「員工工號」(ServiceAccount)、並發給他們「萬能鑰匙和維修授權書」(RBAC)。
+> - **`operator.yaml`**：真正聘請進來的「維修技師」(Operator Pod)。
+
 ```bash
 ROOK_VERSION=v1.17.0
 
