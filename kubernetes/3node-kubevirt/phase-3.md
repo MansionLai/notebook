@@ -160,11 +160,18 @@ kubectl get cephcluster -n ceph-external-cluster
 # operator 仍在 rook-ceph
 kubectl get pods -n rook-ceph -l app=rook-ceph-operator
 # 預期：rook-ceph-operator Running
+```
 
-# 確認 external cluster 依賴資源已存在
-kubectl get configmap rook-ceph-mon-endpoints -n ceph-external-cluster
-kubectl get secret rook-ceph-mon rook-ceph-operator-creds rook-csi-rbd-node rook-csi-rbd-provisioner \
-  -n ceph-external-cluster
+> 💡 **成功連線後的自動化成果（自動生成的 Secret）：**
+> 當狀態變為 `Connected` 後，Operator 會自動「加工」原始資料並生出以下 Secret，這是驗證連線成功的關鍵指標：
+> - **`rook-ceph-config`**：自動生成的 `ceph.conf` 與 `keyring`，供 K8s 內部 Pod 直接連線 Ceph 使用。
+> - **`rook-ceph-exporter-keyring`**：監控專用憑證，讓 Prometheus 能抓取外部 Ceph 的數據。
+> - **`rook-csi-cephfs-*`**：Operator 的「貼心服務」，即便你只設了 RBD，它也會自動幫你準備好 CephFS 的 CSI 憑證。
+
+```bash
+# 確認所有資源（含自動生成的）已存在
+kubectl get configmap -n ceph-external-cluster
+kubectl get secret -n ceph-external-cluster
 ```
 
 ---
