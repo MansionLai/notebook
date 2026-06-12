@@ -288,5 +288,19 @@ kubectl delete pvc test-rbd-pvc
 
 | 問題 | 原因 | 解法 |
 |------|------|------|
-| `csi-rbdplugin-provisioner` / `csi-cephfsplugin-provisioner` 有 1 個 Pod 長期 Pending | provisioner 需要 2 副本且有 anti-affinity；但 cluster 只有 worker 可排程（master/infra 有 taint） | 為兩個 provisioner deployment 增加 toleration（control-plane/infra），讓第二副本可排到 infra 或 master |
-| monitoring PVC 掛載失敗：`driver name rook-ceph.rbd.csi.ceph.com not found` | `csi-rbdplugin` 沒有在掛載目標節點（特別是 infra）運行 | patch `csi-rbdplugin` DaemonSet toleration，確保在 infra/control-plane/worker 都有 rbd node plugin |
+| `csi-rbdplugin-provisioner` / `csi-cephfsplugin-provisioner` 有 1 個 Pod 長期 Pending | provisioner 需要 2 副本且有 anti-affinity；但 cluster 只有 worker 可排程（master/infra 有 taint） | 透過 patch 設定 `CSI_PROVISIONER_TOLERATIONS` 與 `CSI_PLUGIN_TOLERATIONS` (見下方指令) |
+| monitoring PVC 掛載失敗：`driver name rook-ceph.rbd.csi.ceph.com not found` | `csi-rbdplugin` 沒有在掛載目標節點（特別是 infra）運行 | 同上，透過 patch 讓 DaemonSet 也能跑在 infra 與 master 節點 |
+
+### 解決方案：補上 CSI Tolerations
+
+執行以下指令，讓 CSI 相關 Pod 能夠進入 `master` 與 `infra` 節點：
+
+```bash
+kubectl -n rook-ceph patch configmap rook-ceph-operator-config --type merge -p '{
+  "data": {
+    "CSI_PROVISIONER_TOLERATIONS": "[{\"key\":\"node-role.kubernetes.io/control-plane\",\"operator\":\"Exists\",\"effect\":\"NoSchedule\"},{\"key\":\"node-role.kubernetes.io/infra\",\"operator\":\"Exists\",\"effect\":\"NoSchedule\"}]",
+    "CSI_PLUGIN_TOLERATIONS": "[{\"key\":\"node-role.kubernetes.io/control-plane\",\"operator\":\"Exists\",\"effect\":\"NoSchedule\"},{\"key\":\"node-role.kubernetes.io/infra\",\"operator\":\"Exists\",\"effect\":\"NoSchedule\"}]"
+  }
+}'
+```
+
