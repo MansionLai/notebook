@@ -7,8 +7,8 @@
     <link rel="icon" type="image/svg+xml" href="/notebook/kubernetes/3node-kubevirt/rook-ceph-slides/favicon.svg" />
     <!-- Tailwind CSS 3.4 CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons (React version) -->
-    <script src="https://unpkg.com/lucide-react@0.344.0/dist/umd/lucide-react.js"></script>
+    <!-- Iconify (Web Component for Icons) -->
+    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
     <!-- Framer Motion & React (via CDN) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -73,27 +73,16 @@
         const { motion, AnimatePresence } = MotionLib || { motion: (props) => <div {...props} />, AnimatePresence: ({children}) => children };
 
         // --- Icons Wrapper ---
-        // Using LucideReact UMD global
+        // Using Iconify Web Component for maximum reliability
         const Icon = ({ name, size = 24, className = "" }) => {
-            // Map string name to LucideReact component
-            // Names in slides are kebab-case (database, server, etc.)
-            // LucideReact uses PascalCase (Database, Server, etc.)
-            const toPascalCase = (str) => {
-                return str
-                    .split('-')
-                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                    .join('');
-            };
-
-            const iconName = toPascalCase(name);
-            const LucideIcon = LucideReact[iconName];
-
-            if (!LucideIcon) {
-                console.warn(`Icon "${iconName}" not found in LucideReact`);
-                return <div style={{ width: size, height: size }} className={className}></div>;
-            }
-
-            return <LucideIcon size={size} className={className} strokeWidth={2} />;
+            // Iconify uses "lucide:icon-name" to pull from the Lucide set
+            return (
+                <iconify-icon 
+                    icon={`lucide:${name}`} 
+                    style={{ fontSize: size, color: 'currentColor' }}
+                    class={className}
+                ></iconify-icon>
+            );
         };
 
         // --- Data Definitions ---
