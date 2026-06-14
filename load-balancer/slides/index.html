@@ -126,20 +126,17 @@
             const [showPacket, setShowPacket] = useState(false);
 
             useEffect(() => {
-                let packetInterval;
-                if (isMasterAlive) {
-                    packetInterval = setInterval(() => {
-                        setShowPacket(true);
-                        setTimeout(() => setShowPacket(false), 1200);
-                    }, 2500);
-                }
+                const packetInterval = setInterval(() => {
+                    setShowPacket(true);
+                    setTimeout(() => setShowPacket(false), 1200);
+                }, 2500);
                 return () => clearInterval(packetInterval);
             }, [isMasterAlive]);
 
             return (
                 <div className="flex flex-col items-center w-full space-y-12 py-8">
                     <div className="flex justify-between items-center w-full max-w-3xl relative px-12">
-                        {/* Master Node */}
+                        {/* LB-1 Node */}
                         <div className="flex flex-col items-center z-10">
                             <motion.div 
                                 animate={{ 
@@ -162,17 +159,17 @@
                         <AnimatePresence>
                             {showPacket && (
                                 <motion.div 
-                                    initial={{ x: 0, opacity: 0 }}
-                                    animate={{ x: 300, opacity: 1 }}
+                                    initial={{ x: isMasterAlive ? 0 : 300, opacity: 0 }}
+                                    animate={{ x: isMasterAlive ? 300 : 0, opacity: 1 }}
                                     exit={{ opacity: 0 }}
                                     transition={{ duration: 1.2, ease: "easeInOut" }}
                                     className="absolute left-[160px] top-12 z-0"
                                 >
                                     <div className="flex flex-col items-center">
                                         <div className="px-3 py-1 bg-blue-500/80 rounded-full text-[8px] font-bold text-white shadow-lg shadow-blue-500/20 whitespace-nowrap border border-blue-400/30">
-                                            UNICAST: LB-2 (192.168.50.212)
+                                            {isMasterAlive ? "LB-1 -> LB-2 (ADVERT)" : "LB-2 -> LB-1 (ADVERT)"}
                                         </div>
-                                        <div className="w-2 h-2 bg-blue-400 rounded-full mt-1 animate-pulse"></div>
+                                        <div className={`w-2 h-2 rounded-full mt-1 animate-pulse ${isMasterAlive ? 'bg-blue-400' : 'bg-emerald-400'}`}></div>
                                     </div>
                                 </motion.div>
                             )}
@@ -181,17 +178,19 @@
                         {/* Connection Line */}
                         <div className="absolute top-16 left-0 right-0 h-[2px] bg-white/5 -z-10"></div>
 
-                        {/* Backup Node */}
+                        {/* LB-2 Node */}
                         <div className="flex flex-col items-center z-10">
                             <motion.div 
                                 animate={{ 
                                     borderColor: !isMasterAlive ? "#10b981" : "rgba(255,255,255,0.1)",
-                                    backgroundColor: !isMasterAlive ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.03)"
+                                    backgroundColor: !isMasterAlive ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.03)",
+                                    scale: !isMasterAlive ? [1, 1.05, 1] : 1
                                 }}
+                                transition={!isMasterAlive ? { repeat: Infinity, duration: 2 } : {}}
                                 className="w-32 h-32 rounded-3xl flex flex-col items-center justify-center border-2 glass relative"
                             >
                                 {!isMasterAlive && (
-                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-[10px] font-black px-3 py-0.5 rounded-full text-black shadow-lg shadow-emerald-500/50">VIP TAKEOVER</div>
+                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-[10px] font-black px-3 py-0.5 rounded-full text-black shadow-lg shadow-emerald-500/50">VIP ACTIVE</div>
                                 )}
                                 <Icon name={!isMasterAlive ? "shield-check" : "clock"} size={48} className={!isMasterAlive ? "text-emerald-400" : "text-white/20"} />
                                 <span className="text-xs font-bold mt-2 font-mono uppercase">LB-2 (Pri: 50)</span>
@@ -205,15 +204,15 @@
                             onClick={() => setIsMasterAlive(!isMasterAlive)}
                             className={`px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest transition-all ${isMasterAlive ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20' : 'bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20'}`}
                         >
-                            {isMasterAlive ? "Kill Master (LB-1)" : "Restore LB-1"}
+                            {isMasterAlive ? "Kill LB-1 (Failover)" : "Restore LB-1"}
                         </button>
                     </div>
 
                     <div className="glass p-6 rounded-2xl border-white/5 max-w-xl text-center">
                         <p className="text-sm text-white/70 italic leading-relaxed">
                             {isMasterAlive 
-                                ? "Master 定期向 Backup 發送 Unicast 廣告。Backup 持續監控，只要通訊正常，VIP 就會鎖定在 Master 網卡上。" 
-                                : "LB-1 故障後，LB-2 在超時內未收到廣告，立刻啟動 Failover 機制，將 VIP (192.168.50.250) 掛載至本機網卡。"}
+                                ? "LB-1 正常運行，持續發送 ADVERT 告知 LB-2 自己仍是 Master。VIP 綁定在 LB-1。" 
+                                : "LB-1 故障，LB-2 接管 VIP 並開始發送 ADVERT，宣告自己成為新的 Master。"}
                         </p>
                     </div>
                 </div>
@@ -329,16 +328,17 @@
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                         <div className="space-y-6">
                             <div className="p-6 glass rounded-3xl border-white/5">
-                                <h5 className="text-blue-400 font-bold mb-4 flex items-center gap-2 text-sm"><Icon name="file-code" size={18}/> Configuration Sample (Master)</h5>
+                                <h5 className="text-blue-400 font-bold mb-4 flex items-center gap-2 text-sm"><Icon name="file-code" size={18}/> Configuration Sample (BACKUP)</h5>
                                 <div className="code-block whitespace-pre overflow-x-auto text-[10px]">
 {`vrrp_instance VI_1 {
-    state MASTER
+    state BACKUP
     interface eth0
     virtual_router_id 51
-    priority 100
+    priority 50
     advert_int 1
-    unicast_src_ip 192.168.50.211
-    unicast_peer { 192.168.50.212 }
+    nopreempt
+    unicast_src_ip 192.168.50.212
+    unicast_peer { 192.168.50.211 }
     authentication {
         auth_type PASS
         auth_pass 1111
@@ -351,8 +351,8 @@
                                 </div>
                             </div>
                             <div className="p-4 glass rounded-2xl border-blue-500/20">
-                                <p className="text-[10px] text-white/50 italic">
-                                    * Backup 節點僅需更改 <code className="text-blue-300">state BACKUP</code>, <code className="text-blue-300">priority 50</code> 以及對應的 <code className="text-blue-300">unicast</code> 位址。
+                                <p className="text-[10px] text-white/50 italic leading-relaxed">
+                                    * 建議兩台皆設為 <code className="text-blue-300">BACKUP</code> 並配合 <code className="text-blue-300">nopreempt</code>，可避免 Master 修復後發生不必要的二次切換 (Preemption)。
                                 </p>
                             </div>
                         </div>
@@ -360,24 +360,24 @@
                             <h5 className="text-emerald-400 font-bold flex items-center gap-2 text-sm"><Icon name="info" size={18}/> 參數詳解</h5>
                             <div className="space-y-4 text-xs font-mono">
                                 <div className="config-grid border-b border-white/5 pb-2">
+                                    <span className="text-purple-400 font-bold">nopreempt</span>
+                                    <span className="text-white/60">不搶佔模式。當原 Master 恢復時，不會強制搶回 VIP，減少服務中斷。</span>
+                                </div>
+                                <div className="config-grid border-b border-white/5 pb-2">
                                     <span className="text-purple-400 font-bold">state</span>
-                                    <span className="text-white/60">初始角色。MASTER 啟動時即搶佔 VIP；BACKUP 則等待。</span>
+                                    <span className="text-white/60">初始狀態。在 nopreempt 模式下，建議雙方都設為 BACKUP。</span>
                                 </div>
                                 <div className="config-grid border-b border-white/5 pb-2">
                                     <span className="text-purple-400 font-bold">priority</span>
-                                    <span className="text-white/60">競選權重。權重最高者在 VRRP 協商中勝出成為新 Master。</span>
+                                    <span className="text-white/60">競選權重。數值高者勝出。</span>
                                 </div>
                                 <div className="config-grid border-b border-white/5 pb-2">
                                     <span className="text-purple-400 font-bold">unicast_peer</span>
-                                    <span className="text-white/60">對等點位址。在雲端或混合雲環境建議取代組播 (Multicast)。</span>
+                                    <span className="text-white/60">單播對手。指定具體的對端 IP，避免 Multicast 廣播風暴。</span>
                                 </div>
                                 <div className="config-grid border-b border-white/5 pb-2">
                                     <span className="text-purple-400 font-bold">virtual_ip</span>
-                                    <span className="text-white/60">浮動 IP。當 Failover 發生時，會透過 Gratuitous ARP 通知交換機。</span>
-                                </div>
-                                <div className="config-grid border-b border-white/5 pb-2">
-                                    <span className="text-purple-400 font-bold">track_script</span>
-                                    <span className="text-white/60">聯動腳本。可根據自定義邏輯 (如 curl check) 扣除權重。</span>
+                                    <span className="text-white/60">漂移 IP。外部存取的唯一入口。</span>
                                 </div>
                             </div>
                         </div>
@@ -467,7 +467,7 @@
                             <ul className="space-y-4 text-sm text-white/70">
                                 <li className="flex gap-3"><Icon name="check" size={16} className="text-emerald-400" /> 使用專用的控制平面負載均衡器</li>
                                 <li className="flex gap-3"><Icon name="check" size={16} className="text-emerald-400" /> Keepalived 務必設定 Unicast 以維持網路乾淨</li>
-                                <li className="flex gap-3"><Icon name="check" size={16} className="text-emerald-400" /> Priority 差距需足以覆蓋故障時的權重調整</li>
+                                <li className="flex gap-3"><Icon name="check" size={16} className="text-emerald-400" /> 啟用 nopreempt 模式，防止服務頻繁切換</li>
                                 <li className="flex gap-3"><Icon name="check" size={16} className="text-emerald-400" /> 定期進行切換測試 (Chaos Testing)</li>
                             </ul>
                         </div>
