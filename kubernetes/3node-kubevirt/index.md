@@ -10,6 +10,10 @@ permalink: /kubernetes/3node-kubevirt/
 
 這份筆記已改為 **phase 導覽式結構**。如果你要完整從 Azure 建到 KubeVirt VM，請依序閱讀 `Phase 0` 到 `Phase 6`；如果你要查整體設計或指令，請直接跳到下方參考文件。
 
+### 🎨 [互動式架構簡報 (Slides)](./rook-ceph-slides/index.html)
+- **視覺化導覽**：以投影片方式快速理解 Rook-Ceph v1.17 外部模式架構
+- **不需捲動**：互動式分頁切換，適合向團隊展示整合細節
+
 ## Build Agenda
 
 | Phase | 主題 | 說明 |

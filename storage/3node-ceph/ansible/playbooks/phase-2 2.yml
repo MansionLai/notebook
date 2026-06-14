@@ -1,6 +1,0 @@
-- name: Phase 2 | Ceph prerequisites
-  hosts: ceph_nodes
-  gather_facts: true
-  become: true
-  roles:
-      - ceph_prereqs
