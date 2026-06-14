@@ -62,17 +62,53 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        // Helper to safely get libraries from window
         const { useState, useEffect, useCallback, useRef } = React;
-        const { motion, AnimatePresence } = FramerMotion;
+        
+        // Framer Motion UMD export is usually 'Motion'
+        const MotionLib = window.Motion || window.FramerMotion;
+        if (!MotionLib) {
+            console.error("Framer Motion not found! Please check CDN.");
+        }
+        const { motion, AnimatePresence } = MotionLib || { motion: (props) => <div {...props} />, AnimatePresence: ({children}) => children };
 
         // --- Icons Wrapper ---
         const Icon = ({ name, size = 24, className = "" }) => {
+            const iconRef = useRef(null);
+            const [ready, setReady] = useState(false);
+
             useEffect(() => {
-                if (window.lucide) {
-                    window.lucide.createIcons();
-                }
+                const checkLucide = () => {
+                    if (window.lucide && window.lucide.icons && window.lucide.icons[name]) {
+                        setReady(true);
+                    } else {
+                        setTimeout(checkLucide, 100);
+                    }
+                };
+                checkLucide();
             }, [name]);
-            return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
+
+            useEffect(() => {
+                if (ready && iconRef.current) {
+                    try {
+                        window.lucide.createIcons({
+                            attrs: {
+                                class: className,
+                                'stroke-width': 2
+                            },
+                            nameAttr: 'data-lucide'
+                        });
+                    } catch (e) {
+                        console.error("Lucide error:", e);
+                    }
+                }
+            }, [ready, className]);
+            
+            return (
+                <div style={{ width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} className={className}>
+                    <i ref={iconRef} data-lucide={name} style={{ width: size, height: size }}></i>
+                </div>
+            );
         };
 
         // --- Data Definitions ---
