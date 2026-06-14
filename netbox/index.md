@@ -19,7 +19,7 @@ permalink: /netbox/
 - 整體數據流和通信機制
 - 架構圖和流程圖
 
-### 🎨 [互動式架構簡報 (Slides)](../netbox-slides/index.html)
+### 🎨 [互動式架構簡報 (Slides)](./slides/index.html)
 - **視覺化導覽**：以投影片方式快速理解 NetBox 架構
 - **不需捲動**：互動式分頁切換
 
