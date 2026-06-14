@@ -19,6 +19,10 @@ permalink: /netbox/
 - 整體數據流和通信機制
 - 架構圖和流程圖
 
+### 🎨 [互動式架構簡報 (Slides)](../netbox-slides/index.html)
+- **視覺化導覽**：以投影片方式快速理解 NetBox 架構
+- **不需捲動**：互動式分頁切換
+
 ### 2. [Azure VM + K3s 基礎設施搭建](./azure-vm-k3s-setup.md)
 - 在 Azure VM 上創建 3 個 Ubuntu VM
 - 初始化 K3s 1 control plane + 2 worker 叢集
