@@ -65,9 +65,20 @@
 
         /* Prevent text truncation in some browsers */
         .slide-content-container {
-            max-height: 65vh;
+            max-height: 70vh;
             overflow-y: auto;
             scrollbar-width: none;
+        }
+        
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: #93c5fd;
+            line-height: 1.5;
         }
     </style>
 </head>
@@ -311,52 +322,63 @@
                 id: 'keepalived-config',
                 title: 'Keepalived Configuration',
                 subtitle: '關鍵參數詳解',
-                description: '深入理解 keepalived.conf 的核心設定選項',
+                description: '位於 /etc/keepalived/keepalived.conf 的核心設定',
                 gradient: 'gradient-slate',
                 icon: 'settings',
                 content: (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="p-6 glass rounded-3xl space-y-4 border-white/5 overflow-y-auto max-h-[400px]">
-                            <h5 className="text-blue-400 font-bold flex items-center gap-2"><Icon name="code" size={18}/> vrrp_instance VI_1</h5>
-                            <div className="space-y-4 text-xs font-mono">
-                                <div className="config-grid">
-                                    <span className="text-purple-400">unicast_peer</span>
-                                    <span className="text-white/60">指定對手 IP。避免在公用網段使用 Multicast 造成干擾。</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                        <div className="space-y-6">
+                            <div className="p-6 glass rounded-3xl border-white/5">
+                                <h5 className="text-blue-400 font-bold mb-4 flex items-center gap-2 text-sm"><Icon name="file-code" size={18}/> Configuration Sample (Master)</h5>
+                                <div className="code-block whitespace-pre overflow-x-auto text-[10px]">
+{`vrrp_instance VI_1 {
+    state MASTER
+    interface eth0
+    virtual_router_id 51
+    priority 100
+    advert_int 1
+    unicast_src_ip 192.168.50.211
+    unicast_peer { 192.168.50.212 }
+    authentication {
+        auth_type PASS
+        auth_pass 1111
+    }
+    virtual_ipaddress {
+        192.168.50.250/24
+    }
+    track_script { check_haproxy }
+}`}
                                 </div>
-                                <div className="config-grid">
-                                    <span className="text-purple-400">priority</span>
-                                    <span className="text-white/60">權重值。MASTER 設 100，BACKUP 設 50，差距建議大於 20。</span>
-                                </div>
-                                <div className="config-grid">
-                                    <span className="text-purple-400">interface</span>
-                                    <span className="text-white/60">綁定 VIP 的實體網卡 (例如 eth0)。</span>
-                                </div>
-                                <div className="config-grid">
-                                    <span className="text-purple-400">virtual_router_id</span>
-                                    <span className="text-white/60">虛擬路由 ID (0-255)。同一組群組必須一致。</span>
-                                </div>
-                                <div className="config-grid">
-                                    <span className="text-purple-400">advert_int</span>
-                                    <span className="text-white/60">廣告間隔秒數 (預設 1s)。</span>
-                                </div>
-                                <div className="config-grid">
-                                    <span className="text-purple-400">auth_pass</span>
-                                    <span className="text-white/60">組播認證密碼。</span>
-                                </div>
+                            </div>
+                            <div className="p-4 glass rounded-2xl border-blue-500/20">
+                                <p className="text-[10px] text-white/50 italic">
+                                    * Backup 節點僅需更改 <code className="text-blue-300">state BACKUP</code>, <code className="text-blue-300">priority 50</code> 以及對應的 <code className="text-blue-300">unicast</code> 位址。
+                                </p>
                             </div>
                         </div>
-                        <div className="space-y-6">
-                            <div className="p-6 glass rounded-3xl border-emerald-500/20">
-                                <h5 className="text-emerald-400 font-bold mb-3 flex items-center gap-2"><Icon name="git-branch" size={18}/> virtual_ipaddress</h5>
-                                <p className="text-sm text-white/60 leading-relaxed">
-                                    定義漂移 IP 位址 (VIP)。Keepalived 會自動在 MASTER 節點上動態掛載此 IP，對外提供統一服務窗口。
-                                </p>
-                            </div>
-                            <div className="p-6 glass rounded-3xl border-purple-500/20">
-                                <h5 className="text-purple-400 font-bold mb-3 flex items-center gap-2"><Icon name="file-search" size={18}/> track_script</h5>
-                                <p className="text-sm text-white/60 leading-relaxed">
-                                    監控腳本。例如檢查 HAProxy 進程。若腳本失敗，會自動降低 Priority 觸發 VIP 漂移。
-                                </p>
+                        <div className="p-6 glass rounded-3xl space-y-4 border-white/5 overflow-y-auto max-h-[480px]">
+                            <h5 className="text-emerald-400 font-bold flex items-center gap-2 text-sm"><Icon name="info" size={18}/> 參數詳解</h5>
+                            <div className="space-y-4 text-xs font-mono">
+                                <div className="config-grid border-b border-white/5 pb-2">
+                                    <span className="text-purple-400 font-bold">state</span>
+                                    <span className="text-white/60">初始角色。MASTER 啟動時即搶佔 VIP；BACKUP 則等待。</span>
+                                </div>
+                                <div className="config-grid border-b border-white/5 pb-2">
+                                    <span className="text-purple-400 font-bold">priority</span>
+                                    <span className="text-white/60">競選權重。權重最高者在 VRRP 協商中勝出成為新 Master。</span>
+                                </div>
+                                <div className="config-grid border-b border-white/5 pb-2">
+                                    <span className="text-purple-400 font-bold">unicast_peer</span>
+                                    <span className="text-white/60">對等點位址。在雲端或混合雲環境建議取代組播 (Multicast)。</span>
+                                </div>
+                                <div className="config-grid border-b border-white/5 pb-2">
+                                    <span className="text-purple-400 font-bold">virtual_ip</span>
+                                    <span className="text-white/60">浮動 IP。當 Failover 發生時，會透過 Gratuitous ARP 通知交換機。</span>
+                                </div>
+                                <div className="config-grid border-b border-white/5 pb-2">
+                                    <span className="text-purple-400 font-bold">track_script</span>
+                                    <span className="text-white/60">聯動腳本。可根據自定義邏輯 (如 curl check) 扣除權重。</span>
+                                </div>
                             </div>
                         </div>
                     </div>
