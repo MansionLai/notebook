@@ -124,6 +124,7 @@
         const VRRPAnimation = () => {
             const [isMasterAlive, setIsMasterAlive] = useState(true);
             const [showPacket, setShowPacket] = useState(false);
+            const [showGARP, setShowGARP] = useState(false);
 
             useEffect(() => {
                 const packetInterval = setInterval(() => {
@@ -133,8 +134,37 @@
                 return () => clearInterval(packetInterval);
             }, [isMasterAlive]);
 
+            // Trigger GARP animation when status changes
+            useEffect(() => {
+                setShowGARP(true);
+                const timer = setTimeout(() => setShowGARP(false), 1500);
+                return () => clearTimeout(timer);
+            }, [isMasterAlive]);
+
             return (
-                <div className="flex flex-col items-center w-full space-y-12 py-8">
+                <div className="flex flex-col items-center w-full space-y-12 py-4">
+                    {/* Network Switch Layer */}
+                    <div className="flex flex-col items-center mb-4">
+                        <div className="p-4 glass rounded-3xl border-blue-500/30 flex flex-col items-center w-48 relative">
+                            <Icon name="network" size={40} className="text-blue-400" />
+                            <span className="text-[10px] font-black mt-2 text-white/50 tracking-widest uppercase">L2 Switch</span>
+                            
+                            {/* GARP Reception Visual */}
+                            <AnimatePresence>
+                                {showGARP && (
+                                    <motion.div 
+                                        initial={{ scale: 0.8, opacity: 0 }}
+                                        animate={{ scale: 1.2, opacity: 1 }}
+                                        exit={{ scale: 1.5, opacity: 0 }}
+                                        className="absolute -top-2 bg-emerald-500/20 border border-emerald-500/50 px-2 py-0.5 rounded text-[8px] text-emerald-400 font-bold"
+                                    >
+                                        CAM TABLE UPDATED
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    </div>
+
                     <div className="flex justify-between items-center w-full max-w-3xl relative px-12">
                         {/* LB-1 Node */}
                         <div className="flex flex-col items-center z-10">
@@ -154,6 +184,25 @@
                             </motion.div>
                             <span className="text-[10px] mt-2 font-mono text-white/40">192.168.50.211</span>
                         </div>
+
+                        {/* GARP Packet Animation */}
+                        <AnimatePresence>
+                            {showGARP && (
+                                <motion.div 
+                                    initial={{ y: 80, x: isMasterAlive ? -160 : 160, opacity: 0 }}
+                                    animate={{ y: -100, x: 0, opacity: 1 }}
+                                    transition={{ duration: 0.8, ease: "easeOut" }}
+                                    className="absolute left-1/2 top-12 z-20"
+                                >
+                                    <div className="flex flex-col items-center">
+                                        <div className="px-3 py-1 bg-emerald-500 rounded-full text-[8px] font-black text-black shadow-lg whitespace-nowrap">
+                                            GRATUITOUS ARP
+                                        </div>
+                                        <div className="w-2 h-2 bg-emerald-400 rounded-full mt-1 animate-ping"></div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
 
                         {/* Unicast Packet Animation */}
                         <AnimatePresence>
@@ -204,7 +253,7 @@
                             onClick={() => setIsMasterAlive(!isMasterAlive)}
                             className={`px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest transition-all ${isMasterAlive ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20' : 'bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20'}`}
                         >
-                            {isMasterAlive ? "Kill LB-1 (Failover)" : "Restore LB-1"}
+                            {isMasterAlive ? "Kill LB-1 (Trigger GARP)" : "Restore LB-1 (Trigger GARP)"}
                         </button>
                     </div>
 
@@ -212,7 +261,7 @@
                         <p className="text-sm text-white/70 italic leading-relaxed">
                             {isMasterAlive 
                                 ? "LB-1 正常運行，持續發送 ADVERT 告知 LB-2 自己仍是 Master。VIP 綁定在 LB-1。" 
-                                : "LB-1 故障，LB-2 接管 VIP 並開始發送 ADVERT，宣告自己成為新的 Master。"}
+                                : "LB-1 故障，LB-2 接管 VIP 並立即發送 Gratuitous ARP 通知 Switch 更新 MAC 位址，隨後開始發送 ADVERT。"}
                         </p>
                     </div>
                 </div>
@@ -312,7 +361,7 @@
                 id: 'keepalived-vrrp',
                 title: 'VRRP Mechanism',
                 subtitle: 'Keepalived 核心原理',
-                description: '透過 VRRP Unicast 廣告實現「故障即時感知」與「VIP 無縫遷移」',
+                description: '透過 VRRP ADVERT 與 Gratuitous ARP 實現 VIP 的物理位置遷移',
                 gradient: 'gradient-purple',
                 icon: 'activity',
                 content: <VRRPAnimation />
