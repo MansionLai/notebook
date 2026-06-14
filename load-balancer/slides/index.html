@@ -56,6 +56,12 @@
         ::-webkit-scrollbar {
             display: none;
         }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: 140px 1fr;
+            gap: 1rem;
+        }
     </style>
 </head>
 <body>
@@ -67,41 +73,125 @@
         const MotionLib = window.Motion || window.FramerMotion;
         const { motion, AnimatePresence } = MotionLib || { motion: (props) => <div {...props} />, AnimatePresence: ({children}) => children };
 
-        // --- Icons Wrapper ---
+        // --- Icons Wrapper (Improved for CDN reliability) ---
         const Icon = ({ name, size = 24, className = "" }) => {
             const iconRef = useRef(null);
-            const [ready, setReady] = useState(false);
 
             useEffect(() => {
-                const checkLucide = () => {
-                    if (window.lucide && window.lucide.icons && window.lucide.icons[name]) {
-                        setReady(true);
-                    } else {
-                        setTimeout(checkLucide, 100);
-                    }
-                };
-                checkLucide();
-            }, [name]);
-
-            useEffect(() => {
-                if (ready && iconRef.current) {
-                    try {
+                const timer = setInterval(() => {
+                    if (window.lucide && window.lucide.createIcons && iconRef.current) {
                         window.lucide.createIcons({
                             attrs: {
                                 class: className,
-                                'stroke-width': 2
+                                'stroke-width': 2,
+                                'width': size,
+                                'height': size
                             },
                             nameAttr: 'data-lucide'
                         });
-                    } catch (e) {
-                        console.error("Lucide error:", e);
+                        clearInterval(timer);
                     }
-                }
-            }, [ready, className]);
+                }, 100);
+                return () => clearInterval(timer);
+            }, [name, size, className]);
             
             return (
-                <div style={{ width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} className={className}>
+                <div className={`inline-flex items-center justify-center ${className}`} style={{ width: size, height: size }}>
                     <i ref={iconRef} data-lucide={name} style={{ width: size, height: size }}></i>
+                </div>
+            );
+        };
+
+        // --- VRRP Animation Component ---
+        const VRRPAnimation = () => {
+            const [isMasterAlive, setIsMasterAlive] = useState(true);
+            const [showPacket, setShowPacket] = useState(false);
+
+            useEffect(() => {
+                let packetInterval;
+                if (isMasterAlive) {
+                    packetInterval = setInterval(() => {
+                        setShowPacket(true);
+                        setTimeout(() => setShowPacket(false), 1000);
+                    }, 2000);
+                }
+                return () => clearInterval(packetInterval);
+            }, [isMasterAlive]);
+
+            return (
+                <div className="flex flex-col items-center w-full space-y-12 py-8">
+                    <div className="flex justify-between items-center w-full max-w-3xl relative px-12">
+                        {/* Master Node */}
+                        <div className="flex flex-col items-center z-10">
+                            <motion.div 
+                                animate={{ 
+                                    scale: isMasterAlive ? [1, 1.05, 1] : 1,
+                                    opacity: isMasterAlive ? 1 : 0.4 
+                                }}
+                                transition={{ repeat: Infinity, duration: 2 }}
+                                className={`w-32 h-32 rounded-3xl flex flex-col items-center justify-center border-2 transition-colors ${isMasterAlive ? 'border-emerald-500 bg-emerald-500/10' : 'border-red-500 bg-red-500/10'}`}
+                            >
+                                <Icon name={isMasterAlive ? "shield-check" : "shield-alert"} size={48} className={isMasterAlive ? "text-emerald-400" : "text-red-400"} />
+                                <span className="text-xs font-bold mt-2">MASTER</span>
+                            </motion.div>
+                            <span className="text-[10px] mt-2 font-mono text-white/40">192.168.50.211</span>
+                        </div>
+
+                        {/* Packet Animation */}
+                        <AnimatePresence>
+                            {showPacket && (
+                                <motion.div 
+                                    initial={{ x: 0, opacity: 0 }}
+                                    animate={{ x: 300, opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{ duration: 1, ease: "linear" }}
+                                    className="absolute left-[160px] top-12 z-0"
+                                >
+                                    <div className="flex flex-col items-center">
+                                        <div className="px-3 py-1 bg-blue-500 rounded-full text-[8px] font-bold text-white shadow-lg shadow-blue-500/20 whitespace-nowrap">
+                                            VRRP ADVERTISEMENT
+                                        </div>
+                                        <div className="w-2 h-2 bg-blue-400 rounded-full mt-1 animate-ping"></div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* Connection Line */}
+                        <div className="absolute top-16 left-0 right-0 h-[2px] bg-white/5 -z-10"></div>
+
+                        {/* Backup Node */}
+                        <div className="flex flex-col items-center z-10">
+                            <motion.div 
+                                animate={{ 
+                                    borderColor: !isMasterAlive ? "#10b981" : "rgba(255,255,255,0.1)",
+                                    backgroundColor: !isMasterAlive ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.03)"
+                                }}
+                                className="w-32 h-32 rounded-3xl flex flex-col items-center justify-center border-2 glass"
+                            >
+                                <Icon name={!isMasterAlive ? "shield-check" : "clock"} size={48} className={!isMasterAlive ? "text-emerald-400" : "text-white/20"} />
+                                <span className="text-xs font-bold mt-2 uppercase">{!isMasterAlive ? "New Master" : "Backup"}</span>
+                            </motion.div>
+                            <span className="text-[10px] mt-2 font-mono text-white/40">192.168.50.212</span>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-4">
+                        <button 
+                            onClick={() => setIsMasterAlive(!isMasterAlive)}
+                            className={`px-6 py-2 rounded-full font-bold text-xs transition-all ${isMasterAlive ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}
+                        >
+                            {isMasterAlive ? "Simulate Master Failure" : "Restore Master"}
+                        </button>
+                    </div>
+
+                    <div className="glass p-6 rounded-2xl border-white/5 max-w-xl text-center">
+                        <p className="text-sm text-white/70 italic leading-relaxed">
+                            {isMasterAlive 
+                                ? "Master 定期向組播位址發送 VRRP 廣告。Backup 只要收到廣告，就會重置計時器並保持 Standby 狀態。" 
+                                : "當 Backup 超過 (3 * Advert_Int + Skew_Time) 秒未收到廣告，將立刻接管 VIP 並宣佈自己成為 Master。"}
+                        </p>
+                    </div>
                 </div>
             );
         };
@@ -196,47 +286,64 @@
                 )
             },
             {
-                id: 'keepalived',
-                title: 'Keepalived',
-                subtitle: '高可用守護者',
-                description: '基於 VRRP 協定，提供虛擬 IP (VIP) 在多台機器間自動切換的能力',
+                id: 'keepalived-vrrp',
+                title: 'VRRP Mechanism',
+                subtitle: 'Keepalived 核心原理',
+                description: '透過 VRRP 廣告實現「故障即時感知」與「VIP 無縫遷移」',
                 gradient: 'gradient-purple',
-                icon: 'shield',
+                icon: 'activity',
+                content: <VRRPAnimation />
+            },
+            {
+                id: 'keepalived-config',
+                title: 'Keepalived Configuration',
+                subtitle: '關鍵參數詳解',
+                description: '深入理解 keepalived.conf 的核心設定選項',
+                gradient: 'gradient-slate',
+                icon: 'settings',
                 content: (
-                    <div className="space-y-8">
-                        <div className="flex flex-col md:flex-row gap-8 justify-center items-stretch">
-                            <div className="flex-1 p-6 glass rounded-3xl border-purple-500/20">
-                                <h5 className="text-purple-400 font-bold mb-4 flex items-center gap-2">
-                                    <Icon name="monitor" size={20} /> MASTER Node
-                                </h5>
-                                <div className="bg-purple-500/20 p-4 rounded-xl mb-4 text-center font-bold">Holds VIP (10.0.0.100)</div>
-                                <p className="text-xs text-white/60">發送 VRRP 廣播，宣告存活狀態</p>
-                            </div>
-                            <div className="flex items-center justify-center">
-                                <Icon name="refresh-cw" className="text-white/20" size={32} />
-                            </div>
-                            <div className="flex-1 p-6 glass rounded-3xl border-slate-500/20">
-                                <h5 className="text-slate-400 font-bold mb-4 flex items-center gap-2">
-                                    <Icon name="monitor" size={20} /> BACKUP Node
-                                </h5>
-                                <div className="bg-white/5 p-4 rounded-xl mb-4 text-center font-bold text-white/30">Standby Mode</div>
-                                <p className="text-xs text-white/60">監聽 MASTER 廣播，若超時則接管 VIP</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="p-6 glass rounded-3xl space-y-4 border-white/5 overflow-y-auto max-h-[400px]">
+                            <h5 className="text-blue-400 font-bold flex items-center gap-2"><Icon name="code" size={18}/> vrrp_instance VI_1</h5>
+                            <div className="space-y-4 text-xs font-mono">
+                                <div className="config-grid">
+                                    <span className="text-purple-400">state</span>
+                                    <span className="text-white/60">節點初始狀態 (MASTER/BACKUP)。由 Priority 決定最終角色。</span>
+                                </div>
+                                <div className="config-grid">
+                                    <span className="text-purple-400">interface</span>
+                                    <span className="text-white/60">綁定 VIP 的網卡 (例如 eth0)。</span>
+                                </div>
+                                <div className="config-grid">
+                                    <span className="text-purple-400">virtual_router_id</span>
+                                    <span className="text-white/60">虛擬路由 ID (0-255)。同一組群組必須一致。</span>
+                                </div>
+                                <div className="config-grid">
+                                    <span className="text-purple-400">priority</span>
+                                    <span className="text-white/60">權重值。越高越容易成為 MASTER。</span>
+                                </div>
+                                <div className="config-grid">
+                                    <span className="text-purple-400">advert_int</span>
+                                    <span className="text-white/60">廣告間隔秒數 (預設 1s)。</span>
+                                </div>
+                                <div className="config-grid">
+                                    <span className="text-purple-400">auth_pass</span>
+                                    <span className="text-white/60">組播認證密碼。防止未授權設備加入組。</span>
+                                </div>
                             </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="p-4 glass rounded-2xl flex items-center gap-4">
-                                <Icon name="check-circle" className="text-emerald-400" />
-                                <div>
-                                    <h6 className="font-bold">Health Checking Scripts</h6>
-                                    <p className="text-xs text-white/50">可根據 HAProxy 程序狀態決定是否觸發切換</p>
-                                </div>
+                        <div className="space-y-6">
+                            <div className="p-6 glass rounded-3xl border-emerald-500/20">
+                                <h5 className="text-emerald-400 font-bold mb-3 flex items-center gap-2"><Icon name="git-branch" size={18}/> virtual_ipaddress</h5>
+                                <p className="text-sm text-white/60 leading-relaxed">
+                                    定義漂移 IP 位址。Keepalived 會自動在 MASTER 網卡上執行 <code className="bg-black/40 px-1 rounded text-emerald-300">ip addr add</code>。
+                                </p>
                             </div>
-                            <div className="p-4 glass rounded-2xl flex items-center gap-4">
-                                <Icon name="navigation" className="text-blue-400" />
-                                <div>
-                                    <h6 className="font-bold">Transparent Failover</h6>
-                                    <p className="text-xs text-white/50">客戶端無需感知，連線始終指向同一個 VIP</p>
-                                </div>
+                            <div className="p-6 glass rounded-3xl border-purple-500/20">
+                                <h5 className="text-purple-400 font-bold mb-3 flex items-center gap-2"><Icon name="file-search" size={18}/> track_script</h5>
+                                <p className="text-sm text-white/60 leading-relaxed">
+                                    監控腳本。例如檢查 HAProxy 進程是否存活。若腳本回傳非 0，會自動降低 Priority 觸發切換。
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -388,12 +495,12 @@
                         {/* Header */}
                         <header className="flex justify-between items-center mb-16">
                             <div className="flex items-center gap-4">
-                                <div className="p-3 glass rounded-2xl">
+                                <div className="p-3 glass rounded-2xl flex items-center justify-center">
                                     <Icon name={slide.icon} className="text-white" size={24} />
                                 </div>
                                 <div>
-                                    <h1 className="text-2xl font-black tracking-tighter uppercase">{slide.title}</h1>
-                                    <p className="text-xs text-white/50 font-mono">{slide.subtitle}</p>
+                                    <h1 className="text-2xl font-black tracking-tighter uppercase leading-none">{slide.title}</h1>
+                                    <p className="text-[10px] text-white/50 font-mono mt-1 uppercase tracking-widest">{slide.subtitle}</p>
                                 </div>
                             </div>
                             <div className="flex gap-2">
