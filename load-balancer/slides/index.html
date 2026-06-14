@@ -3,13 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Keepalived & HAProxy Presentation</title>
+    <title>Keepalived & HAProxy: The Complete Guide</title>
     <link rel="icon" type="image/svg+xml" href="/notebook/load-balancer/slides/favicon.svg" />
-    <!-- Tailwind CSS 3.4 CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Framer Motion & React (via CDN) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
@@ -20,7 +17,7 @@
         
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #000;
+            background-color: #050505;
             color: white;
             overflow: hidden;
             margin: 0;
@@ -32,53 +29,50 @@
 
         .glass {
             background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .gradient-blue { background: linear-gradient(135deg, #1e3a8a 0%, #1e1b4b 50%, #000 100%); }
+        .gradient-purple { background: linear-gradient(135deg, #4c1d95 0%, #2e1065 50%, #000 100%); }
+        .gradient-emerald { background: linear-gradient(135deg, #064e3b 0%, #022c22 50%, #000 100%); }
+        .gradient-slate { background: linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #000 100%); }
+        .gradient-rose { background: linear-gradient(135deg, #881337 0%, #4c0519 50%, #000 100%); }
+
+        ::-webkit-scrollbar { display: none; }
+
+        .slide-content-container {
+            max-height: 72vh;
+            overflow-y: auto;
+            scrollbar-width: none;
+            padding-right: 10px;
+        }
+        
+        .code-block {
+            background: rgba(0, 0, 0, 0.6);
             border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .gradient-blue {
-            background: linear-gradient(135deg, #1e3a8a 0%, #1e1b4b 50%, #000 100%);
-        }
-
-        .gradient-purple {
-            background: linear-gradient(135deg, #4c1d95 0%, #2e1065 50%, #000 100%);
-        }
-
-        .gradient-emerald {
-            background: linear-gradient(135deg, #064e3b 0%, #022c22 50%, #000 100%);
-        }
-
-        .gradient-slate {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #000 100%);
-        }
-
-        /* Hide scrollbars */
-        ::-webkit-scrollbar {
-            display: none;
+            border-radius: 12px;
+            padding: 1.25rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: #93c5fd;
+            line-height: 1.6;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
         }
 
         .config-grid {
             display: grid;
-            grid-template-columns: 140px 1fr;
-            gap: 1rem;
-        }
-
-        /* Prevent text truncation in some browsers */
-        .slide-content-container {
-            max-height: 70vh;
-            overflow-y: auto;
-            scrollbar-width: none;
+            grid-template-columns: 160px 1fr;
+            gap: 1.5rem;
+            align-items: center;
         }
         
-        .code-block {
-            background: rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 1rem;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
-            color: #93c5fd;
-            line-height: 1.5;
+        .scenario-box {
+            transition: all 0.3s ease;
+        }
+        .scenario-box:hover {
+            background: rgba(255, 255, 255, 0.06);
+            transform: translateY(-2px);
         }
     </style>
 </head>
@@ -86,25 +80,18 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useCallback, useRef } = React;
-        
+        const { useState, useEffect, useCallback, useRef, useMemo } = React;
         const MotionLib = window.Motion || window.FramerMotion;
-        const { motion, AnimatePresence } = MotionLib || { motion: (props) => <div {...props} />, AnimatePresence: ({children}) => children };
+        const { motion, AnimatePresence } = MotionLib;
 
         // --- Icons Wrapper ---
         const Icon = ({ name, size = 24, className = "" }) => {
             const iconRef = useRef(null);
-
             useEffect(() => {
                 const timer = setInterval(() => {
                     if (window.lucide && window.lucide.createIcons && iconRef.current) {
                         window.lucide.createIcons({
-                            attrs: {
-                                class: className,
-                                'stroke-width': 2,
-                                'width': size,
-                                'height': size
-                            },
+                            attrs: { class: className, 'stroke-width': 2, 'width': size, 'height': size },
                             nameAttr: 'data-lucide'
                         });
                         clearInterval(timer);
@@ -112,7 +99,6 @@
                 }, 100);
                 return () => clearInterval(timer);
             }, [name, size, className]);
-            
             return (
                 <div className={`inline-flex items-center justify-center ${className}`} style={{ width: size, height: size }}>
                     <i ref={iconRef} data-lucide={name} style={{ width: size, height: size }}></i>
@@ -120,9 +106,9 @@
             );
         };
 
-        // --- VRRP Animation Component ---
-        const VRRPAnimation = () => {
-            const [isMasterAlive, setIsMasterAlive] = useState(true);
+        // --- Animated Components ---
+        const VRRPAnimationFull = () => {
+            const [isLB1Alive, setIsLB1Alive] = useState(true);
             const [showPacket, setShowPacket] = useState(false);
             const [showGARP, setShowGARP] = useState(false);
 
@@ -132,137 +118,116 @@
                     setTimeout(() => setShowPacket(false), 1200);
                 }, 2500);
                 return () => clearInterval(packetInterval);
-            }, [isMasterAlive]);
+            }, [isLB1Alive]);
 
-            // Trigger GARP animation when status changes
             useEffect(() => {
                 setShowGARP(true);
                 const timer = setTimeout(() => setShowGARP(false), 1500);
                 return () => clearTimeout(timer);
-            }, [isMasterAlive]);
+            }, [isLB1Alive]);
 
             return (
                 <div className="flex flex-col items-center w-full space-y-12 py-4">
-                    {/* Network Switch Layer */}
-                    <div className="flex flex-col items-center mb-4">
-                        <div className="p-4 glass rounded-3xl border-blue-500/30 flex flex-col items-center w-48 relative">
-                            <Icon name="network" size={40} className="text-blue-400" />
-                            <span className="text-[10px] font-black mt-2 text-white/50 tracking-widest uppercase">L2 Switch</span>
-                            
-                            {/* GARP Reception Visual */}
-                            <AnimatePresence>
-                                {showGARP && (
-                                    <motion.div 
-                                        initial={{ scale: 0.8, opacity: 0 }}
-                                        animate={{ scale: 1.2, opacity: 1 }}
-                                        exit={{ scale: 1.5, opacity: 0 }}
-                                        className="absolute -top-2 bg-emerald-500/20 border border-emerald-500/50 px-2 py-0.5 rounded text-[8px] text-emerald-400 font-bold"
-                                    >
-                                        CAM TABLE UPDATED
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-between items-center w-full max-w-3xl relative px-12">
-                        {/* LB-1 Node */}
-                        <div className="flex flex-col items-center z-10">
-                            <motion.div 
-                                animate={{ 
-                                    scale: isMasterAlive ? [1, 1.05, 1] : 1,
-                                    opacity: isMasterAlive ? 1 : 0.4 
-                                }}
-                                transition={{ repeat: Infinity, duration: 2 }}
-                                className={`w-32 h-32 rounded-3xl flex flex-col items-center justify-center border-2 transition-colors relative ${isMasterAlive ? 'border-emerald-500 bg-emerald-500/10' : 'border-red-500 bg-red-500/10'}`}
-                            >
-                                {isMasterAlive && (
-                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-[10px] font-black px-3 py-0.5 rounded-full text-black shadow-lg shadow-emerald-500/50">VIP ACTIVE</div>
-                                )}
-                                <Icon name={isMasterAlive ? "shield-check" : "shield-alert"} size={48} className={isMasterAlive ? "text-emerald-400" : "text-red-400"} />
-                                <span className="text-xs font-bold mt-2 font-mono">LB-1 (Pri: 100)</span>
-                            </motion.div>
-                            <span className="text-[10px] mt-2 font-mono text-white/40">192.168.50.211</span>
-                        </div>
-
-                        {/* GARP Packet Animation */}
+                    <div className="p-4 glass rounded-3xl border-blue-500/30 flex flex-col items-center w-48 relative">
+                        <Icon name="network" size={40} className="text-blue-400" />
+                        <span className="text-[10px] font-black mt-2 text-white/50 tracking-widest uppercase text-center leading-none">Core Switch<br/><span className="opacity-40">(L2 Layer)</span></span>
                         <AnimatePresence>
                             {showGARP && (
-                                <motion.div 
-                                    initial={{ y: 80, x: isMasterAlive ? -160 : 160, opacity: 0 }}
-                                    animate={{ y: -100, x: 0, opacity: 1 }}
-                                    transition={{ duration: 0.8, ease: "easeOut" }}
-                                    className="absolute left-1/2 top-12 z-20"
-                                >
-                                    <div className="flex flex-col items-center">
-                                        <div className="px-3 py-1 bg-emerald-500 rounded-full text-[8px] font-black text-black shadow-lg whitespace-nowrap">
-                                            GRATUITOUS ARP
-                                        </div>
-                                        <div className="w-2 h-2 bg-emerald-400 rounded-full mt-1 animate-ping"></div>
-                                    </div>
+                                <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1.2, opacity: 1 }} exit={{ scale: 1.5, opacity: 0 }} className="absolute -top-4 bg-emerald-500 border border-emerald-400 px-3 py-1 rounded-full text-[8px] text-black font-black shadow-xl">CAM TABLE REFRESHED</motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    <div className="flex justify-between items-center w-full max-w-4xl relative px-12">
+                        {/* LB-1 */}
+                        <div className="flex flex-col items-center z-10">
+                            <motion.div animate={{ scale: isLB1Alive ? [1, 1.03, 1] : 1, opacity: isLB1Alive ? 1 : 0.4 }} transition={{ repeat: Infinity, duration: 2 }} className={`w-40 h-40 rounded-3xl flex flex-col items-center justify-center border-2 transition-colors relative ${isLB1Alive ? 'border-emerald-500 bg-emerald-500/10' : 'border-red-500 bg-red-500/10'}`}>
+                                {isLB1Alive && <div className="absolute -top-3 bg-emerald-500 text-[9px] font-black px-3 py-1 rounded-full text-black shadow-lg">VIP 192.168.50.250</div>}
+                                <Icon name={isLB1Alive ? "shield-check" : "shield-alert"} size={56} className={isLB1Alive ? "text-emerald-400" : "text-red-400"} />
+                                <span className="text-xs font-black mt-3 font-mono">LB-NODE-01</span>
+                                <span className="text-[9px] font-mono text-white/40">Pri: 100 (Master)</span>
+                            </motion.div>
+                        </div>
+
+                        {/* GARP Visual */}
+                        <AnimatePresence>
+                            {showGARP && (
+                                <motion.div initial={{ y: 60, x: isLB1Alive ? -200 : 200, opacity: 0 }} animate={{ y: -140, x: 0, opacity: 1 }} transition={{ duration: 0.8, ease: "circOut" }} className="absolute left-1/2 top-12 z-20">
+                                    <div className="px-3 py-1 bg-emerald-400 rounded-full text-[9px] font-black text-black shadow-2xl uppercase tracking-tighter">Gratuitous ARP</div>
                                 </motion.div>
                             )}
                         </AnimatePresence>
 
-                        {/* Unicast Packet Animation */}
+                        {/* VRRP Visual */}
                         <AnimatePresence>
                             {showPacket && (
-                                <motion.div 
-                                    initial={{ x: isMasterAlive ? 0 : 300, opacity: 0 }}
-                                    animate={{ x: isMasterAlive ? 300 : 0, opacity: 1 }}
-                                    exit={{ opacity: 0 }}
-                                    transition={{ duration: 1.2, ease: "easeInOut" }}
-                                    className="absolute left-[160px] top-12 z-0"
-                                >
+                                <motion.div initial={{ x: isLB1Alive ? 0 : 360, opacity: 0 }} animate={{ x: isLB1Alive ? 360 : 0, opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 1.2, ease: "easeInOut" }} className="absolute left-[180px] top-16 z-0">
                                     <div className="flex flex-col items-center">
-                                        <div className="px-3 py-1 bg-blue-500/80 rounded-full text-[8px] font-bold text-white shadow-lg shadow-blue-500/20 whitespace-nowrap border border-blue-400/30">
-                                            {isMasterAlive ? "LB-1 -> LB-2 (ADVERT)" : "LB-2 -> LB-1 (ADVERT)"}
-                                        </div>
-                                        <div className={`w-2 h-2 rounded-full mt-1 animate-pulse ${isMasterAlive ? 'bg-blue-400' : 'bg-emerald-400'}`}></div>
+                                        <div className="px-3 py-1 bg-blue-500/90 rounded-full text-[8px] font-bold text-white shadow-lg whitespace-nowrap border border-blue-400/30">VRRP ADVERT (Pri: {isLB1Alive ? '100' : '50'})</div>
+                                        <div className={`w-3 h-3 rounded-full mt-1 animate-ping ${isLB1Alive ? 'bg-blue-400' : 'bg-emerald-400'}`}></div>
                                     </div>
                                 </motion.div>
                             )}
                         </AnimatePresence>
 
-                        {/* Connection Line */}
-                        <div className="absolute top-16 left-0 right-0 h-[2px] bg-white/5 -z-10"></div>
-
-                        {/* LB-2 Node */}
+                        {/* LB-2 */}
                         <div className="flex flex-col items-center z-10">
-                            <motion.div 
-                                animate={{ 
-                                    borderColor: !isMasterAlive ? "#10b981" : "rgba(255,255,255,0.1)",
-                                    backgroundColor: !isMasterAlive ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.03)",
-                                    scale: !isMasterAlive ? [1, 1.05, 1] : 1
-                                }}
-                                transition={!isMasterAlive ? { repeat: Infinity, duration: 2 } : {}}
-                                className="w-32 h-32 rounded-3xl flex flex-col items-center justify-center border-2 glass relative"
-                            >
-                                {!isMasterAlive && (
-                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-[10px] font-black px-3 py-0.5 rounded-full text-black shadow-lg shadow-emerald-500/50">VIP ACTIVE</div>
-                                )}
-                                <Icon name={!isMasterAlive ? "shield-check" : "clock"} size={48} className={!isMasterAlive ? "text-emerald-400" : "text-white/20"} />
-                                <span className="text-xs font-bold mt-2 font-mono uppercase">LB-2 (Pri: 50)</span>
+                            <motion.div animate={{ borderColor: !isLB1Alive ? "#10b981" : "rgba(255,255,255,0.1)", backgroundColor: !isLB1Alive ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.03)", scale: !isLB1Alive ? [1, 1.03, 1] : 1 }} transition={!isLB1Alive ? { repeat: Infinity, duration: 2 } : {}} className="w-40 h-40 rounded-3xl flex flex-col items-center justify-center border-2 glass relative">
+                                {!isLB1Alive && <div className="absolute -top-3 bg-emerald-500 text-[9px] font-black px-3 py-1 rounded-full text-black shadow-lg">VIP 192.168.50.250</div>}
+                                <Icon name={!isLB1Alive ? "shield-check" : "clock"} size={56} className={!isLB1Alive ? "text-emerald-400" : "text-white/20"} />
+                                <span className="text-xs font-black mt-3 font-mono uppercase">LB-NODE-02</span>
+                                <span className="text-[9px] font-mono text-white/40">Pri: 50 (Backup)</span>
                             </motion.div>
-                            <span className="text-[10px] mt-2 font-mono text-white/40">192.168.50.212</span>
                         </div>
                     </div>
 
-                    <div className="flex gap-4">
-                        <button 
-                            onClick={() => setIsMasterAlive(!isMasterAlive)}
-                            className={`px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest transition-all ${isMasterAlive ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20' : 'bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20'}`}
-                        >
-                            {isMasterAlive ? "Kill LB-1 (Trigger GARP)" : "Restore LB-1 (Trigger GARP)"}
+                    <div className="flex gap-6">
+                        <button onClick={() => setIsLB1Alive(!isLB1Alive)} className={`px-10 py-4 rounded-full font-black text-xs uppercase tracking-widest transition-all shadow-2xl ${isLB1Alive ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-900/40' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-900/40'}`}>
+                            {isLB1Alive ? "Trigger Failure (LB-01 Down)" : "Recover LB-01"}
                         </button>
                     </div>
+                </div>
+            );
+        };
 
-                    <div className="glass p-6 rounded-2xl border-white/5 max-w-xl text-center">
-                        <p className="text-sm text-white/70 italic leading-relaxed">
-                            {isMasterAlive 
-                                ? "LB-1 正常運行，持續發送 ADVERT 告知 LB-2 自己仍是 Master。VIP 綁定在 LB-1。" 
-                                : "LB-1 故障，LB-2 接管 VIP 並立即發送 Gratuitous ARP 通知 Switch 更新 MAC 位址，隨後開始發送 ADVERT。"}
-                        </p>
+        const HAProxyCrashSimulation = () => {
+            const [nodes, setNodes] = useState([
+                { id: 1, ip: '10.0.0.1', status: 'healthy' },
+                { id: 2, ip: '10.0.0.2', status: 'healthy' },
+                { id: 3, ip: '10.0.0.3', status: 'healthy' },
+            ]);
+            const toggleNode = (id) => {
+                setNodes(nodes.map(n => n.id === id ? { ...n, status: n.status === 'healthy' ? 'crashed' : 'healthy' } : n));
+            };
+            return (
+                <div className="flex flex-col items-center space-y-10 w-full py-6">
+                    <div className="w-full max-w-2xl bg-black/60 rounded-3xl p-6 border border-white/10 shadow-2xl">
+                        <div className="flex justify-between items-center mb-8 border-b border-white/10 pb-4">
+                            <h5 className="font-mono text-xs text-blue-400 font-bold uppercase tracking-widest">HAProxy Statistics UI</h5>
+                            <div className="flex gap-4">
+                                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div><span className="text-[10px]">UP</span></div>
+                                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500"></div><span className="text-[10px]">DOWN</span></div>
+                            </div>
+                        </div>
+                        <div className="space-y-4">
+                            {nodes.map(n => (
+                                <motion.div key={n.id} animate={{ backgroundColor: n.status === 'healthy' ? 'rgba(16,185,129,0.05)' : 'rgba(244,63,94,0.1)' }} className="flex items-center justify-between p-4 rounded-xl border border-white/5">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`p-2 rounded-lg ${n.status === 'healthy' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                            <Icon name="server" size={20} />
+                                        </div>
+                                        <div><div className="text-xs font-bold text-white/80">API-SERVER-{n.id}</div><div className="text-[10px] font-mono text-white/30">{n.ip}</div></div>
+                                    </div>
+                                    <div className="flex items-center gap-8">
+                                        <div className="text-right"><div className="text-[10px] text-white/30 uppercase">Status</div><div className={`text-[10px] font-black ${n.status === 'healthy' ? 'text-emerald-400' : 'text-red-400'}`}>{n.status.toUpperCase()}</div></div>
+                                        <button onClick={() => toggleNode(n.id)} className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-[9px] font-bold transition-all border border-white/10 uppercase tracking-tighter">Toggle Crash</button>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="p-6 glass rounded-2xl border-blue-500/10 max-w-xl text-center">
+                        <p className="text-sm text-white/70 italic leading-relaxed font-light">"當後端 Service 發生故障時，HAProxy 的健康檢查機制 (check) 會在定義的間隔內自動將節點剔除，保證流量不被轉發至無效節點。"</p>
                     </div>
                 </div>
             );
@@ -270,115 +235,95 @@
 
         // --- Data Definitions ---
         const slides = [
-            {
-                id: 'hero',
-                title: 'Keepalived & HAProxy',
-                subtitle: 'High Availability Load Balancer',
-                description: '在 Kubernetes 叢集實現穩定、可靠的 API Server 高可用架構',
-                gradient: 'gradient-blue',
-                icon: 'shield-check',
-                content: (
-                    <div className="flex flex-col items-center justify-center text-center space-y-8">
-                        <div className="flex gap-6">
-                            <div className="px-6 py-2 glass rounded-full text-blue-400 font-mono text-sm">VRRP Failover</div>
-                            <div className="px-6 py-2 glass rounded-full text-purple-400 font-mono text-sm">L4/L7 Load Balancing</div>
-                        </div>
-                        <div className="mt-12 grid grid-cols-3 gap-8 w-full max-w-4xl">
-                            <div className="p-6 glass rounded-3xl text-center">
-                                <Icon name="activity" className="mx-auto mb-4 text-blue-400" size={32} />
-                                <h4 className="font-bold">Keepalived</h4>
-                                <p className="text-xs text-white/50 mt-2">VIP Management</p>
-                            </div>
-                            <div className="p-6 glass rounded-3xl text-center border-blue-500/30">
-                                <Icon name="repeat" className="mx-auto mb-4 text-purple-400" size={32} />
-                                <h4 className="font-bold">HAProxy</h4>
-                                <p className="text-xs text-white/50 mt-2">Traffic Distribution</p>
-                            </div>
-                            <div className="p-6 glass rounded-3xl text-center">
-                                <Icon name="server" className="mx-auto mb-4 text-emerald-400" size={32} />
-                                <h4 className="font-bold">K8s API</h4>
-                                <p className="text-xs text-white/50 mt-2">High Availability</p>
-                            </div>
-                        </div>
+            { id: 'hero', title: 'High Availability Masters', subtitle: 'HAProxy & Keepalived Deep Dive', description: '打造電信級 K8s 控制平面高可用架構：從負載均衡到故障自動恢復', gradient: 'gradient-blue', icon: 'shield-check', content: (
+                <div className="flex flex-col items-center justify-center text-center space-y-12 py-10">
+                    <div className="flex gap-10">
+                        <div className="flex flex-col items-center"><div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-3 text-emerald-400"><Icon name="cpu" size={32}/></div><span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">HAProxy</span></div>
+                        <div className="flex flex-col items-center"><div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-3 text-blue-400"><Icon name="activity" size={32}/></div><span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Keepalived</span></div>
+                        <div className="flex flex-col items-center"><div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-3 text-purple-400"><Icon name="box" size={32}/></div><span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">K8s API</span></div>
                     </div>
-                )
-            },
-            {
-                id: 'haproxy',
-                title: 'HAProxy',
-                subtitle: '高性能負載均衡器',
-                description: '提供極致效能的 TCP 與 HTTP 轉發能力，支援健康檢查與多種調度算法',
-                gradient: 'gradient-slate',
-                icon: 'zap',
-                content: (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-                        <div className="space-y-6">
-                            <div className="flex gap-4 items-start">
-                                <div className="p-3 bg-blue-500/20 rounded-xl"><Icon name="cpu" className="text-blue-400" /></div>
-                                <div>
-                                    <h4 className="font-bold text-lg">L4/L7 負載均衡</h4>
-                                    <p className="text-sm text-white/60 leading-relaxed">針對 K8s API Server (6443) 進行 TCP 層級的高效轉發，確保控制平面通訊低延遲</p>
-                                </div>
-                            </div>
-                            <div className="flex gap-4 items-start">
-                                <div className="p-3 bg-green-500/20 rounded-xl"><Icon name="heart" className="text-green-400" /></div>
-                                <div>
-                                    <h4 className="font-bold text-lg">主動健康檢查</h4>
-                                    <p className="text-sm text-white/60 leading-relaxed">自動偵測並剔除故障的 API Server 節點，實現服務自我修復</p>
-                                </div>
-                            </div>
-                            <div className="flex gap-4 items-start">
-                                <div className="p-3 bg-purple-500/20 rounded-xl"><Icon name="bar-chart" className="text-purple-400" /></div>
-                                <div>
-                                    <h4 className="font-bold text-lg">豐富的統計介面</h4>
-                                    <p className="text-sm text-white/60 leading-relaxed">內建 Stats 頁面，即時監控後端節點負載、連線數與流量分佈</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="glass rounded-3xl p-8 border-white/5 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full"></div>
-                            <div className="relative z-10 space-y-4">
-                                <h5 className="text-xs font-mono text-white/30 uppercase tracking-widest">Configuration Logic</h5>
-                                <div className="p-4 bg-white/5 rounded-xl border border-white/10 font-mono text-xs text-blue-300">
-                                    frontend k8s-api<br/>
-                                    &nbsp;&nbsp;bind *:6443<br/>
-                                    &nbsp;&nbsp;default_backend k8s-masters
-                                </div>
-                                <div className="flex justify-center py-4">
-                                    <Icon name="arrow-down" className="text-white/20" size={40} />
-                                </div>
-                                <div className="p-4 bg-blue-500/20 rounded-xl border border-blue-500/30 font-mono text-xs text-center">
-                                    backend k8s-masters<br/>
-                                    &nbsp;&nbsp;balance roundrobin<br/>
-                                    &nbsp;&nbsp;server master1 10.0.0.1:6443 check
-                                </div>
-                            </div>
-                        </div>
+                    <div className="grid grid-cols-2 gap-8 w-full max-w-3xl">
+                        <div className="p-8 glass rounded-[40px] text-left border-l-4 border-l-blue-500"><h4 className="font-black text-xl mb-2 text-blue-400">L4 Load Balancing</h4><p className="text-xs text-white/50 leading-relaxed">高性能 TCP 轉發，解決 API Server 水平擴展難題。</p></div>
+                        <div className="p-8 glass rounded-[40px] text-left border-l-4 border-l-emerald-500"><h4 className="font-black text-xl mb-2 text-emerald-400">VRRP Redundancy</h4><p className="text-xs text-white/50 leading-relaxed">消除負載均衡器自身單點故障，實現 VIP 秒級漂移。</p></div>
                     </div>
-                )
-            },
-            {
-                id: 'keepalived-vrrp',
-                title: 'VRRP Mechanism',
-                subtitle: 'Keepalived 核心原理',
-                description: '透過 VRRP ADVERT 與 Gratuitous ARP 實現 VIP 的物理位置遷移',
-                gradient: 'gradient-purple',
-                icon: 'activity',
-                content: <VRRPAnimation />
-            },
-            {
-                id: 'keepalived-config',
-                title: 'Keepalived Configuration',
-                subtitle: '關鍵參數詳解',
-                description: '位於 /etc/keepalived/keepalived.conf 的核心設定',
-                gradient: 'gradient-slate',
-                icon: 'settings',
-                content: (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                        <div className="space-y-6">
-                            <div className="p-6 glass rounded-3xl border-white/5">
-                                <h5 className="text-blue-400 font-bold mb-4 flex items-center gap-2 text-sm"><Icon name="file-code" size={18}/> Configuration Sample (BACKUP)</h5>
-                                <div className="code-block whitespace-pre overflow-x-auto text-[10px]">
+                </div>
+            )},
+            { id: 'haproxy-intro', title: 'HAProxy Fundamentals', subtitle: 'The Load Balancing Core', description: '高性能負載均衡的代名詞，支援數百萬級並發連線的強大引擎。', gradient: 'gradient-slate', icon: 'zap', content: (
+                <div className="grid grid-cols-2 gap-10 h-full">
+                    <div className="space-y-8">
+                        <div className="scenario-box p-6 glass rounded-3xl border-white/5"><h5 className="font-bold text-lg flex items-center gap-3 text-blue-400"><Icon name="layers" size={20}/> Layer 4 (TCP) Mode</h5><p className="text-xs text-white/60 leading-relaxed mt-2">針對 K8s 6443 Port，不解密 SSL 封包直接透傳，效能最高、資源消耗最低。</p></div>
+                        <div className="scenario-box p-6 glass rounded-3xl border-white/5"><h5 className="font-bold text-lg flex items-center gap-3 text-purple-400"><Icon name="globe" size={20}/> Layer 7 (HTTP) Mode</h5><p className="text-xs text-white/60 leading-relaxed mt-2">支援 SSL 卸載、內容過濾、Header 改寫，適用於 Ingress Controller 情境。</p></div>
+                    </div>
+                    <div className="p-8 glass rounded-3xl bg-blue-500/5 flex flex-col justify-center border-blue-500/10"><h5 className="text-center font-black text-2xl mb-6">Why HAProxy?</h5><div className="space-y-4 text-sm text-white/80"><div className="flex gap-4 items-center"><Icon name="check-circle" className="text-emerald-400" size={16}/> 極低延遲 (Event-driven)</div><div className="flex gap-4 items-center"><Icon name="check-circle" className="text-emerald-400" size={16}/> 強大的健康檢查 (Health Checks)</div><div className="flex gap-4 items-center"><Icon name="check-circle" className="text-emerald-400" size={16}/> 靈活的調度算法</div></div></div>
+                </div>
+            )},
+            { id: 'haproxy-frontend', title: 'Frontend Deep Dive', subtitle: 'Entry Point Logic', description: '定義流量「如何進入」負載均衡器，包含監聽端口、SSL 憑證與過濾規則。', gradient: 'gradient-blue', icon: 'indent', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="code-block h-fit"><div className="text-white/30 text-[9px] mb-2 uppercase">/etc/haproxy/haproxy.cfg</div>
+{`frontend k8s-api
+    bind *:6443
+    mode tcp
+    option tcplog
+    default_backend k8s-masters
+
+frontend stats
+    bind *:8404
+    mode http
+    stats enable
+    stats uri /stats
+    stats refresh 10s`}
+                    </div>
+                    <div className="space-y-6">
+                        <div className="config-grid border-b border-white/5 pb-4"><span className="text-blue-400 font-bold text-sm">bind</span><span className="text-xs text-white/60 leading-relaxed">監聽實體位址或 VIP。* 表示監聽所有網卡。</span></div>
+                        <div className="config-grid border-b border-white/5 pb-4"><span className="text-blue-400 font-bold text-sm">mode tcp</span><span className="text-xs text-white/60 leading-relaxed">針對 API Server 必須使用 TCP 模式進行透傳。</span></div>
+                        <div className="config-grid border-b border-white/5 pb-4"><span className="text-blue-400 font-bold text-sm">stats enable</span><span className="text-xs text-white/60 leading-relaxed">開啟監控網頁，視覺化檢視各後端節點健康度。</span></div>
+                    </div>
+                </div>
+            )},
+            { id: 'haproxy-backend', title: 'Backend Logic', subtitle: 'Target Distribution', description: '定義流量「送往何處」，並設定負載分配策略與健康檢查標準。', gradient: 'gradient-slate', icon: 'outdent', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="code-block h-fit"><div className="text-white/30 text-[9px] mb-2 uppercase">/etc/haproxy/haproxy.cfg</div>
+{`backend k8s-masters
+    mode tcp
+    balance roundrobin
+    option tcp-check
+    server master1 10.0.0.1:6443 check inter 2s rise 2 fall 3
+    server master2 10.0.0.2:6443 check inter 2s rise 2 fall 3
+    server master3 10.0.0.3:6443 check inter 2s rise 2 fall 3`}
+                    </div>
+                    <div className="space-y-4">
+                        <div className="p-5 glass rounded-2xl border-l-2 border-emerald-500"><h6 className="font-bold text-sm text-emerald-400 mb-1">Check Parameters</h6><p className="text-[11px] text-white/50">inter: 檢查頻率 (2s) <br/> rise: 成功 2 次判定為恢復 <br/> fall: 失敗 3 次判定為故障</p></div>
+                        <div className="p-5 glass rounded-2xl border-l-2 border-blue-500"><h6 className="font-bold text-sm text-blue-400 mb-1">Balance Algorithms</h6><p className="text-[11px] text-white/50">roundrobin: 輪詢分配 <br/> leastconn: 最少連線優先 (推薦用於長連線)</p></div>
+                    </div>
+                </div>
+            )},
+            { id: 'haproxy-crash', title: 'Scenario: Backend Crash', subtitle: 'Automatic Fail-Isolation', description: '模擬當其中一台 API Server 發生故障時，HAProxy 如何保護控制平面。', gradient: 'gradient-rose', icon: 'alert-triangle', content: <HAProxyCrashSimulation /> },
+            { id: 'haproxy-stats', title: 'Monitoring & Stats', subtitle: 'Visibility is Control', description: 'HAProxy 內建強大的統計報表，可用於監控流量、錯誤率與反應時間。', gradient: 'gradient-slate', icon: 'bar-chart-3', content: (
+                <div className="flex flex-col items-center py-10">
+                    <div className="grid grid-cols-4 gap-6 w-full max-w-4xl">
+                        <div className="p-6 glass rounded-3xl text-center"><div className="text-2xl font-black text-blue-400">1.2M</div><div className="text-[10px] text-white/40 uppercase mt-2">Sessions/s</div></div>
+                        <div className="p-6 glass rounded-3xl text-center border-emerald-500/20"><div className="text-2xl font-black text-emerald-400">100%</div><div className="text-[10px] text-white/40 uppercase mt-2">Uptime</div></div>
+                        <div className="p-6 glass rounded-3xl text-center"><div className="text-2xl font-black text-purple-400">15ms</div><div className="text-[10px] text-white/40 uppercase mt-2">Avg Latency</div></div>
+                        <div className="p-6 glass rounded-3xl text-center border-red-500/20"><div className="text-2xl font-black text-red-400">0.01%</div><div className="text-[10px] text-white/40 uppercase mt-2">Error Rate</div></div>
+                    </div>
+                    <div className="mt-12 p-8 glass rounded-[40px] w-full border-white/5 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-10"><Icon name="activity" size={80}/></div>
+                        <h5 className="font-bold text-xl mb-4">Real-time Decision Making</h5>
+                        <p className="text-sm text-white/60 leading-relaxed max-w-2xl">透過 Prometheus Exporter，統計數據可以輕鬆整合至 Grafana 儀表板，提供秒級的系統洞察與告警觸發。</p>
+                    </div>
+                </div>
+            )},
+            { id: 'keepalived-vrrp-full', title: 'VRRP Mechanism', subtitle: 'Failover in Action', description: '深入理解 VRRP Advertisement 與 Gratuitous ARP (GARP) 的協同運作。', gradient: 'gradient-purple', icon: 'activity', content: <VRRPAnimationFull /> },
+            { id: 'keepalived-vrrp-theory', title: 'VRRP Protocol Theory', subtitle: 'The Heart of Redundancy', description: 'VRRP (Virtual Router Redundancy Protocol) 是其實現 VIP 高可用的核心協定。', gradient: 'gradient-slate', icon: 'info', content: (
+                <div className="grid grid-cols-3 gap-6 py-6 h-full">
+                    <div className="p-6 glass rounded-3xl flex flex-col justify-between"><h6 className="text-blue-400 font-bold mb-3 uppercase tracking-tighter">Multicast/Unicast</h6><p className="text-xs text-white/60">預設使用組播 (224.0.0.18)，但在嚴格的網路環境中改用單播 (Unicast) 更為安全且可控。</p><Icon name="radio" size={32} className="text-white/10 mt-4 self-end"/></div>
+                    <div className="p-6 glass rounded-3xl flex flex-col justify-between"><h6 className="text-emerald-400 font-bold mb-3 uppercase tracking-tighter">Priority Election</h6><p className="text-xs text-white/60">數值較高者 (100 vs 50) 獲勝成為 Master。若數值相同，則 IP 較大者獲勝。</p><Icon name="award" size={32} className="text-white/10 mt-4 self-end"/></div>
+                    <div className="p-6 glass rounded-3xl flex flex-col justify-between"><h6 className="text-purple-400 font-bold mb-3 uppercase tracking-tighter">Advert Interval</h6><p className="text-xs text-white/60">Master 定期發送廣播的間隔 (預設 1s)。若 Backup 超過 3.6s 未收到，則發動接管。</p><Icon name="clock" size={32} className="text-white/10 mt-4 self-end"/></div>
+                </div>
+            )},
+            { id: 'keepalived-config-full', title: 'Keepalived Config (Best Practice)', subtitle: 'Optimizing Redundancy', description: '基於 nopreempt 與 BACKUP 模式的穩定配置，防止服務頻繁切換造成的抖動。', gradient: 'gradient-slate', icon: 'settings', content: (
+                <div className="grid grid-cols-2 gap-8">
+                    <div className="code-block"><div className="text-white/30 text-[9px] mb-2 uppercase">/etc/keepalived/keepalived.conf (LB-02)</div>
 {`vrrp_instance VI_1 {
     state BACKUP
     interface eth0
@@ -390,169 +335,171 @@
     unicast_peer { 192.168.50.211 }
     authentication {
         auth_type PASS
-        auth_pass 1111
+        auth_pass 1234
     }
     virtual_ipaddress {
         192.168.50.250/24
     }
     track_script { check_haproxy }
 }`}
-                                </div>
-                            </div>
-                            <div className="p-4 glass rounded-2xl border-blue-500/20">
-                                <p className="text-[10px] text-white/50 italic leading-relaxed">
-                                    * 建議兩台皆設為 <code className="text-blue-300">BACKUP</code> 並配合 <code className="text-blue-300">nopreempt</code>，可避免 Master 修復後發生不必要的二次切換 (Preemption)。
-                                </p>
-                            </div>
-                        </div>
-                        <div className="p-6 glass rounded-3xl space-y-4 border-white/5 overflow-y-auto max-h-[480px]">
-                            <h5 className="text-emerald-400 font-bold flex items-center gap-2 text-sm"><Icon name="info" size={18}/> 參數詳解</h5>
-                            <div className="space-y-4 text-xs font-mono">
-                                <div className="config-grid border-b border-white/5 pb-2">
-                                    <span className="text-purple-400 font-bold">nopreempt</span>
-                                    <span className="text-white/60">不搶佔模式。當原 Master 恢復時，不會強制搶回 VIP，減少服務中斷。</span>
-                                </div>
-                                <div className="config-grid border-b border-white/5 pb-2">
-                                    <span className="text-purple-400 font-bold">state</span>
-                                    <span className="text-white/60">初始狀態。在 nopreempt 模式下，建議雙方都設為 BACKUP。</span>
-                                </div>
-                                <div className="config-grid border-b border-white/5 pb-2">
-                                    <span className="text-purple-400 font-bold">priority</span>
-                                    <span className="text-white/60">競選權重。數值高者勝出。</span>
-                                </div>
-                                <div className="config-grid border-b border-white/5 pb-2">
-                                    <span className="text-purple-400 font-bold">unicast_peer</span>
-                                    <span className="text-white/60">單播對手。指定具體的對端 IP，避免 Multicast 廣播風暴。</span>
-                                </div>
-                                <div className="config-grid border-b border-white/5 pb-2">
-                                    <span className="text-purple-400 font-bold">virtual_ip</span>
-                                    <span className="text-white/60">漂移 IP。外部存取的唯一入口。</span>
-                                </div>
-                            </div>
+                    </div>
+                    <div className="space-y-4">
+                        <div className="p-5 glass rounded-2xl border-l-4 border-blue-500"><h6 className="font-bold text-sm text-blue-400 mb-1">nopreempt</h6><p className="text-[11px] text-white/50 leading-relaxed text-justify">重要參數。開啟後，當原 Master (高優先級) 恢復時，不會強制從當前 Master (低優先級) 手中搶回 VIP。這能有效避免網路抖動導致的連續切換。</p></div>
+                        <div className="p-5 glass rounded-2xl border-l-4 border-emerald-500"><h6 className="font-bold text-sm text-emerald-400 mb-1">Unicast Peer</h6><p className="text-[11px] text-white/50 leading-relaxed">避免在大型公共網段使用組播引起衝突，指定對端實體 IP 進行精準通訊。</p></div>
+                    </div>
+                </div>
+            )},
+            { id: 'keepalived-track', title: 'Tracking Health', subtitle: 'The Glue of Synergy', description: 'Keepalived 不僅監測網路，還能聯動監測本地服務 (如 HAProxy)。', gradient: 'gradient-blue', icon: 'link', content: (
+                <div className="grid grid-cols-2 gap-10">
+                    <div className="space-y-6">
+                        <h5 className="font-black text-xl text-blue-400">Track Script Logic</h5>
+                        <p className="text-sm text-white/60 leading-relaxed">這是一個定義在 Keepalived 中的監視腳本。它能感知 HAProxy 是否崩潰，並主動降低自身的優先級。</p>
+                        <div className="code-block">
+{`vrrp_script check_haproxy {
+    script "killall -0 haproxy"
+    interval 2
+    weight -30
+    fall 2
+    rise 2
+}`}
                         </div>
                     </div>
-                )
-            },
-            {
-                id: 'architecture',
-                title: 'Architecture Flow',
-                subtitle: '流量傳遞路徑',
-                description: '從 kubectl 客戶端到後端 3 台 API Server 的完整負載均衡路徑',
-                gradient: 'gradient-blue',
-                icon: 'network',
-                content: (
-                    <div className="flex flex-col items-center space-y-12 py-4">
-                        <div className="flex flex-col md:flex-row items-center gap-8 w-full justify-center">
-                            {/* Tier 1: Client */}
-                            <div className="flex flex-col items-center">
-                                <div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-2 text-blue-400 border-blue-500/30"><Icon name="terminal" size={32} /></div>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-white/60">Client</span>
-                            </div>
-
-                            <Icon name="arrow-right" className="text-white/10 hidden md:block" />
-
-                            {/* Tier 2: LB Cluster */}
-                            <div className="p-6 glass rounded-3xl border-white/10 relative">
-                                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-[10px] font-black px-4 py-0.5 rounded-full text-black">VIP: 192.168.50.250</div>
-                                <div className="flex gap-4">
-                                    <div className="text-center">
-                                        <div className="w-14 h-14 bg-emerald-500/20 rounded-xl flex items-center justify-center mb-2 border border-emerald-500/50 relative">
-                                            <div className="absolute top-0 right-0 w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                                            <Icon name="layers" size={24} className="text-emerald-400" />
-                                        </div>
-                                        <span className="text-[8px] font-mono text-white/50">LB-1 (Active)</span>
-                                    </div>
-                                    <div className="text-center opacity-40">
-                                        <div className="w-14 h-14 glass rounded-xl flex items-center justify-center mb-2 border border-white/10">
-                                            <Icon name="layers" size={24} />
-                                        </div>
-                                        <span className="text-[8px] font-mono">LB-2 (Standby)</span>
-                                    </div>
-                                </div>
-                                <div className="text-center mt-3 text-[10px] font-bold text-blue-300 uppercase tracking-tighter">HAProxy + Keepalived</div>
-                            </div>
-
-                            <Icon name="arrow-right" className="text-white/10 hidden md:block" />
-
-                            {/* Tier 3: Master Nodes */}
-                            <div className="grid grid-cols-1 gap-3">
-                                <div className="flex items-center gap-4 px-6 py-3 glass rounded-2xl border-purple-500/20">
-                                    <Icon name="server" size={16} className="text-purple-400" />
-                                    <span className="text-xs font-mono">Master-1 (10.0.0.1)</span>
-                                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                </div>
-                                <div className="flex items-center gap-4 px-6 py-3 glass rounded-2xl border-purple-500/20">
-                                    <Icon name="server" size={16} className="text-purple-400" />
-                                    <span className="text-xs font-mono">Master-2 (10.0.0.2)</span>
-                                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                </div>
-                                <div className="flex items-center gap-4 px-6 py-3 glass rounded-2xl border-purple-500/20">
-                                    <Icon name="server" size={16} className="text-purple-400" />
-                                    <span className="text-xs font-mono">Master-3 (10.0.0.3)</span>
-                                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                </div>
-                            </div>
+                    <div className="flex flex-col justify-center space-y-6">
+                        <div className="p-6 glass rounded-3xl border-white/5"><div className="flex items-center gap-4 mb-3"><div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-lg"><Icon name="check" size={20}/></div><h6 className="font-bold">Automated Response</h6></div><p className="text-xs text-white/50">若 HAProxy 程序消失，script 回傳非 0，Keepalived 會自動將 Priority 減去 30。</p></div>
+                        <div className="p-6 glass rounded-3xl border-white/5"><div className="flex items-center gap-4 mb-3"><div className="p-2 bg-purple-500/20 text-purple-400 rounded-lg"><Icon name="zap" size={20}/></div><h6 className="font-bold">Transparent Failover</h6></div><p className="text-xs text-white/50">Backup 節點偵測到 Master 優先級降低，立刻發起選舉並接管 VIP。</p></div>
+                    </div>
+                </div>
+            )},
+            { id: 'scenario-failover', title: 'Scenario: LB Node Failure', subtitle: 'Immediate Reaction', description: '當 Master LB 節點徹底崩潰 (如 Kernel Panic) 時的行為流程。', gradient: 'gradient-rose', icon: 'zap-off', content: (
+                <div className="relative py-10 h-full">
+                    <div className="grid grid-cols-4 gap-4 h-full items-stretch">
+                        <div className="flex flex-col items-center gap-4 p-4 glass rounded-3xl"><div className="text-rose-500 font-black text-lg">0ms</div><p className="text-[10px] text-center text-white/40">LB-01 發生硬體故障，VRRP ADVERT 廣播立刻中斷。</p></div>
+                        <div className="flex flex-col items-center gap-4 p-4 glass rounded-3xl"><div className="text-rose-500 font-black text-lg">3.6s</div><p className="text-[10px] text-center text-white/40">LB-02 計時器超時，確認 Master 離線，發動狀態轉換。</p></div>
+                        <div className="flex flex-col items-center gap-4 p-4 glass rounded-3xl border-emerald-500/20"><div className="text-emerald-500 font-black text-lg">+10ms</div><p className="text-[10px] text-center text-white/40">LB-02 將 VIP 掛載至本地網卡，並發送 Gratuitous ARP。</p></div>
+                        <div className="flex flex-col items-center gap-4 p-4 glass rounded-3xl border-emerald-500/20"><div className="text-emerald-500 font-black text-lg">+50ms</div><p className="text-[10px] text-center text-white/40">Switch 更新 CAM 表，外部流量無縫導向 LB-02。</p></div>
+                    </div>
+                </div>
+            )},
+            { id: 'scenario-preemption', title: 'Scenario: LB Node Restore', subtitle: 'The Preemption Flap', description: '當 LB-01 恢復並重新上線時，若未開啟 nopreempt 的副作用。', gradient: 'gradient-rose', icon: 'refresh-ccw', content: (
+                <div className="flex flex-col md:flex-row gap-8 items-center py-6">
+                    <div className="flex-1 p-8 glass rounded-[40px] border-rose-500/20 relative">
+                        <div className="absolute top-0 right-0 p-4 text-rose-500"><Icon name="x-circle" size={32}/></div>
+                        <h5 className="font-black text-xl text-rose-400 mb-4">With Preemption (預設)</h5>
+                        <ol className="space-y-4 text-sm text-white/70 list-decimal pl-6 font-light">
+                            <li>LB-01 恢復服務，偵測到 Priority 比當前 Master 高。</li>
+                            <li>LB-01 發送強佔包，強制接管 VIP。</li>
+                            <li>VIP 在短時間內發生第二次位移，導致現有的 TCP 連線全部中斷。</li>
+                            <li className="font-bold text-rose-300">結論：不推薦在生產環境使用此模式。</li>
+                        </ol>
+                    </div>
+                    <div className="flex-1 p-8 glass rounded-[40px] border-emerald-500/20 relative">
+                        <div className="absolute top-0 right-0 p-4 text-emerald-500"><Icon name="check-circle" size={32}/></div>
+                        <h5 className="font-black text-xl text-emerald-400 mb-4">With nopreempt</h5>
+                        <ul className="space-y-4 text-sm text-white/70 list-disc pl-6 font-light">
+                            <li>LB-01 恢復服務後進入 BACKUP 狀態。</li>
+                            <li>LB-01 持續發送廣播，但不主動搶奪 VIP。</li>
+                            <li>VIP 穩定停留在 LB-02，直到 LB-02 下次故障為止。</li>
+                            <li className="font-bold text-emerald-300">結論：極高可用架構的最佳實踐。</li>
+                        </ul>
+                    </div>
+                </div>
+            )},
+            { id: 'synergy-flow', title: 'Better Together', subtitle: 'The 1+1 > 2 Architecture', description: '總結：Keepalived 解決 HAProxy 的單點問題，HAProxy 解決 API 的擴展問題。', gradient: 'gradient-emerald', icon: 'users', content: (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-6">
+                    <div className="p-8 glass rounded-[40px] space-y-4 text-center border-b-4 border-b-blue-500"><Icon name="map-pin" className="text-blue-400" size={40}/><h5 className="font-black">Stability</h5><p className="text-xs text-white/50">VIP 作為 kubeconfig 唯一位址，終身不變。</p></div>
+                    <div className="p-8 glass rounded-[40px] space-y-4 text-center border-b-4 border-b-emerald-500"><Icon name="git-merge" className="text-emerald-400" size={40}/><h5 className="font-black">Efficiency</h5><p className="text-xs text-white/50">流量平均分配，徹底榨乾 Master 節點效能。</p></div>
+                    <div className="p-8 glass rounded-[40px] space-y-4 text-center border-b-4 border-b-purple-500"><Icon name="life-buoy" className="text-purple-400" size={40}/><h5 className="font-black">Redundancy</h5><p className="text-xs text-white/50">雙層保護機制，容忍任意一台節點關機。</p></div>
+                </div>
+            )},
+            { id: 'arch-flow-diagram', title: 'Complete Architecture', subtitle: 'End-to-End Flow', description: '從 kubectl 客戶端到後端 3 台 API Server 的完整流程回顧。', gradient: 'gradient-blue', icon: 'network', content: (
+                <div className="flex flex-col items-center space-y-12 py-8">
+                    <div className="flex flex-col md:flex-row items-center gap-10 w-full justify-center">
+                        <div className="flex flex-col items-center"><div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-2 text-blue-400 border-blue-500/30"><Icon name="terminal" size={32} /></div><span className="text-[10px] font-black uppercase tracking-widest text-white/60">Client</span></div>
+                        <Icon name="arrow-right" className="text-white/10 hidden md:block" />
+                        <div className="p-8 glass rounded-3xl border-white/10 relative"><div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-[10px] font-black px-4 py-1 rounded-full text-black shadow-xl">VIP: 192.168.50.250</div>
+                            <div className="flex gap-6"><div className="text-center"><div className="w-16 h-16 bg-emerald-500/20 rounded-xl flex items-center justify-center mb-2 border border-emerald-500/50 relative"><div className="absolute top-0 right-0 w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div><Icon name="layers" size={28} className="text-emerald-400" /></div><span className="text-[9px] font-black font-mono text-white/50">LB-1 (Active)</span></div>
+                            <div className="text-center opacity-40"><div className="w-16 h-16 glass rounded-xl flex items-center justify-center mb-2 border border-white/10"><Icon name="layers" size={28} /></div><span className="text-[9px] font-black font-mono">LB-2 (Standby)</span></div></div>
                         </div>
-                        
-                        <div className="grid grid-cols-3 gap-8 w-full max-w-2xl text-[10px] font-mono text-center text-white/30">
-                            <div>1. Client connects to VIP</div>
-                            <div>2. Keepalived routes to LB-1</div>
-                            <div>3. HAProxy balances to Masters</div>
+                        <Icon name="arrow-right" className="text-white/10 hidden md:block" />
+                        <div className="grid grid-cols-1 gap-3">
+                            {[1, 2, 3].map(i => <div key={i} className="flex items-center gap-4 px-8 py-3 glass rounded-2xl border-purple-500/20"><Icon name="server" size={16} className="text-purple-400" /><span className="text-xs font-black font-mono">MASTER-0{i}</span><div className="w-2 h-2 rounded-full bg-emerald-500"></div></div>)}
                         </div>
                     </div>
-                )
-            },
-            {
-                id: 'summary',
-                title: 'Best Practices',
-                subtitle: '實戰建議與總結',
-                description: '在生產環境部署時的關鍵注意事項',
-                gradient: 'gradient-slate',
-                icon: 'award',
-                content: (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="p-8 glass rounded-3xl border-white/5 space-y-4">
-                            <h5 className="font-bold text-lg border-l-4 border-blue-500 pl-4">部署要點</h5>
-                            <ul className="space-y-4 text-sm text-white/70">
-                                <li className="flex gap-3"><Icon name="check" size={16} className="text-emerald-400" /> 使用專用的控制平面負載均衡器</li>
-                                <li className="flex gap-3"><Icon name="check" size={16} className="text-emerald-400" /> Keepalived 務必設定 Unicast 以維持網路乾淨</li>
-                                <li className="flex gap-3"><Icon name="check" size={16} className="text-emerald-400" /> 啟用 nopreempt 模式，防止服務頻繁切換</li>
-                                <li className="flex gap-3"><Icon name="check" size={16} className="text-emerald-400" /> 定期進行切換測試 (Chaos Testing)</li>
-                            </ul>
-                        </div>
-                        <div className="flex flex-col justify-center items-center p-8 bg-blue-500/10 rounded-3xl border border-blue-500/20">
-                            <Icon name="rocket" size={64} className="text-blue-400 mb-6" />
-                            <h4 className="text-2xl font-bold mb-2">Ready for HA</h4>
-                            <p className="text-sm text-white/60 text-center">透過 Keepalived & HAProxy，打造堅不可摧的 K8s 基礎設施。</p>
-                            <div className="mt-8 flex gap-4">
-                                <div className="px-4 py-2 glass rounded-full text-[10px] font-mono uppercase tracking-widest text-blue-300">Robust</div>
-                                <div className="px-4 py-2 glass rounded-full text-[10px] font-mono uppercase tracking-widest text-emerald-300">Efficient</div>
-                                <div className="px-4 py-2 glass rounded-full text-[10px] font-mono uppercase tracking-widest text-purple-300">Scalable</div>
-                            </div>
-                        </div>
+                    <div className="grid grid-cols-3 gap-10 w-full max-w-4xl text-[10px] font-black font-mono text-center text-white/30 uppercase tracking-tighter"><div>[L2] Switch Points to LB-01</div><div>[L4] TCP Forwarding Active</div><div>[L7] API Health Check OK</div></div>
+                </div>
+            )},
+            { id: 'common-errors', title: 'Troubleshooting Guide', subtitle: 'Common Pitfalls', description: '在實際部署中經常會遇到的問題與解決方案。', gradient: 'gradient-rose', icon: 'wrench', content: (
+                <div className="grid grid-cols-2 gap-8 h-full">
+                    <div className="space-y-4 h-[400px] overflow-y-auto pr-4">
+                        <div className="p-6 glass rounded-3xl border-l-4 border-rose-500"><h6 className="font-bold text-blue-400">VIP 無法通訊？</h6><p className="text-[11px] text-white/60 mt-2">檢查核心是否允許在 loopback 上綁定 VIP (net.ipv4.ip_nonlocal_bind=1)。</p></div>
+                        <div className="p-6 glass rounded-3xl border-l-4 border-rose-500"><h6 className="font-bold text-blue-400">Split-Brain 腦裂？</h6><p className="text-[11px] text-white/60 mt-2">兩台 LB 同時持有 VIP。檢查防火牆是否阻擋了 UDP 112 (VRRP) 流量。</p></div>
+                        <div className="p-6 glass rounded-3xl border-l-4 border-rose-500"><h6 className="font-bold text-blue-400">HAProxy 統計無數據？</h6><p className="text-[11px] text-white/60 mt-2">確認 stats socket 的讀寫權限，或是 stats 頁面監聽的 IP/Port 是否正確。</p></div>
                     </div>
-                )
-            }
+                    <div className="flex flex-col justify-center items-center p-8 bg-blue-500/5 rounded-[40px] border border-white/5"><Icon name="help-circle" size={64} className="text-blue-500/30 mb-6"/><h5 className="text-xl font-black mb-4">Need Help?</h5><p className="text-center text-xs text-white/40 leading-relaxed font-light">查看本地文檔或 Multipass 部署日誌。<br/>$ journalctl -u keepalived -f</p></div>
+                </div>
+            )},
+            { id: 'best-practices-extended', title: 'Advanced Best Practices', subtitle: 'Production Ready', description: '針對大型 K8s 叢集生產環境的進階調優建議。', gradient: 'gradient-slate', icon: 'award', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="p-10 glass rounded-[50px] space-y-6">
+                        <h5 className="font-black text-xl text-emerald-400 border-l-4 border-emerald-500 pl-6">Reliability</h5>
+                        <ul className="space-y-5 text-sm text-white/70 font-light">
+                            <li className="flex gap-4"><Icon name="check" size={16} className="text-emerald-400 flex-shrink-0"/> 分別部署在不同實體機/機架以防電源故障。</li>
+                            <li className="flex gap-4"><Icon name="check" size={16} className="text-emerald-400 flex-shrink-0"/> 限制 HAProxy 最大連線數 (maxconn) 保護核心資源。</li>
+                            <li className="flex gap-4"><Icon name="check" size={16} className="text-emerald-400 flex-shrink-0"/> 定期更換 VRRP 認證密碼。</li>
+                        </ul>
+                    </div>
+                    <div className="p-10 glass rounded-[50px] space-y-6 bg-blue-500/5">
+                        <h5 className="font-black text-xl text-blue-400 border-l-4 border-blue-500 pl-6">Automation</h5>
+                        <ul className="space-y-5 text-sm text-white/70 font-light">
+                            <li className="flex gap-4"><Icon name="check" size={16} className="text-blue-400 flex-shrink-0"/> 使用 Ansible 自動化所有 Config 的部署。</li>
+                            <li className="flex gap-4"><Icon name="check" size={16} className="text-blue-400 flex-shrink-0"/> 聯動 Prometheus 實現 Failover 發生時告警。</li>
+                            <li className="flex gap-4"><Icon name="check" size={16} className="text-blue-400 flex-shrink-0"/> 將日誌導向中心化平台 (ELK/Loki)。</li>
+                        </ul>
+                    </div>
+                </div>
+            )},
+            { id: 'resource-links', title: 'Resources & References', subtitle: 'Learn More', description: '更多詳細的技術規格與實作腳本，可參閱以下連結。', gradient: 'gradient-slate', icon: 'link-2', content: (
+                <div className="flex flex-col items-center py-10">
+                    <div className="grid grid-cols-2 gap-8 w-full max-w-2xl">
+                        <div className="p-8 glass rounded-3xl hover:bg-white/5 transition-all text-center group"><Icon name="book" size={40} className="text-blue-400 mb-4 group-hover:scale-110 transition-transform"/><h6 className="font-bold mb-1">Official Docs</h6><p className="text-[10px] text-white/30">haproxy.org / keepalived.org</p></div>
+                        <div className="p-8 glass rounded-3xl hover:bg-white/5 transition-all text-center group"><Icon name="github" size={40} className="text-purple-400 mb-4 group-hover:scale-110 transition-transform"/><h6 className="font-bold mb-1">Lab Scripts</h6><p className="text-[10px] text-white/30">MansionLai / notebook</p></div>
+                    </div>
+                    <div className="mt-12 p-6 glass rounded-2xl border-white/5 flex items-center gap-6 max-w-xl"><Icon name="terminal" size={32} className="text-emerald-500"/><p className="text-xs font-mono text-white/60">"The true power of HA is when you can pull the plug and the client doesn't even notice."</p></div>
+                </div>
+            )},
+            { id: 'qa', title: 'Q&A Session', subtitle: 'Discussion', description: '歡迎針對任何實作細節、核心參數或場景設計進行討論。', gradient: 'gradient-blue', icon: 'messages-square', content: (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <Icon name="help-circle" size={100} className="text-blue-400/20 mb-8 animate-pulse"/>
+                    <h5 className="text-5xl font-black mb-4 uppercase tracking-tighter">Any Questions?</h5>
+                    <p className="text-white/40 text-sm font-light">Thank you for attending this session.</p>
+                    <div className="mt-12 flex gap-4"><div className="px-6 py-2 glass rounded-full text-[10px] font-black uppercase tracking-widest text-blue-300">Open Discussion</div><div className="px-6 py-2 glass rounded-full text-[10px] font-black uppercase tracking-widest text-emerald-300">Live Demo Next</div></div>
+                </div>
+            )},
+            { id: 'conclusion', title: 'Conclusion', subtitle: 'Summary of Journey', description: '透過雙層高可用設計，打造穩定、可靠、可擴展的 K8s 基礎設施。', gradient: 'gradient-emerald', icon: 'flag', content: (
+                <div className="flex flex-col items-center py-10">
+                    <div className="p-10 glass rounded-[60px] max-w-4xl border-emerald-500/20 relative">
+                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-emerald-500 rounded-full blur-[60px] opacity-20"></div>
+                        <h5 className="text-3xl font-black text-center mb-10">K8s HA Stack</h5>
+                        <div className="space-y-6"><div className="flex items-center gap-6 p-4 bg-white/5 rounded-2xl"><div className="w-12 h-12 glass rounded-xl flex items-center justify-center text-blue-400 font-black">01</div><div><h6 className="font-bold text-sm">HAProxy (Load Balancing)</h6><p className="text-[10px] text-white/40">Ensures traffic reaches all control plane nodes evenly.</p></div></div><div className="flex items-center gap-6 p-4 bg-white/5 rounded-2xl"><div className="w-12 h-12 glass rounded-xl flex items-center justify-center text-emerald-400 font-black">02</div><div><h6 className="font-bold text-sm">Keepalived (High Availability)</h6><p className="text-[10px] text-white/40">Guarantees the existence of the VIP through VRRP/GARP.</p></div></div><div className="flex items-center gap-6 p-4 bg-white/5 rounded-2xl"><div className="w-12 h-12 glass rounded-xl flex items-center justify-center text-purple-400 font-black">03</div><div><h6 className="font-bold text-sm">Automated Recovery</h6><p className="text-[10px] text-white/40">The system heals itself within milliseconds of failure detection.</p></div></div></div>
+                    </div>
+                </div>
+            )},
+            { id: 'final', title: 'The End', subtitle: 'Thank You', description: 'Prepared by Gemini CLI Agent.', gradient: 'gradient-slate', icon: 'heart', content: (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                    <Icon name="rocket" size={80} className="text-blue-500 mb-6 drop-shadow-[0_0_20px_rgba(59,130,246,0.5)]"/>
+                    <h5 className="text-6xl font-black uppercase tracking-tighter mb-4">Build Stronger.</h5>
+                    <p className="text-white/20 text-xs font-mono uppercase tracking-[0.4em]">HAProxy + Keepalived Lab 2026</p>
+                </div>
+            )}
         ];
 
-        // --- Components ---
+        // --- App Component ---
         const App = () => {
             const [currentSlide, setCurrentSlide] = useState(0);
             const [direction, setDirection] = useState(0);
 
-            const nextSlide = useCallback(() => {
-                if (currentSlide < slides.length - 1) {
-                    setDirection(1);
-                    setCurrentSlide(prev => prev + 1);
-                }
-            }, [currentSlide]);
-
-            const prevSlide = useCallback(() => {
-                if (currentSlide > 0) {
-                    setDirection(-1);
-                    setCurrentSlide(prev => prev - 1);
-                }
-            }, [currentSlide]);
+            const nextSlide = useCallback(() => { if (currentSlide < slides.length - 1) { setDirection(1); setCurrentSlide(prev => prev + 1); } }, [currentSlide]);
+            const prevSlide = useCallback(() => { if (currentSlide > 0) { setDirection(-1); setCurrentSlide(prev => prev - 1); } }, [currentSlide]);
 
             useEffect(() => {
                 const handleKeyDown = (e) => {
@@ -567,96 +514,51 @@
 
             return (
                 <div className={`h-screen w-screen overflow-hidden relative transition-colors duration-1000 ${slide.gradient}`}>
-                    {/* Background decoration */}
                     <div className="absolute inset-0 opacity-20 pointer-events-none">
-                        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[120px]"></div>
-                        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-500 rounded-full blur-[120px]"></div>
+                        <div className="absolute top-[-10%] left-[-10%] w-[45%] h-[45%] bg-blue-500 rounded-full blur-[140px]"></div>
+                        <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] bg-purple-500 rounded-full blur-[140px]"></div>
                     </div>
 
                     <div className="relative z-10 h-full flex flex-col p-12 max-w-7xl mx-auto">
-                        {/* Header */}
-                        <header className="flex justify-between items-center mb-10">
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 glass rounded-2xl flex items-center justify-center">
-                                    <Icon name={slide.icon} className="text-white" size={24} />
+                        <header className="flex justify-between items-center mb-8">
+                            <div className="flex items-center gap-5">
+                                <div className="p-3 glass rounded-2xl flex items-center justify-center shadow-xl border-white/15">
+                                    <Icon name={slide.icon} className="text-white" size={28} />
                                 </div>
                                 <div>
                                     <h1 className="text-2xl font-black tracking-tighter uppercase leading-none">{slide.title}</h1>
-                                    <p className="text-[10px] text-white/50 font-mono mt-1 uppercase tracking-widest leading-none">{slide.subtitle}</p>
+                                    <p className="text-[10px] text-white/40 font-mono mt-1.5 uppercase tracking-widest leading-none">{slide.subtitle}</p>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2.5">
                                 {slides.map((_, i) => (
-                                    <div 
-                                        key={i} 
-                                        className={`h-1 rounded-full transition-all duration-300 ${i === currentSlide ? 'w-8 bg-white' : 'w-2 bg-white/20'}`}
-                                    />
+                                    <div key={i} onClick={() => { setDirection(i > currentSlide ? 1 : -1); setCurrentSlide(i); }} className={`h-1.5 rounded-full transition-all duration-500 cursor-pointer ${i === currentSlide ? 'w-10 bg-white' : 'w-2 bg-white/10 hover:bg-white/30'}`} />
                                 ))}
                             </div>
                         </header>
 
-                        {/* Main Content */}
-                        <main className="flex-1 relative overflow-hidden flex flex-col pt-4">
+                        <main className="flex-1 relative overflow-hidden flex flex-col pt-2">
                             <AnimatePresence mode="wait" custom={direction}>
-                                <motion.div
-                                    key={currentSlide}
-                                    custom={direction}
-                                    initial={{ opacity: 0, x: direction * 50, scale: 0.98 }}
-                                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                                    exit={{ opacity: 0, x: direction * -50, scale: 1.02 }}
-                                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                                    className="w-full h-full flex flex-col"
-                                >
-                                    <div className="mb-8 max-w-3xl">
-                                        <motion.p 
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{ delay: 0.2 }}
-                                            className="text-lg text-white/80 leading-relaxed font-light"
-                                        >
-                                            {slide.description}
-                                        </motion.p>
+                                <motion.div key={currentSlide} custom={direction} initial={{ opacity: 0, x: direction * 80, scale: 0.98, filter: 'blur(10px)' }} animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }} exit={{ opacity: 0, x: direction * -80, scale: 1.02, filter: 'blur(10px)' }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }} className="w-full h-full flex flex-col">
+                                    <div className="mb-8 max-w-4xl">
+                                        <motion.p initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="text-xl text-white/80 leading-relaxed font-light tracking-tight italic">"{slide.description}"</motion.p>
                                     </div>
-                                    <motion.div 
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: 0.3 }}
-                                        className="flex-1 slide-content-container"
-                                    >
+                                    <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="flex-1 slide-content-container">
                                         {slide.content}
                                     </motion.div>
                                 </motion.div>
                             </AnimatePresence>
                         </main>
 
-                        {/* Footer / Controls */}
-                        <footer className="mt-8 flex justify-between items-center border-t border-white/10 pt-8">
-                            <div className="text-[10px] font-mono text-white/20 uppercase tracking-[0.2em]">
-                                Keepalived & HAProxy • K8s Load Balancing • Phase 0
-                            </div>
-                            <div className="flex gap-4">
-                                <button 
-                                    onClick={prevSlide}
-                                    disabled={currentSlide === 0}
-                                    className={`p-4 rounded-full glass transition-all ${currentSlide === 0 ? 'opacity-20' : 'hover:bg-white/10 active:scale-90'}`}
-                                >
-                                    <Icon name="chevron-left" />
-                                </button>
-                                <button 
-                                    onClick={nextSlide}
-                                    disabled={currentSlide === slides.length - 1}
-                                    className={`p-4 rounded-full glass transition-all ${currentSlide === slides.length - 1 ? 'opacity-20' : 'hover:bg-white/10 active:scale-90'}`}
-                                >
-                                    <Icon name="chevron-right" />
-                                </button>
+                        <footer className="mt-8 flex justify-between items-center border-t border-white/5 pt-8">
+                            <div className="text-[10px] font-black font-mono text-white/20 uppercase tracking-[0.4em]">Keepalived & HAProxy • Advanced HA Stack • 2026</div>
+                            <div className="flex gap-5">
+                                <button onClick={prevSlide} disabled={currentSlide === 0} className={`p-5 rounded-full glass transition-all border-white/10 ${currentSlide === 0 ? 'opacity-10' : 'hover:bg-white/10 hover:scale-110 active:scale-95 shadow-xl'}`}><Icon name="chevron-left" size={24}/></button>
+                                <button onClick={nextSlide} disabled={currentSlide === slides.length - 1} className={`p-5 rounded-full glass transition-all border-white/10 ${currentSlide === slides.length - 1 ? 'opacity-10' : 'hover:bg-white/10 hover:scale-110 active:scale-95 shadow-xl'}`}><Icon name="chevron-right" size={24}/></button>
                             </div>
                         </footer>
                     </div>
-
-                    {/* Page Number Indicator */}
-                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-xs font-mono text-white/10">
-                        {String(currentSlide + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}
-                    </div>
+                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-xs font-black font-mono text-white/10 tracking-widest">{String(currentSlide + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}</div>
                 </div>
             );
         };
