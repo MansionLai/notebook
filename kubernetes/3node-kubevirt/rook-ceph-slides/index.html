@@ -74,40 +74,45 @@
 
         // --- Icons Wrapper ---
         const Icon = ({ name, size = 24, className = "" }) => {
-            const iconRef = useRef(null);
-            const [ready, setReady] = useState(false);
+            const containerRef = useRef(null);
 
             useEffect(() => {
-                const checkLucide = () => {
-                    if (window.lucide && window.lucide.icons && window.lucide.icons[name]) {
-                        setReady(true);
-                    } else {
-                        setTimeout(checkLucide, 100);
+                const renderIcon = () => {
+                    if (window.lucide && containerRef.current) {
+                        const iconData = window.lucide.icons[name];
+                        if (iconData) {
+                            // Clear previous content
+                            containerRef.current.innerHTML = '';
+                            
+                            // Create temporary element for lucide to replace
+                            const iconEl = document.createElement('i');
+                            iconEl.setAttribute('data-lucide', name);
+                            containerRef.current.appendChild(iconEl);
+
+                            window.lucide.createIcons({
+                                attrs: {
+                                    class: className,
+                                    'stroke-width': 2,
+                                    width: size,
+                                    height: size
+                                },
+                                nameAttr: 'data-lucide'
+                            });
+                        } else {
+                            // Retry if lucide is not fully initialized
+                            setTimeout(renderIcon, 100);
+                        }
                     }
                 };
-                checkLucide();
-            }, [name]);
-
-            useEffect(() => {
-                if (ready && iconRef.current) {
-                    try {
-                        window.lucide.createIcons({
-                            attrs: {
-                                class: className,
-                                'stroke-width': 2
-                            },
-                            nameAttr: 'data-lucide'
-                        });
-                    } catch (e) {
-                        console.error("Lucide error:", e);
-                    }
-                }
-            }, [ready, className]);
+                renderIcon();
+            }, [name, size, className]);
             
             return (
-                <div style={{ width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} className={className}>
-                    <i ref={iconRef} data-lucide={name} style={{ width: size, height: size }}></i>
-                </div>
+                <div 
+                    ref={containerRef} 
+                    style={{ width: size, height: size }} 
+                    className={`inline-flex items-center justify-center ${className}`}
+                ></div>
             );
         };
 
@@ -117,7 +122,7 @@
                 id: 'hero',
                 title: 'Rook-Ceph v1.17',
                 subtitle: 'Cloud Native Storage for KubeVirt',
-                description: '在 3 節點 K8s 叢集實現高效、穩定的外部 Ceph 整合',
+                description: '在 K8s 叢集實現高效、穩定的外部 Ceph 整合',
                 gradient: 'gradient-blue',
                 icon: 'database',
                 content: (
@@ -130,7 +135,7 @@
                             <div className="p-6 glass rounded-3xl text-center">
                                 <Icon name="server" className="mx-auto mb-4 text-blue-400" size={32} />
                                 <h4 className="font-bold">Infrastructure</h4>
-                                <p className="text-xs text-white/50 mt-2">3-Node Lab</p>
+                                <p className="text-xs text-white/50 mt-2">K8s Cluster</p>
                             </div>
                             <div className="p-6 glass rounded-3xl text-center border-blue-500/30">
                                 <Icon name="box" className="mx-auto mb-4 text-purple-400" size={32} />
