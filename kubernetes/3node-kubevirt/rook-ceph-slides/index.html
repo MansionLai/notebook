@@ -7,8 +7,8 @@
     <link rel="icon" type="image/svg+xml" href="/notebook/kubernetes/3node-kubevirt/rook-ceph-slides/favicon.svg" />
     <!-- Tailwind CSS 3.4 CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Lucide Icons (React version) -->
+    <script src="https://unpkg.com/lucide-react@0.344.0/dist/umd/lucide-react.js"></script>
     <!-- Framer Motion & React (via CDN) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -73,38 +73,27 @@
         const { motion, AnimatePresence } = MotionLib || { motion: (props) => <div {...props} />, AnimatePresence: ({children}) => children };
 
         // --- Icons Wrapper ---
+        // Using LucideReact UMD global
         const Icon = ({ name, size = 24, className = "" }) => {
-            const [svg, setSvg] = useState("");
+            // Map string name to LucideReact component
+            // Names in slides are kebab-case (database, server, etc.)
+            // LucideReact uses PascalCase (Database, Server, etc.)
+            const toPascalCase = (str) => {
+                return str
+                    .split('-')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join('');
+            };
 
-            useEffect(() => {
-                let isMounted = true;
-                const renderIcon = () => {
-                    if (window.lucide && window.lucide.icons && window.lucide.icons[name]) {
-                        const iconData = window.lucide.icons[name];
-                        // Lucide icons in the browser bundle usually have a toSvg method
-                        const svgString = iconData.toSvg({
-                            class: className,
-                            'stroke-width': 2,
-                            width: size,
-                            height: size
-                        });
-                        if (isMounted) setSvg(svgString);
-                    } else {
-                        // Retry if lucide is not fully initialized
-                        setTimeout(renderIcon, 100);
-                    }
-                };
-                renderIcon();
-                return () => { isMounted = false; };
-            }, [name, size, className]);
-            
-            return (
-                <div 
-                    className={`inline-flex items-center justify-center ${className}`}
-                    style={{ width: size, height: size, minWidth: size, minHeight: size }}
-                    dangerouslySetInnerHTML={{ __html: svg }}
-                ></div>
-            );
+            const iconName = toPascalCase(name);
+            const LucideIcon = LucideReact[iconName];
+
+            if (!LucideIcon) {
+                console.warn(`Icon "${iconName}" not found in LucideReact`);
+                return <div style={{ width: size, height: size }} className={className}></div>;
+            }
+
+            return <LucideIcon size={size} className={className} strokeWidth={2} />;
         };
 
         // --- Data Definitions ---
