@@ -5,69 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rook-Ceph Deep Dive</title>
     <link rel="icon" type="image/svg+xml" href="/notebook/kubernetes/3node-kubevirt/rook-ceph-slides/favicon.svg" />
-    <!-- Tailwind CSS 3.4 CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Iconify (Web Component for Icons) -->
     <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
-    <!-- Framer Motion & React (via CDN) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #000;
-            color: white;
-            overflow: hidden;
-            margin: 0;
-        }
-
-        .font-mono {
-            font-family: 'JetBrains Mono', monospace;
-        }
-
-        .glass {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
+        body { font-family: 'Inter', sans-serif; background-color: #000; color: white; overflow: hidden; margin: 0; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
         .gradient-blue { background: linear-gradient(135deg, #1e3a8a 0%, #1e1b4b 50%, #000 100%); }
         .gradient-purple { background: linear-gradient(135deg, #4c1d95 0%, #2e1065 50%, #000 100%); }
         .gradient-emerald { background: linear-gradient(135deg, #064e3b 0%, #022c22 50%, #000 100%); }
         .gradient-slate { background: linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #000 100%); }
         .gradient-crimson { background: linear-gradient(135deg, #7f1d1d 0%, #450a0a 50%, #000 100%); }
         .gradient-amber { background: linear-gradient(135deg, #78350f 0%, #451a03 50%, #000 100%); }
-
         ::-webkit-scrollbar { display: none; }
-
         code { color: #93c5fd; }
     </style>
 </head>
 <body>
     <div id="root"></div>
-
     <script type="text/babel">
-        const { useState, useEffect, useCallback, useRef } = React;
+        const { useState, useEffect, useCallback } = React;
         const MotionLib = window.Motion || window.FramerMotion;
-        const { motion, AnimatePresence } = MotionLib || { 
-            motion: { div: (props) => <div {...props} /> }, 
-            AnimatePresence: ({children}) => children 
-        };
+        const motion = MotionLib.motion;
+        const AnimatePresence = MotionLib.AnimatePresence;
 
-        const Icon = ({ name, size = 24, className = "" }) => {
-            return (
-                <iconify-icon 
-                    icon={`lucide:${name}`} 
-                    style={{ fontSize: size, color: 'currentColor' }}
-                    class={className}
-                ></iconify-icon>
-            );
-        };
+        const Icon = ({ name, size = 24, className = "" }) => (
+            <iconify-icon icon={`lucide:${name}`} style={{ fontSize: size, color: 'currentColor' }} class={className}></iconify-icon>
+        );
 
         const slides = [
             {
@@ -193,7 +162,7 @@
                                 <li className="flex gap-3"><Icon name="check-square" className="text-green-400" /> 自動化部署與營運</li>
                                 <li className="flex gap-3"><Icon name="check-square" className="text-green-400" /> 透過 CRD 實現聲明式配置</li>
                                 <li className="flex gap-3"><Icon name="check-square" className="text-green-400" /> 無縫整合 CSI 驅動程式</li>
-                                <li className="flex gap-3"><Icon name="check-square" className="text-green-400" /> 支援多種儲存後端 (Ceph 為首)</li>
+                                <li className="flex gap-3"><Icon name="check-square" className="text-green-400" /> 支援多種儲存後端</li>
                             </ul>
                         </div>
                         <div className="p-8 glass rounded-3xl text-center border-blue-500/20">
@@ -274,8 +243,8 @@
                         <thead>
                             <tr className="border-b border-white/10">
                                 <th className="py-3 text-left font-bold text-white/40 uppercase">特性</th>
-                                <th className="py-3 text-left font-bold text-blue-400">Internal (Converged)</th>
-                                <th className="py-3 text-left font-bold text-emerald-400">External (Dedicated)</th>
+                                <th className="py-3 text-left font-bold text-blue-400">Internal</th>
+                                <th className="py-3 text-left font-bold text-emerald-400">External</th>
                             </tr>
                         </thead>
                         <tbody className="text-white/70">
@@ -296,8 +265,8 @@
                             </tr>
                             <tr>
                                 <td className="py-4 font-bold">典型場景</td>
-                                <td className="py-4">小型開發、超融合</td>
-                                <td className="py-4">生產環境、大容量</td>
+                                <td className="py-4">小型開發</td>
+                                <td className="py-4">生產環境</td>
                             </tr>
                         </tbody>
                     </table>
@@ -317,7 +286,7 @@
                             <ul className="text-xs space-y-2 text-white/50 italic">
                                 <li>- 指定 namespace (rook-ceph)</li>
                                 <li>- 指定 ceph version</li>
-                                <li>- 配置監控 (prometheus) 整合</li>
+                                <li>- 配置監控整合</li>
                             </ul>
                         </div>
                         <div className="p-4 glass rounded-xl font-mono text-[9px] text-purple-300 leading-relaxed overflow-hidden">
@@ -328,10 +297,7 @@
                             spec:<br/>
                             &nbsp;&nbsp;external:<br/>
                             &nbsp;&nbsp;&nbsp;&nbsp;enable: true<br/>
-                            &nbsp;&nbsp;dataDirHostPath: /var/lib/rook<br/>
-                            &nbsp;&nbsp;healthCheck:<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;daemonHealth:<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;status: ...
+                            &nbsp;&nbsp;dataDirHostPath: /var/lib/rook
                         </div>
                     </div>
                 )
@@ -350,26 +316,19 @@
                             <p className="text-xs text-white/60">在 External 模式下，這只是個邏輯參照，確保 Rook 知道要對接哪個現成的 Pool。</p>
                             <div className="h-px bg-white/10 my-4"></div>
                             <h5 className="font-bold text-sm">StorageClass</h5>
-                            <p className="text-xs text-white/60">定義 Provisioner 為 <code>rook-ceph.rbd.csi.ceph.com</code>，並關聯特定的 Pool 與 ClusterID。</p>
+                            <p className="text-xs text-white/60">定義 Provisioner 為 <code>rook-ceph.rbd.csi.ceph.com</code>。</p>
                         </div>
                         <div className="p-4 glass rounded-xl space-y-4">
                             <div className="flex gap-3 items-center">
-                                <Icon name="layers" className="text-blue-400" size={16}/>
-                                <span className="text-xs font-mono">SC: ceph-rbd</span>
+                                <Icon name="layers" className="text-blue-400" size={16}/><span className="text-xs font-mono">SC: ceph-rbd</span>
                             </div>
+                            <div className="flex gap-3 items-center"><Icon name="arrow-down" className="text-white/20" size={16}/></div>
                             <div className="flex gap-3 items-center">
-                                <Icon name="arrow-down" className="text-white/20" size={16}/>
+                                <Icon name="box" className="text-purple-400" size={16}/><span className="text-xs font-mono">PVC: vm-disk-01</span>
                             </div>
+                            <div className="flex gap-3 items-center"><Icon name="arrow-down" className="text-white/20" size={16}/></div>
                             <div className="flex gap-3 items-center">
-                                <Icon name="box" className="text-purple-400" size={16}/>
-                                <span className="text-xs font-mono">PVC: vm-disk-01</span>
-                            </div>
-                            <div className="flex gap-3 items-center">
-                                <Icon name="arrow-down" className="text-white/20" size={16}/>
-                            </div>
-                            <div className="flex gap-3 items-center">
-                                <Icon name="hard-drive" className="text-emerald-400" size={16}/>
-                                <span className="text-xs font-mono">External RBD Image</span>
+                                <Icon name="hard-drive" className="text-emerald-400" size={16}/><span className="text-xs font-mono">External RBD Image</span>
                             </div>
                         </div>
                     </div>
@@ -388,14 +347,13 @@
                             <p className="text-sm">支援 K8s 標準 Snapshot API，允許開發者：</p>
                             <ul className="text-xs space-y-2 text-white/60">
                                 <li className="flex gap-2"><Icon name="check" size={14} className="text-amber-400"/> 為運行中的 VM 建立磁碟快照</li>
-                                <li className="flex gap-2"><Icon name="check" size={14} className="text-amber-400"/> 從快照還原至新 Volume (Restore)</li>
+                                <li className="flex gap-2"><Icon name="check" size={14} className="text-amber-400"/> 從快照還原至新 Volume</li>
                                 <li className="flex gap-2"><Icon name="check" size={14} className="text-amber-400"/> 跨 Namespace 克隆 Volume</li>
                             </ul>
                         </div>
                         <div className="p-6 glass rounded-3xl border-amber-500/30 text-center">
                             <Icon name="history" size={48} className="text-amber-400 mb-4"/>
                             <h5 className="font-bold text-sm">Point-in-time Recovery</h5>
-                            <p className="text-[10px] text-white/40 mt-2 font-mono">deletionPolicy: Retain / Delete</p>
                         </div>
                     </div>
                 )
@@ -412,18 +370,11 @@
                         <p className="text-white/70">這是 K8s 獲取外部 Ceph MON 地址的首要途徑。</p>
                         <div className="p-4 bg-black/40 rounded-xl border border-white/5 font-mono text-[10px]">
                             data:<br/>
-                            &nbsp;&nbsp;data: 192.168.1.10:6789,192.168.1.11:6789,192.168.1.12:6789<br/>
-                            &nbsp;&nbsp;mapping: "{}"
+                            &nbsp;&nbsp;data: 192.168.1.10:6789,192.168.1.11:6789,192.168.1.12:6789
                         </div>
                         <div className="flex gap-4">
-                            <div className="flex-1 p-3 glass rounded-lg border-blue-500/20 text-[10px]">
-                                <Icon name="info" size={12} className="text-blue-400 mb-1"/><br/>
-                                必須包含所有活動中的 MON 地址
-                            </div>
-                            <div className="flex-1 p-3 glass rounded-lg border-purple-500/20 text-[10px]">
-                                <Icon name="alert-triangle" size={12} className="text-purple-400 mb-1"/><br/>
-                                格式錯誤將導致 CSI 驅動無法掛載儲存
-                            </div>
+                            <div className="flex-1 p-3 glass rounded-lg border-blue-500/20 text-[10px]">包含所有活動中的 MON 地址</div>
+                            <div className="flex-1 p-3 glass rounded-lg border-purple-500/20 text-[10px]">格式錯誤將導致掛載失敗</div>
                         </div>
                     </div>
                 )
@@ -439,14 +390,11 @@
                     <div className="grid grid-cols-2 gap-8">
                         <div className="p-5 glass rounded-2xl space-y-3">
                             <h5 className="font-bold text-sm text-yellow-400">rook-ceph-mon</h5>
-                            <p className="text-[10px] text-white/50">存放 admin keyring 與 mon-store。這是 Rook Operator 管理外部叢集的權限來源。</p>
+                            <p className="text-[10px] text-white/50">存放 admin keyring。Rook Operator 使用。</p>
                         </div>
                         <div className="p-5 glass rounded-2xl space-y-3">
                             <h5 className="font-bold text-sm text-blue-400">csi-rbd-secret</h5>
-                            <p className="text-[10px] text-white/50">存放 user (client.rbd) keyring。這是 CSI 驅動為 Pod 掛載磁碟時使用的權限。</p>
-                        </div>
-                        <div className="col-span-2 p-4 glass rounded-xl bg-yellow-500/5 border border-yellow-500/10 text-[10px] italic text-center">
-                            注意：Keyring 必須預先在外部 Ceph 建立並正確賦予 Pool 存取權限 (caps)
+                            <p className="text-[10px] text-white/50">存放 user keyring。CSI 驅動使用。</p>
                         </div>
                     </div>
                 )
@@ -461,22 +409,14 @@
                 content: (
                     <div className="relative">
                         <div className="flex justify-between items-center px-4 mb-8">
-                            <div className="text-center z-10"><div className="w-12 h-12 glass rounded-full flex items-center justify-center bg-blue-500/20 mb-2"><Icon name="monitor"/></div><span className="text-[10px]">VM</span></div>
-                            <div className="text-center z-10"><div className="w-12 h-12 glass rounded-full flex items-center justify-center bg-purple-500/20 mb-2"><Icon name="box"/></div><span className="text-[10px]">PVC</span></div>
-                            <div className="text-center z-10"><div className="w-12 h-12 glass rounded-full flex items-center justify-center bg-emerald-500/20 mb-2"><Icon name="zap"/></div><span className="text-[10px]">CSI</span></div>
-                            <div className="text-center z-10"><div className="w-12 h-12 glass rounded-full flex items-center justify-center bg-slate-500/20 mb-2"><Icon name="server"/></div><span className="text-[10px]">Kernel</span></div>
-                            <div className="text-center z-10"><div className="w-12 h-12 glass rounded-full flex items-center justify-center bg-emerald-500/40 mb-2"><Icon name="database"/></div><span className="text-[10px]">OSD</span></div>
+                            <div className="text-center"><Icon name="monitor" className="mb-2 mx-auto"/><span className="text-[10px]">VM</span></div>
+                            <div className="text-center"><Icon name="box" className="mb-2 mx-auto"/><span className="text-[10px]">PVC</span></div>
+                            <div className="text-center"><Icon name="zap" className="mb-2 mx-auto"/><span className="text-[10px]">CSI</span></div>
+                            <div className="text-center"><Icon name="server" className="mb-2 mx-auto"/><span className="text-[10px]">Kernel</span></div>
+                            <div className="text-center"><Icon name="database" className="mb-2 mx-auto"/><span className="text-[10px]">OSD</span></div>
                         </div>
-                        <div className="absolute top-6 left-10 right-10 h-0.5 bg-white/10 -z-0"></div>
-                        <div className="grid grid-cols-2 gap-4 mt-8">
-                            <div className="p-4 glass rounded-xl text-[10px] text-white/60">
-                                1. VM 發出 I/O 請求至虛擬磁碟<br/>
-                                2. KubeVirt 透過 PVC 找到對應 RBD Image
-                            </div>
-                            <div className="p-4 glass rounded-xl text-[10px] text-white/60">
-                                3. Host Kernel RBD Module 與 Ceph 建立連線<br/>
-                                4. 資料透過網路直接寫入外部 OSD
-                            </div>
+                        <div className="p-4 glass rounded-xl text-[10px] text-white/60 text-center italic">
+                            資料透過 Host Kernel RBD 模組直接發往外部 Ceph 網路
                         </div>
                     </div>
                 )
@@ -484,31 +424,25 @@
             {
                 id: 'lab-topology',
                 title: 'Lab Topology',
-                subtitle: '3-Node KubeVirt Setup',
+                subtitle: 'K8s Cluster Setup',
                 description: '本專案的實體與邏輯拓撲',
                 gradient: 'gradient-slate',
                 icon: 'map',
                 content: (
                     <div className="grid grid-cols-2 gap-8 items-center">
                         <div className="p-6 glass rounded-3xl space-y-6">
-                            <div className="flex justify-between items-center">
-                                <span className="text-xs font-bold">Azure Cluster (3 Nodes)</span>
-                                <Icon name="cloud" className="text-blue-400" size={16}/>
-                            </div>
+                            <div className="flex justify-between items-center"><span className="text-xs font-bold">Azure Cluster</span><Icon name="cloud" className="text-blue-400" size={16}/></div>
                             <div className="flex gap-2">
                                 <div className="flex-1 h-12 glass rounded bg-blue-500/20 flex items-center justify-center text-[8px]">Master</div>
                                 <div className="flex-1 h-12 glass rounded bg-blue-500/20 flex items-center justify-center text-[8px]">Worker 1</div>
                                 <div className="flex-1 h-12 glass rounded bg-blue-500/20 flex items-center justify-center text-[8px]">Worker 2</div>
                             </div>
                             <div className="text-center"><Icon name="arrow-down" className="text-white/20"/></div>
-                            <div className="p-3 glass rounded-xl border-emerald-500/30 text-center">
-                                <span className="text-[10px] font-bold text-emerald-300">External Ceph Cluster</span>
-                            </div>
+                            <div className="p-3 glass rounded-xl border-emerald-500/30 text-center"><span className="text-[10px] font-bold text-emerald-300">External Ceph Cluster</span></div>
                         </div>
                         <ul className="text-xs space-y-4 text-white/70">
                             <li className="flex gap-3"><Icon name="network" className="text-blue-400" size={16}/> 所有節點透過 VNet 直接對接 Ceph MON</li>
                             <li className="flex gap-3"><Icon name="check-circle" className="text-blue-400" size={16}/> Rook Operator 運行於 Master 節點</li>
-                            <li className="flex gap-3"><Icon name="check-circle" className="text-blue-400" size={16}/> CSI Plugins 分佈於所有 Worker 節點</li>
                         </ul>
                     </div>
                 )
@@ -521,23 +455,11 @@
                 gradient: 'gradient-blue',
                 icon: 'play',
                 content: (
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-4">
-                            <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">1</div>
-                            <div className="flex-1 p-3 glass rounded-xl text-xs">部署 <code>rook-ceph-operator</code> (透過 Helm 或 YAML)</div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">2</div>
-                            <div className="flex-1 p-3 glass rounded-xl text-xs">建立 <code>ceph-external-cluster</code> Namespace 並匯入 MON/Admin 憑證</div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">3</div>
-                            <div className="flex-1 p-3 glass rounded-xl text-xs">套用 <code>CephCluster</code> CR 並觀察 <code>Connected</code> 狀態</div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">4</div>
-                            <div className="flex-1 p-3 glass rounded-xl text-xs">建立 <code>StorageClass</code> 並部署測試 PVC 驗證自動 Provisioning</div>
-                        </div>
+                    <div className="space-y-3">
+                        <div className="p-3 glass rounded-xl text-xs">1. 部署 <code>rook-ceph-operator</code></div>
+                        <div className="p-3 glass rounded-xl text-xs">2. 建立 <code>ceph-external-cluster</code> 並匯入憑證</div>
+                        <div className="p-3 glass rounded-xl text-xs">3. 套用 <code>CephCluster</code> CR 並觀察 <code>Connected</code></div>
+                        <div className="p-3 glass rounded-xl text-xs">4. 建立 <code>StorageClass</code> 驗證 Provisioning</div>
                     </div>
                 )
             },
@@ -550,25 +472,20 @@
                 icon: 'vibrate',
                 content: (
                     <div className="grid grid-cols-2 gap-8">
-                        <div className="space-y-4">
-                            <p className="text-xs text-white/70">KubeVirt 的 <code>DataVolume</code> 可以直接引用 Rook 的 <code>StorageClass</code>：</p>
-                            <ul className="text-[10px] space-y-2 text-white/50">
+                        <div className="space-y-4 text-xs">
+                            <p>KubeVirt 的 <code>DataVolume</code> 可以直接引用 Rook 的 <code>StorageClass</code>。</p>
+                            <ul className="space-y-2 text-white/50">
                                 <li>- 自動建立 PVC</li>
-                                <li>- 支援從 HTTP/S3 鏡像匯入資料</li>
-                                <li>- 完美的磁碟 Lifecycle 管理</li>
+                                <li>- 支援鏡像匯入</li>
                             </ul>
                         </div>
-                        <div className="p-4 glass rounded-xl font-mono text-[9px] text-purple-300 leading-tight">
+                        <div className="p-4 glass rounded-xl font-mono text-[9px] text-purple-300">
                             spec:<br/>
-                            &nbsp;&nbsp;dataVolumeTemplates:<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;- metadata:<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name: ub24-disk<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;spec:<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;storage:<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;storageClassName: rook-ceph-rbd<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;resources:<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;requests:<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;storage: 20Gi
+                            &nbsp;&nbsp;storage:<br/>
+                            &nbsp;&nbsp;&nbsp;&nbsp;storageClassName: rook-ceph-rbd<br/>
+                            &nbsp;&nbsp;&nbsp;&nbsp;resources:<br/>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;requests:<br/>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;storage: 20Gi
                         </div>
                     </div>
                 )
@@ -581,15 +498,9 @@
                 gradient: 'gradient-slate',
                 icon: 'shuffle',
                 content: (
-                    <div className="p-6 glass rounded-3xl space-y-4 border-blue-500/20">
-                        <h5 className="font-bold text-sm flex items-center gap-2"><Icon name="info" size={16} className="text-blue-400"/> Add-before-Remove 策略</h5>
-                        <ol className="text-xs space-y-3 text-white/70 list-decimal pl-4">
-                            <li>在外部 Ceph 新增 MON (dc2)</li>
-                            <li>更新 K8s <code>rook-ceph-mon-endpoints</code> ConfigMap (包含舊與新)</li>
-                            <li>驗證 <code>rook-ceph-config</code> 已同步新地址</li>
-                            <li>從外部 Ceph 移除舊 MON (dc1)</li>
-                            <li>再次更新 ConfigMap 移除舊地址，完成收斂</li>
-                        </ol>
+                    <div className="p-6 glass rounded-3xl space-y-4 border-blue-500/20 text-xs">
+                        <h5 className="font-bold flex items-center gap-2"><Icon name="info" size={16} className="text-blue-400"/> Add-before-Remove 策略</h5>
+                        <p>1. 新增 MON -> 2. 更新 ConfigMap -> 3. 移除舊 MON -> 4. 再次更新 ConfigMap</p>
                     </div>
                 )
             },
@@ -602,15 +513,13 @@
                 icon: 'bar-chart-3',
                 content: (
                     <div className="grid grid-cols-2 gap-6">
-                        <div className="p-5 glass rounded-2xl border-blue-500/20 text-center space-y-3">
+                        <div className="p-5 glass rounded-2xl text-center space-y-3">
                             <Icon name="activity" className="text-blue-400" size={32} />
                             <h5 className="font-bold text-xs">Ceph Exporter</h5>
-                            <p className="text-[10px] text-white/50">Rook 自動部署 Exporter Pod，將外部 Ceph 指標轉化為 Prometheus 格式</p>
                         </div>
-                        <div className="p-5 glass rounded-2xl border-emerald-500/20 text-center space-y-3">
+                        <div className="p-5 glass rounded-2xl text-center space-y-3">
                             <Icon name="monitor" className="text-emerald-400" size={32} />
-                            <h5 className="font-bold text-xs">Grafana Dashboards</h5>
-                            <p className="text-[10px] text-white/50">視覺化呈現 IOPS, Throughput, Latency 與集群平衡狀態</p>
+                            <h5 className="font-bold text-xs">Grafana</h5>
                         </div>
                     </div>
                 )
@@ -623,17 +532,11 @@
                 gradient: 'gradient-crimson',
                 icon: 'alert-triangle',
                 content: (
-                    <div className="space-y-4">
-                        <div className="p-4 glass rounded-xl border-red-500/30">
-                            <h5 className="text-xs font-bold text-red-400 mb-2">情境描述</h5>
-                            <p className="text-xs">Pod 卡在 ContainerCreating，kubectl describe 顯示找不到驅動。</p>
-                        </div>
+                    <div className="space-y-4 text-xs">
+                        <p>原因：CSI DaemonSet 沒跑在具有 Taint 的節點。</p>
                         <div className="p-4 glass rounded-xl border-emerald-500/30">
-                            <h5 className="text-xs font-bold text-emerald-400 mb-2">解決方案：Patch Tolerations</h5>
-                            <p className="text-xs">預設 CSI DaemonSet 可能沒跑在具有 Taint 的 Infra 或 Control-Plane 節點。手動 Patch 以確保全叢集覆蓋。</p>
-                            <div className="mt-2 py-2 px-3 bg-black/50 rounded font-mono text-[9px] text-emerald-300">
-                                kubectl -n rook-ceph patch daemonset csi-rbdplugin --type merge -p '{"spec":{"template":{"spec":{"tolerations":[{"operator":"Exists"}]}}}}'
-                            </div>
+                            <h5 className="font-bold text-emerald-400 mb-2">解決方案：Patch Tolerations</h5>
+                            <p>手動 Patch 以確保全叢集覆蓋。</p>
                         </div>
                     </div>
                 )
@@ -646,15 +549,9 @@
                 gradient: 'gradient-crimson',
                 icon: 'wifi-off',
                 content: (
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="p-5 glass rounded-2xl space-y-4">
-                            <h5 className="text-xs font-bold text-red-400">網路 MTU 檢查</h5>
-                            <p className="text-[10px] text-white/60">若底層網路支援 Jumbo Frames 但 K8s Node 沒開啟，大封包會被丟棄導致連線異常。</p>
-                        </div>
-                        <div className="p-5 glass rounded-2xl space-y-4">
-                            <h5 className="text-xs font-bold text-red-400">NSG / Firewall</h5>
-                            <p className="text-[10px] text-white/60">確認 Azure NSG 已放行 TCP 6789 (MON) 與 3300 (MSGR2)，以及 OSD 通訊埠範圍 (6800-7300)。</p>
-                        </div>
+                    <div className="grid grid-cols-2 gap-6 text-xs">
+                        <div className="p-5 glass rounded-2xl space-y-4"><h5 className="font-bold text-red-400">網路 MTU 檢查</h5></div>
+                        <div className="p-5 glass rounded-2xl space-y-4"><h5 className="font-bold text-red-400">NSG / Firewall</h5></div>
                     </div>
                 )
             },
@@ -666,35 +563,9 @@
                 gradient: 'gradient-emerald',
                 icon: 'award',
                 content: (
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="p-4 glass rounded-xl flex gap-3">
-                            <Icon name="check-circle" className="text-green-400" size={16}/>
-                            <div className="space-y-1">
-                                <h6 className="text-[10px] font-bold">版本對齊</h6>
-                                <p className="text-[9px] text-white/50">確保 Rook 版本與 Ceph 版本處於官方支援矩陣內</p>
-                            </div>
-                        </div>
-                        <div className="p-4 glass rounded-xl flex gap-3">
-                            <Icon name="check-circle" className="text-green-400" size={16}/>
-                            <div className="space-y-1">
-                                <h6 className="text-[10px] font-bold">資源限制</h6>
-                                <p className="text-[9px] text-white/50">為 CSI 驅動設定合理的 Requests/Limits，避免影響節點穩定</p>
-                            </div>
-                        </div>
-                        <div className="p-4 glass rounded-xl flex gap-3">
-                            <Icon name="check-circle" className="text-green-400" size={16}/>
-                            <div className="space-y-1">
-                                <h6 className="text-[10px] font-bold">獨立 Network</h6>
-                                <p className="text-[9px] text-white/50">如果可能，將 Ceph 客戶端流量放在獨立的 Subnet 或 NIC</p>
-                            </div>
-                        </div>
-                        <div className="p-4 glass rounded-xl flex gap-3">
-                            <Icon name="check-circle" className="text-green-400" size={16}/>
-                            <div className="space-y-1">
-                                <h6 className="text-[10px] font-bold">快照測試</h6>
-                                <p className="text-[9px] text-white/50">定期執行還原測試，確保 VolumeSnapshot 真的可用</p>
-                            </div>
-                        </div>
+                    <div className="grid grid-cols-2 gap-4 text-[10px]">
+                        <div className="p-4 glass rounded-xl flex gap-3"><Icon name="check-circle" className="text-green-400" size={16}/><div><h6 className="font-bold">版本對齊</h6></div></div>
+                        <div className="p-4 glass rounded-xl flex gap-3"><Icon name="check-circle" className="text-green-400" size={16}/><div><h6 className="font-bold">資源限制</h6></div></div>
                     </div>
                 )
             },
@@ -707,16 +578,7 @@
                 icon: 'flag',
                 content: (
                     <div className="flex flex-col items-center justify-center text-center space-y-6">
-                        <div className="p-8 glass rounded-3xl border-blue-500/20 max-w-lg">
-                            <p className="text-sm text-white/80 leading-relaxed italic">
-                                "透過 Rook，我們不僅獲得了儲存能力，更獲得了與 K8s 原生工作流完全一致的維運體驗。"
-                            </p>
-                        </div>
-                        <div className="flex gap-4">
-                            <div className="px-4 py-2 bg-blue-500/20 rounded text-[10px] font-mono">GitOps Ready</div>
-                            <div className="px-4 py-2 bg-purple-500/20 rounded text-[10px] font-mono">KubeVirt Native</div>
-                            <div className="px-4 py-2 bg-emerald-500/20 rounded text-[10px] font-mono">Scalable</div>
-                        </div>
+                        <p className="text-sm italic">"獲得與 K8s 原生工作流一致的維運體驗。"</p>
                     </div>
                 )
             },
@@ -729,13 +591,8 @@
                 icon: 'message-circle',
                 content: (
                     <div className="flex flex-col items-center justify-center h-full space-y-8">
-                        <div className="w-24 h-24 glass rounded-full flex items-center justify-center bg-white/5 animate-pulse">
-                            <Icon name="help-circle" size={48} className="text-blue-400" />
-                        </div>
-                        <div className="text-center space-y-2">
-                            <p className="text-2xl font-bold">Thank You for Attending!</p>
-                            <p className="text-xs text-white/40 font-mono">MansionLai's Personal Notebook • 2026</p>
-                        </div>
+                        <div className="w-24 h-24 glass rounded-full flex items-center justify-center bg-white/5 animate-pulse"><Icon name="help-circle" size={48} className="text-blue-400" /></div>
+                        <p className="text-2xl font-bold">Thank You!</p>
                     </div>
                 )
             }
@@ -744,137 +601,49 @@
         const App = () => {
             const [currentSlide, setCurrentSlide] = useState(0);
             const [direction, setDirection] = useState(0);
-
-            const nextSlide = useCallback(() => {
-                if (currentSlide < slides.length - 1) {
-                    setDirection(1);
-                    setCurrentSlide(prev => prev + 1);
-                }
-            }, [currentSlide]);
-
-            const prevSlide = useCallback(() => {
-                if (currentSlide > 0) {
-                    setDirection(-1);
-                    setCurrentSlide(prev => prev - 1);
-                }
-            }, [currentSlide]);
-
+            const nextSlide = useCallback(() => { if (currentSlide < slides.length - 1) { setDirection(1); setCurrentSlide(prev => prev + 1); } }, [currentSlide]);
+            const prevSlide = useCallback(() => { if (currentSlide > 0) { setDirection(-1); setCurrentSlide(prev => prev - 1); } }, [currentSlide]);
             useEffect(() => {
                 const handleKeyDown = (e) => {
                     if (e.key === 'ArrowRight' || e.key === ' ') nextSlide();
                     if (e.key === 'ArrowLeft') prevSlide();
-                    if (e.key === 'Home') setCurrentSlide(0);
-                    if (e.key === 'End') setCurrentSlide(slides.length - 1);
                 };
                 window.addEventListener('keydown', handleKeyDown);
                 return () => window.removeEventListener('keydown', handleKeyDown);
             }, [nextSlide, prevSlide]);
-
             const slide = slides[currentSlide];
-
             return (
                 <div className={`h-screen w-screen overflow-hidden relative transition-colors duration-1000 ${slide.gradient}`}>
                     <div className="absolute top-0 left-0 h-1 bg-white/10 w-full z-50">
-                        <motion.div 
-                            className="h-full bg-blue-400"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${((currentSlide + 1) / slides.length) * 100}%` }}
-                            transition={{ duration: 0.3 }}
-                        />
+                        <motion.div className="h-full bg-blue-400" initial={{ width: 0 }} animate={{ width: `${((currentSlide + 1) / slides.length) * 100}%` }} />
                     </div>
-
                     <div className="relative z-10 h-full flex flex-col p-12 max-w-7xl mx-auto">
                         <header className="flex justify-between items-start mb-12">
                             <div className="flex items-center gap-4">
-                                <div className="p-3 glass rounded-2xl">
-                                    <Icon name={slide.icon} className="text-white" size={24} />
-                                </div>
-                                <div>
-                                    <h1 className="text-2xl font-black tracking-tighter uppercase">{slide.title}</h1>
-                                    <p className="text-xs text-white/50 font-mono">{slide.subtitle}</p>
-                                </div>
+                                <div className="p-3 glass rounded-2xl"><Icon name={slide.icon} className="text-white" size={24} /></div>
+                                <div><h1 className="text-2xl font-black tracking-tighter uppercase">{slide.title}</h1><p className="text-xs text-white/50 font-mono">{slide.subtitle}</p></div>
                             </div>
-                            <div className="text-[10px] font-mono text-white/20 text-right">
-                                ROOK-CEPH DEEP DIVE<br/>
-                                SLIDE {String(currentSlide + 1).padStart(2, '0')}
-                            </div>
+                            <div className="text-[10px] font-mono text-white/20 text-right">ROOK-CEPH DEEP DIVE<br/>SLIDE {String(currentSlide + 1).padStart(2, '0')}</div>
                         </header>
-
                         <main className="flex-1 relative flex flex-col justify-center">
                             <AnimatePresence mode="wait" custom={direction}>
-                                <motion.div
-                                    key={currentSlide}
-                                    custom={direction}
-                                    initial={{ opacity: 0, x: direction * 50, scale: 0.98 }}
-                                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                                    exit={{ opacity: 0, x: direction * -50, scale: 1.02 }}
-                                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                                    className="w-full"
-                                >
-                                    <div className="mb-10 max-w-3xl">
-                                        <motion.p 
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{ delay: 0.2 }}
-                                            className="text-lg text-white/80 leading-relaxed font-light"
-                                        >
-                                            {slide.description}
-                                        </motion.p>
-                                    </div>
-                                    <motion.div 
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: 0.3 }}
-                                        className="min-h-[300px]"
-                                    >
-                                        {slide.content}
-                                    </motion.div>
+                                <motion.div key={currentSlide} custom={direction} initial={{ opacity: 0, x: direction * 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: direction * -50 }} transition={{ duration: 0.3 }} className="w-full">
+                                    <div className="mb-10 max-w-3xl"><p className="text-lg text-white/80 leading-relaxed font-light">{slide.description}</p></div>
+                                    <div className="min-h-[300px]">{slide.content}</div>
                                 </motion.div>
                             </AnimatePresence>
                         </main>
-
                         <footer className="mt-12 flex justify-between items-center border-t border-white/10 pt-8">
-                            <div className="flex items-center gap-6">
-                                <div className="text-[10px] font-mono text-white/20 uppercase tracking-[0.2em]">
-                                    3-Node KubeVirt Lab • Phase 3
-                                </div>
-                                <div className="h-4 w-px bg-white/10"></div>
-                                <div className="flex gap-1">
-                                    {slides.map((_, i) => (
-                                        <button 
-                                            key={i} 
-                                            onClick={() => setCurrentSlide(i)}
-                                            className={`h-1.5 rounded-full transition-all duration-300 ${i === currentSlide ? 'w-4 bg-blue-400' : 'w-1.5 bg-white/10 hover:bg-white/30'}`}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
+                            <div className="text-[10px] font-mono text-white/20 uppercase tracking-[0.2em]">3-Node KubeVirt Lab • Phase 3</div>
                             <div className="flex gap-4">
-                                <button 
-                                    onClick={prevSlide}
-                                    disabled={currentSlide === 0}
-                                    className={`p-4 rounded-full glass transition-all ${currentSlide === 0 ? 'opacity-10 cursor-not-allowed' : 'hover:bg-white/10 active:scale-90'}`}
-                                >
-                                    <Icon name="chevron-left" />
-                                </button>
-                                <button 
-                                    onClick={nextSlide}
-                                    disabled={currentSlide === slides.length - 1}
-                                    className={`p-4 rounded-full glass transition-all ${currentSlide === slides.length - 1 ? 'opacity-10 cursor-not-allowed' : 'hover:bg-white/10 active:scale-90'}`}
-                                >
-                                    <Icon name="chevron-right" />
-                                </button>
+                                <button onClick={prevSlide} disabled={currentSlide === 0} className={`p-4 rounded-full glass ${currentSlide === 0 ? 'opacity-10' : 'hover:bg-white/10'}`}><Icon name="chevron-left" /></button>
+                                <button onClick={nextSlide} disabled={currentSlide === slides.length - 1} className={`p-4 rounded-full glass ${currentSlide === slides.length - 1 ? 'opacity-10' : 'hover:bg-white/10'}`}><Icon name="chevron-right" /></button>
                             </div>
                         </footer>
-                    </div>
-
-                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-xs font-mono text-white/10">
-                        {String(currentSlide + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}
                     </div>
                 </div>
             );
         };
-
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
