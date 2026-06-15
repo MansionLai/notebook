@@ -38,6 +38,7 @@
         .gradient-emerald { background: linear-gradient(135deg, #064e3b 0%, #022c22 50%, #000 100%); }
         .gradient-slate { background: linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #000 100%); }
         .gradient-rose { background: linear-gradient(135deg, #881337 0%, #4c0519 50%, #000 100%); }
+        .gradient-amber { background: linear-gradient(135deg, #78350f 0%, #451a03 50%, #000 100%); }
 
         ::-webkit-scrollbar { display: none; }
 
@@ -62,17 +63,9 @@
 
         .config-grid {
             display: grid;
-            grid-template-columns: 180px 1fr;
+            grid-template-columns: 160px 1fr;
             gap: 1.5rem;
             align-items: center;
-        }
-        
-        .scenario-box {
-            transition: all 0.3s ease;
-        }
-        .scenario-box:hover {
-            background: rgba(255, 255, 255, 0.06);
-            transform: translateY(-2px);
         }
     </style>
 </head>
@@ -80,7 +73,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useCallback, useRef, useMemo } = React;
+        const { useState, useEffect, useCallback, useRef } = React;
         const MotionLib = window.Motion || window.FramerMotion;
         const { motion, AnimatePresence } = MotionLib;
 
@@ -237,301 +230,369 @@
                             ))}
                         </div>
                     </div>
-                    <div className="p-8 glass rounded-3xl border-emerald-500/20 max-w-2xl text-center">
-                        <p className="text-sm text-white/80 font-light leading-relaxed">
-                            <span className="text-emerald-400 font-black uppercase tracking-widest">核心價值：</span> 當後端服務故障（如進程崩潰或網路中斷）時，HAProxy 的 <code className="bg-black/40 px-1.5 py-0.5 rounded text-blue-300">check</code> 指令會立刻發現異常，並在秒級內將該節點從分配名單中移除，確保客戶端 <code className="text-white font-mono">kubectl</code> 請求永不落空。
-                        </p>
-                    </div>
                 </div>
             );
         };
 
-        // --- Data Definitions ---
+        // --- Data Definitions (Expanded to 30 Slides) ---
         const slides = [
-            { id: 'hero', title: 'High Availability Masters', subtitle: 'HAProxy & Keepalived Deep Dive', description: '打造電信級 K8s 控制平面高可用架構：從負載均衡到故障自動恢復', gradient: 'gradient-blue', icon: 'shield-check', content: (
+            // Part 1: High Level Architecture
+            { id: '1-hero', title: 'High Availability Masters', subtitle: 'HAProxy & Keepalived Deep Dive', description: '打造電信級 K8s 控制平面高可用架構：從負載均衡到故障自動恢復。', gradient: 'gradient-blue', icon: 'shield-check', content: (
                 <div className="flex flex-col items-center justify-center text-center space-y-12 py-10">
                     <div className="flex gap-10">
-                        <div className="flex flex-col items-center"><div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-3 text-emerald-400 border border-emerald-400/20"><Icon name="cpu" size={32}/></div><span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">HAProxy</span></div>
-                        <div className="flex flex-col items-center"><div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-3 text-blue-400 border border-blue-400/20"><Icon name="activity" size={32}/></div><span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Keepalived</span></div>
-                        <div className="flex flex-col items-center"><div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-3 text-purple-400 border border-purple-400/20"><Icon name="box" size={32}/></div><span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">K8s API</span></div>
+                        <div className="flex flex-col items-center"><div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-3 text-emerald-400 border border-emerald-400/20 shadow-xl"><Icon name="cpu" size={32}/></div><span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">HAProxy</span></div>
+                        <div className="flex flex-col items-center"><div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-3 text-blue-400 border border-blue-400/20 shadow-xl"><Icon name="activity" size={32}/></div><span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Keepalived</span></div>
+                        <div className="flex flex-col items-center"><div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-3 text-purple-400 border border-purple-400/20 shadow-xl"><Icon name="box" size={32}/></div><span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">K8s API</span></div>
                     </div>
-                    <div className="grid grid-cols-2 gap-8 w-full max-w-3xl">
-                        <div className="p-8 glass rounded-[40px] text-left border-l-4 border-l-emerald-500 shadow-[0_20px_50px_rgba(16,185,129,0.1)]">
-                            <h4 className="font-black text-xl mb-2 text-emerald-400 uppercase tracking-tighter">L4 Load Balancing (HAProxy)</h4>
-                            <p className="text-xs text-white/50 leading-relaxed font-light">高效能的流量轉發中樞，將大量的 K8s API 請求均勻分配至後端多台 Master 節點。</p>
+                </div>
+            )},
+            { id: '2-the-challenge', title: 'The Challenge', subtitle: 'Single Point of Failure', description: '在原生的 Kubernetes 架構中，如果客戶端直接指向單一台 Master Node，會發生什麼事？', gradient: 'gradient-rose', icon: 'alert-triangle', content: (
+                <div className="flex flex-col md:flex-row gap-8 py-6 items-center">
+                    <div className="flex-1 space-y-6">
+                        <div className="p-6 glass rounded-3xl border-l-4 border-rose-500">
+                            <h5 className="font-bold text-rose-400 mb-2">1. Master 效能瓶頸</h5>
+                            <p className="text-xs text-white/60 font-light leading-relaxed">所有的 kubectl 請求與 worker node 狀態回報都擠在同一台機器，無法水平擴展 (Scale-out)。</p>
                         </div>
-                        <div className="p-8 glass rounded-[40px] text-left border-l-4 border-l-blue-500 shadow-[0_20px_50px_rgba(59,130,246,0.1)]">
-                            <h4 className="font-black text-xl mb-2 text-blue-400 uppercase tracking-tighter">VRRP Redundancy (Keepalived)</h4>
-                            <p className="text-xs text-white/50 leading-relaxed font-light">提供「負載均衡器本身」的高可用。透過 VRRP 協定建立主備冗餘，確保 VIP 永不離線。</p>
+                        <div className="p-6 glass rounded-3xl border-l-4 border-rose-500">
+                            <h5 className="font-bold text-rose-400 mb-2">2. 致命的單點故障 (SPOF)</h5>
+                            <p className="text-xs text-white/60 font-light leading-relaxed">當該 Master 關機或網路中斷，即使其他 Master 活著，整個控制平面對外也等於癱瘓。</p>
                         </div>
                     </div>
                 </div>
             )},
-            { id: 'haproxy-modes', title: 'HAProxy Operation Modes', subtitle: 'L4 vs L7 Comparison', description: '針對不同層級的流量進行優化，HAProxy 提供 TCP 與 HTTP 兩種截然不同的運作模式。', gradient: 'gradient-slate', icon: 'zap', content: (
+            { id: '3-the-solution', title: 'The Solution', subtitle: 'Dual-Layer HA Architecture', description: '為了解決這個問題，我們引入了雙層的高可用設計。', gradient: 'gradient-emerald', icon: 'check-circle', content: (
+                <div className="grid grid-cols-2 gap-8 py-4">
+                    <div className="p-8 glass rounded-[40px] text-left border-l-4 border-l-emerald-500 shadow-[0_20px_50px_rgba(16,185,129,0.1)]">
+                        <h4 className="font-black text-xl mb-4 text-emerald-400 uppercase tracking-tighter">1. L4 Load Balancing</h4>
+                        <p className="text-sm text-white/70 leading-relaxed font-light mb-4">使用 <span className="text-emerald-300 font-bold">HAProxy</span>。將大量的請求均勻分配至後端多台 Master 節點，解決擴展性與效能問題。</p>
+                    </div>
+                    <div className="p-8 glass rounded-[40px] text-left border-l-4 border-l-blue-500 shadow-[0_20px_50px_rgba(59,130,246,0.1)]">
+                        <h4 className="font-black text-xl mb-4 text-blue-400 uppercase tracking-tighter">2. VRRP Redundancy</h4>
+                        <p className="text-sm text-white/70 leading-relaxed font-light mb-4">使用 <span className="text-blue-300 font-bold">Keepalived</span>。如果 HAProxy 機器自己掛了怎麼辦？Keepalived 透過主備冗餘解決「負載均衡器本身」的單點故障。</p>
+                    </div>
+                </div>
+            )},
+
+            // Part 2: HAProxy Deep Dive
+            { id: '4-haproxy-intro', title: 'Part 1: HAProxy', subtitle: 'The Load Balancing Core', description: 'HAProxy 是一款免費、快速且可靠的開源軟體，為 TCP 和 HTTP 應用程式提供高可用性與負載均衡。', gradient: 'gradient-slate', icon: 'zap', content: (
+                <div className="flex flex-col items-center py-6">
+                    <div className="p-8 glass rounded-3xl bg-blue-500/5 flex flex-col justify-center border-blue-500/10 w-full max-w-3xl">
+                        <h5 className="text-center font-black text-2xl mb-8">為何選擇 HAProxy？</h5>
+                        <div className="space-y-6 text-sm text-white/80 font-light">
+                            <div className="flex gap-4 items-center"><Icon name="check-circle" className="text-emerald-400 flex-shrink-0" size={24}/> 事件驅動模型 (Event-driven)，單進程即可處理數百萬級連線，極低 CPU 消耗。</div>
+                            <div className="flex gap-4 items-center"><Icon name="check-circle" className="text-emerald-400 flex-shrink-0" size={24}/> 原生的主動健康檢查 (Active Health Checks)，比 DNS Round Robin 更可靠。</div>
+                            <div className="flex gap-4 items-center"><Icon name="check-circle" className="text-emerald-400 flex-shrink-0" size={24}/> 豐富的調度演算法，能應付各種複雜場景。</div>
+                        </div>
+                    </div>
+                </div>
+            )},
+            { id: '5-haproxy-modes', title: 'Operation Modes', subtitle: 'L4 vs L7 Comparison', description: '針對不同層級的流量進行優化，HAProxy 必須選擇適當的運作模式。', gradient: 'gradient-slate', icon: 'git-merge', content: (
                 <div className="grid grid-cols-2 gap-10 py-4">
-                    <div className="scenario-box p-8 glass rounded-[40px] border-emerald-500/10 relative overflow-hidden">
+                    <div className="p-8 glass rounded-[40px] border-emerald-500/10 relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-4 opacity-10"><Icon name="cpu" size={60}/></div>
                         <h5 className="font-black text-xl text-emerald-400 mb-4 tracking-tighter uppercase">Layer 4 (TCP Mode)</h5>
                         <ul className="space-y-4 text-xs text-white/70 font-light leading-relaxed">
-                            <li className="flex gap-3"><Icon name="fast-forward" size={14} className="text-emerald-400 mt-0.5"/> <span className="font-bold text-white">運作原理：</span> 基於 IP 與 Port 轉發，不拆解應用層數據。</li>
-                            <li className="flex gap-3"><Icon name="zap" size={14} className="text-emerald-400 mt-0.5"/> <span className="font-bold text-white">優點：</span> 極低延遲、極低 CPU 消耗、支援 TLS 透傳。</li>
-                            <li className="flex gap-3"><Icon name="target" size={14} className="text-emerald-400 mt-0.5"/> <span className="font-bold text-white">適用情境：</span> <span className="bg-emerald-500/20 text-emerald-300 px-1 rounded">K8s API Server (6443)</span>、資料庫、Redis。</li>
+                            <li className="flex gap-3"><Icon name="fast-forward" size={14} className="text-emerald-400 mt-0.5 flex-shrink-0"/> 只要 IP/Port 匹配就無腦轉發，不拆解應用層數據。</li>
+                            <li className="flex gap-3"><Icon name="shield" size={14} className="text-emerald-400 mt-0.5 flex-shrink-0"/> 支援 TLS/SSL 透傳 (Pass-through)，負載均衡器不需持有私鑰。</li>
+                            <li className="flex gap-3"><Icon name="target" size={14} className="text-emerald-400 mt-0.5 flex-shrink-0"/> 適用於 <span className="bg-emerald-500/20 text-emerald-300 px-1 rounded font-bold">K8s API Server (6443)</span>、資料庫 (MySQL/PostgreSQL)。</li>
                         </ul>
                     </div>
-                    <div className="scenario-box p-8 glass rounded-[40px] border-purple-500/10 relative overflow-hidden">
+                    <div className="p-8 glass rounded-[40px] border-purple-500/10 relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-4 opacity-10"><Icon name="globe" size={60}/></div>
                         <h5 className="font-black text-xl text-purple-400 mb-4 tracking-tighter uppercase">Layer 7 (HTTP Mode)</h5>
                         <ul className="space-y-4 text-xs text-white/70 font-light leading-relaxed">
-                            <li className="flex gap-3"><Icon name="search" size={14} className="text-purple-400 mt-0.5"/> <span className="font-bold text-white">運作原理：</span> 解析 HTTP Header、URL、Cookie 等詳細資訊。</li>
-                            <li className="flex gap-3"><Icon name="shield-check" size={14} className="text-purple-400 mt-0.5"/> <span className="font-bold text-white">優點：</span> 支援 SSL 卸載、路徑路由、更精準的 ACL 過濾。</li>
-                            <li className="flex gap-3"><Icon name="layout" size={14} className="text-purple-400 mt-0.5"/> <span className="font-bold text-white">適用情境：</span> Ingress Controller、網頁 API、微服務路由。</li>
+                            <li className="flex gap-3"><Icon name="search" size={14} className="text-purple-400 mt-0.5 flex-shrink-0"/> 深入解析 HTTP Header、URL Paths 與 Cookies。</li>
+                            <li className="flex gap-3"><Icon name="lock" size={14} className="text-purple-400 mt-0.5 flex-shrink-0"/> 支援 SSL 卸載 (Offloading)，將 HTTPS 轉為內部 HTTP。</li>
+                            <li className="flex gap-3"><Icon name="layout" size={14} className="text-purple-400 mt-0.5 flex-shrink-0"/> 適用於 Ingress Controller 流量入口、微服務路徑路由。</li>
                         </ul>
                     </div>
                 </div>
             )},
-            { id: 'haproxy-frontend-logic', title: 'HAProxy: The Frontend', subtitle: 'Listening & Filtering', description: 'Frontend 定義了流量的入口邏輯。它是 HAProxy 的「感官」，決定如何接收連線。', gradient: 'gradient-blue', icon: 'indent', content: (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+            { id: '6-haproxy-config-structure', title: 'Config Structure', subtitle: 'Frontend & Backend', description: 'HAProxy 的設定檔邏輯極度清晰，主要分為「感官」與「大腦」兩個部分。', gradient: 'gradient-blue', icon: 'file-json', content: (
+                <div className="grid grid-cols-2 gap-8 py-6">
                     <div className="space-y-6">
-                        <div className="p-6 glass rounded-3xl border-l-4 border-blue-500">
-                            <h5 className="font-black text-lg text-blue-400 mb-2">Frontend 做什麼？</h5>
-                            <p className="text-xs text-white/60 leading-relaxed font-light">
-                                1. 監聽實體 IP 或 VIP 的特定 Port。<br/>
-                                2. 定義連線限制 (maxconn)。<br/>
-                                3. 執行 ACL 安全過濾 (如阻擋特定 IP)。<br/>
-                                4. 指向特定的 Backend 進行流量轉發。
-                            </p>
+                        <div className="p-6 glass rounded-3xl border-l-4 border-blue-500 shadow-xl">
+                            <h5 className="font-black text-lg text-blue-400 mb-2 uppercase">1. Frontend (入口)</h5>
+                            <p className="text-xs text-white/60 leading-relaxed font-light">定義 HAProxy 該監聽哪個 IP/Port。設定流量速率限制、SSL 憑證位置，並決定將流量「導向哪個 Backend」。</p>
                         </div>
-                        <div className="code-block">
-{`frontend k8s-api
-    bind *:6443      # 監聽入口
-    mode tcp         # 採用 L4 模式
-    option tcplog    # 啟用 TCP 詳細日誌
-    default_backend k8s-masters`}
+                        <div className="p-6 glass rounded-3xl border-l-4 border-emerald-500 shadow-xl">
+                            <h5 className="font-black text-lg text-emerald-400 mb-2 uppercase">2. Backend (去向)</h5>
+                            <p className="text-xs text-white/60 leading-relaxed font-light">維護真實伺服器的列表。定義負載均衡演算法 (如何分配) 以及健康檢查機制 (如何踢除死節點)。</p>
                         </div>
                     </div>
-                    <div className="p-6 glass rounded-3xl border-white/5 space-y-4">
-                        <Icon name="radio" size={40} className="text-blue-500 opacity-20" />
-                        <h6 className="font-bold">Entry Point Strategy</h6>
-                        <p className="text-[11px] text-white/40 leading-relaxed">
-                            在 K8s HA 架構中，通常會建議將 <code className="text-blue-300">bind</code> 設定在 VIP 上，或是使用 <code className="text-blue-300">*</code> 監聽所有介面，確保不論 VIP 漂移到哪台 LB，HAProxy 都能即時接管。
-                        </p>
+                    <div className="flex items-center justify-center">
+                        <div className="relative">
+                            <div className="w-24 h-24 border-4 border-blue-500/50 rounded-full flex items-center justify-center text-blue-400 font-black absolute -left-12 -top-4 bg-black">Front</div>
+                            <div className="w-24 h-24 border-4 border-emerald-500/50 rounded-full flex items-center justify-center text-emerald-400 font-black absolute left-12 top-12 bg-black">Back</div>
+                            <div className="w-48 h-48 opacity-10"></div>
+                        </div>
                     </div>
                 </div>
             )},
-            { id: 'haproxy-backend-logic', title: 'HAProxy: The Backend', subtitle: 'Load Balancing & Health', description: 'Backend 定義了流量的去向。它是 HAProxy 的「大腦」，負責選擇最健康的伺服器。', gradient: 'gradient-slate', icon: 'outdent', content: (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+            { id: '7-haproxy-frontend-code', title: 'Frontend Configuration', subtitle: 'Listening for Traffic', description: '實際的 frontend 設定範例，展示如何監聽 Kubernetes API 流量。', gradient: 'gradient-slate', icon: 'indent', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center h-full">
+                    <div className="code-block w-full">
+                        <div className="text-white/30 text-[9px] mb-2 uppercase">/etc/haproxy/haproxy.cfg</div>
+{`frontend k8s-api
+    bind *:6443
+    mode tcp
+    option tcplog
+    default_backend k8s-masters
+
+frontend stats
+    bind *:8404
+    mode http
+    stats enable
+    stats uri /stats
+    stats refresh 10s`}
+                    </div>
                     <div className="space-y-6">
-                        <div className="p-6 glass rounded-3xl border-l-4 border-emerald-500">
-                            <h5 className="font-black text-lg text-emerald-400 mb-2">Backend 做什麼？</h5>
-                            <p className="text-xs text-white/60 leading-relaxed font-light">
-                                1. 維護後端伺服器列表 (Pool)。<br/>
-                                2. 決定調度算法 (Round Robin/Leastconn)。<br/>
-                                3. 持續發送健康檢查偵測節點。<br/>
-                                4. 在故障發生時執行節點剔除與恢復。
-                            </p>
-                        </div>
-                        <div className="code-block">
+                        <div className="p-4 glass rounded-2xl border-white/5"><span className="text-blue-400 font-bold block mb-1">bind *:6443</span><span className="text-[11px] text-white/60 font-light">使用 * 代表監聽本機所有介面。這在 Keepalived 架構中很關鍵，因為 VIP 會在節點間漂移，監聽 * 可以確保 VIP 一掛載就能立刻收信。</span></div>
+                        <div className="p-4 glass rounded-2xl border-white/5"><span className="text-blue-400 font-bold block mb-1">mode tcp</span><span className="text-[11px] text-white/60 font-light">強制使用 Layer 4 模式。</span></div>
+                        <div className="p-4 glass rounded-2xl border-white/5"><span className="text-blue-400 font-bold block mb-1">default_backend</span><span className="text-[11px] text-white/60 font-light">將收到的流量無條件往名為 k8s-masters 的後端群組送。</span></div>
+                    </div>
+                </div>
+            )},
+            { id: '8-haproxy-backend-code', title: 'Backend Configuration', subtitle: 'Distributing Traffic', description: '定義 Kubernetes Master 節點群組與健康檢查參數。', gradient: 'gradient-slate', icon: 'outdent', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center h-full">
+                    <div className="code-block w-full">
+                        <div className="text-white/30 text-[9px] mb-2 uppercase">/etc/haproxy/haproxy.cfg</div>
 {`backend k8s-masters
     mode tcp
-    balance roundrobin   # 輪詢調度
-    option tcp-check     # TCP 健康檢查
-    server m1 10.0.0.1:6443 check inter 2s
-    server m2 10.0.0.2:6443 check inter 2s`}
-                        </div>
+    balance roundrobin
+    option tcp-check
+    server master1 10.0.0.1:6443 check inter 2s rise 2 fall 3
+    server master2 10.0.0.2:6443 check inter 2s rise 2 fall 3
+    server master3 10.0.0.3:6443 check inter 2s rise 2 fall 3`}
                     </div>
-                    <div className="p-6 glass rounded-3xl border-white/5 space-y-4">
-                        <Icon name="cpu" size={40} className="text-emerald-500 opacity-20" />
-                        <h6 className="font-bold">Service Intelligence</h6>
-                        <p className="text-[11px] text-white/40 leading-relaxed">
-                            HAProxy 會在背景不斷測試 <code className="text-emerald-300">server</code> 設定中的位址。只要回應超時或拒絕連線，該伺服器就會從運算清單中「暫時移除」，直到它重新通過健康檢查。
-                        </p>
+                    <div className="space-y-6">
+                        <div className="p-4 glass rounded-2xl border-emerald-500/20"><span className="text-emerald-400 font-bold block mb-1">balance roundrobin</span><span className="text-[11px] text-white/60 font-light">輪詢演算法。流量會依序 1 -> 2 -> 3 -> 1 均勻分配。若想讓長連線更平滑，可改用 <code className="text-emerald-200">leastconn</code> (最少連線數優先)。</span></div>
+                        <div className="p-4 glass rounded-2xl border-emerald-500/20"><span className="text-emerald-400 font-bold block mb-1">check inter 2s</span><span className="text-[11px] text-white/60 font-light">每 2 秒發起一次 TCP 連線測試。</span></div>
+                        <div className="p-4 glass rounded-2xl border-emerald-500/20"><span className="text-emerald-400 font-bold block mb-1">rise 2 / fall 3</span><span className="text-[11px] text-white/60 font-light">容錯機制：連續失敗 3 次才正式標記為 DOWN；連續成功 2 次即標記為 UP 重新加入分發。</span></div>
                     </div>
                 </div>
             )},
-            { id: 'haproxy-crash-v2', title: 'Scenario: Backend Crash', subtitle: 'Self-Healing in Action', description: '直觀了解 HAProxy 如何在偵測到後端服務失效時，實現自動化的流量隔離。', gradient: 'gradient-rose', icon: 'alert-triangle', content: <HAProxyCrashSimulation /> },
-            { id: 'haproxy-prometheus', title: 'Observability & Metrics', subtitle: 'Native Prometheus Support', description: 'HAProxy v2.0+ 內建了 Prometheus Exporter，不需額外安裝 Sidecar 即可導出數據。', gradient: 'gradient-slate', icon: 'bar-chart-3', content: (
-                <div className="grid grid-cols-2 gap-10 items-start py-4">
+            { id: '9-haproxy-crash-sim', title: 'Interactive Simulation', subtitle: 'HAProxy Health Checks', description: '點擊按鈕手動關閉節點，觀察 HAProxy 如何秒級隔離故障。', gradient: 'gradient-rose', icon: 'activity', content: <HAProxyCrashSimulation /> },
+            { id: '10-haproxy-prometheus', title: 'Observability', subtitle: 'Native Prometheus Metrics', description: '監控是維運的眼睛。HAProxy 內建原生 Exporter，輕鬆整合 Grafana。', gradient: 'gradient-blue', icon: 'bar-chart-2', content: (
+                <div className="grid grid-cols-2 gap-10 py-6">
                     <div className="space-y-6">
-                        <h5 className="font-black text-lg text-blue-400 uppercase tracking-widest">How to Enable</h5>
-                        <div className="code-block">
+                        <div className="p-6 glass rounded-3xl border-white/5">
+                            <h6 className="font-bold text-blue-400 mb-4">Enabling Exporter</h6>
+                            <div className="code-block text-[9px]">
 {`frontend prometheus-metrics
     bind *:8404
     mode http
     http-request use-service prometheus-exporter if { path /metrics }
-    no log # 避免 metrics 請求刷爆日誌`}
+    no log # 防止監控請求刷爆日誌`}
+                            </div>
                         </div>
-                        <p className="text-[11px] text-white/50 italic leading-relaxed">設定完成後，即可透過 http://LB_IP:8404/metrics 獲取數據。</p>
                     </div>
                     <div className="space-y-4">
-                        <h5 className="font-black text-lg text-emerald-400 uppercase tracking-widest">Key Metrics</h5>
+                        <h6 className="font-bold text-emerald-400 mb-4">Key Metrics to Alert On</h6>
                         <div className="space-y-3">
-                            <div className="p-4 glass rounded-2xl border-white/5"><div className="text-[10px] font-mono text-blue-300">haproxy_backend_active_servers</div><div className="text-[9px] text-white/40 mt-1">目前後端可用伺服器的數量。可用於設定告警。</div></div>
-                            <div className="p-4 glass rounded-2xl border-white/5"><div className="text-[10px] font-mono text-blue-300">haproxy_frontend_current_sessions</div><div className="text-[9px] text-white/40 mt-1">目前的並發連線數。用於觀察系統負載。</div></div>
-                            <div className="p-4 glass rounded-2xl border-white/5"><div className="text-[10px] font-mono text-blue-300">haproxy_backend_response_time_average</div><div className="text-[9px] text-white/40 mt-1">後端平均反應時間。監控是否存在效能瓶頸。</div></div>
+                            <div className="p-4 glass rounded-2xl border-l-2 border-emerald-500"><div className="text-[10px] font-mono text-emerald-300">haproxy_backend_active_servers</div><div className="text-[10px] text-white/50 mt-1 font-light">可用伺服器數量。若 < 3 應發出警告。</div></div>
+                            <div className="p-4 glass rounded-2xl border-l-2 border-emerald-500"><div className="text-[10px] font-mono text-emerald-300">haproxy_frontend_current_sessions</div><div className="text-[10px] text-white/50 mt-1 font-light">當前活躍連線數。用於判斷負載是否達上限。</div></div>
+                            <div className="p-4 glass rounded-2xl border-l-2 border-emerald-500"><div className="text-[10px] font-mono text-emerald-300">haproxy_backend_response_time_average</div><div className="text-[10px] text-white/50 mt-1 font-light">後端平均響應時間 (ms)。</div></div>
                         </div>
                     </div>
                 </div>
             )},
-            { id: 'keepalived-intro-v2', title: 'Keepalived', subtitle: 'The Protocols of High Availability', description: 'Keepalived 透過兩個關鍵協定 (VRRP & GARP) 來管理 VIP 的生命週期與網路流向。', gradient: 'gradient-purple', icon: 'activity', content: (
-                <div className="grid grid-cols-2 gap-10 py-6">
+
+            // Part 3: Keepalived Deep Dive
+            { id: '11-keepalived-intro', title: 'Part 2: Keepalived', subtitle: 'Protecting the Load Balancer', description: '現在我們有了完美的 HAProxy，但如果 HAProxy 那台機器斷電了呢？我們需要 Keepalived。', gradient: 'gradient-purple', icon: 'shield', content: (
+                <div className="flex flex-col items-center py-10">
+                    <div className="w-full max-w-3xl text-center space-y-8">
+                        <Icon name="life-buoy" size={80} className="text-purple-400 mx-auto opacity-50" />
+                        <h4 className="text-3xl font-black">Floating VIPs (虛擬 IP 漂移)</h4>
+                        <p className="text-sm text-white/60 leading-relaxed font-light">
+                            Keepalived 是一個由 C 語言編寫的路由軟體，其主要目標是提供簡單且強大的負載均衡與高可用性工具。在 Kubernetes 架構中，我們使用它來維護一個 <span className="text-purple-300 font-bold">VIP (192.168.50.250)</span>。當主要 LB 故障時，這個 IP 會瞬間「漂移」到備用 LB 上。
+                        </p>
+                    </div>
+                </div>
+            )},
+            { id: '12-keepalived-protocols', title: 'The Core Protocols', subtitle: 'VRRP & GARP', description: 'VIP 漂移看似魔法，其實是透過兩個底層網路協定協同工作的結果。', gradient: 'gradient-purple', icon: 'zap', content: (
+                <div className="grid grid-cols-2 gap-8 py-6 h-full">
                     <div className="p-8 glass rounded-[40px] border-blue-500/20 relative overflow-hidden h-full">
                         <div className="absolute top-0 right-0 p-4 opacity-10"><Icon name="radio" size={60}/></div>
                         <h5 className="font-black text-xl text-blue-400 mb-4 tracking-tighter uppercase">1. VRRP Protocol</h5>
                         <p className="text-xs text-white/70 leading-relaxed font-light mb-6">
-                            <span className="font-bold text-white">選舉與狀態同步：</span> 負責節點間的「心跳」通訊。Master 不斷發送廣播；Backup 負責監聽。若 Backup 超時未收到廣播，則啟動選舉選出新 Master。
+                            <span className="font-bold text-white">任務：心跳與選舉。</span> Master 節點以固定的頻率 (預設每秒) 向 Backup 節點發送廣播，證明自己還活著。當 Backup 收不到廣播超過容忍時間，就會宣佈自己成為新的 Master。
                         </p>
-                        <div className="px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-lg text-[9px] font-mono text-blue-300">Purpose: Detection & Election</div>
+                        <div className="absolute bottom-6 left-8 px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-lg text-[9px] font-mono text-blue-300">Phase 1: Detection</div>
                     </div>
                     <div className="p-8 glass rounded-[40px] border-emerald-500/20 relative overflow-hidden h-full">
                         <div className="absolute top-0 right-0 p-4 opacity-10"><Icon name="send" size={60}/></div>
-                        <h5 className="font-black text-xl text-emerald-400 mb-4 tracking-tighter uppercase">2. Gratuitous ARP (GARP)</h5>
+                        <h5 className="font-black text-xl text-emerald-400 mb-4 tracking-tighter uppercase">2. Gratuitous ARP</h5>
                         <p className="text-xs text-white/70 leading-relaxed font-light mb-6">
-                            <span className="font-bold text-white">網路通知：</span> 當 VIP 漂移至新節點後，該節點會立即向 Switch 發送 GARP 封包，通知 Switch 更新 MAC 地址與 IP 的映射關係。
+                            <span className="font-bold text-white">任務：網路更新。</span> 選舉出新 Master 後，VIP 掛載到新機器的網卡上。此時必須立刻發送無償 ARP (GARP) 封包，強迫實體 Switch 更新它的 MAC Address 表，讓未來的流量轉向新節點。
                         </p>
-                        <div className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[9px] font-mono text-emerald-300">Purpose: Immediate Traffic Re-routing</div>
+                        <div className="absolute bottom-6 left-8 px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[9px] font-mono text-emerald-300">Phase 2: Rerouting</div>
                     </div>
                 </div>
             )},
-            { id: 'keepalived-vrrp-full', title: 'VRRP & GARP in Action', subtitle: 'Visualizing Failover', description: '結合 VRRP 廣告與 GARP 通知的完整視覺化過程。', gradient: 'gradient-purple', icon: 'play-circle', content: <VRRPAnimationFull /> },
-            { id: 'keepalived-vrrp-theory', title: 'VRRP Protocol Theory', subtitle: 'Election Logic', description: '選舉機制確保了叢集中永遠只有一個 Master，避免發生 IP 衝突。', gradient: 'gradient-slate', icon: 'info', content: (
-                <div className="grid grid-cols-3 gap-6 py-6 h-full">
-                    <div className="p-6 glass rounded-3xl flex flex-col justify-between border-white/5 shadow-xl"><h6 className="text-blue-400 font-bold mb-3 uppercase tracking-tighter">Multicast/Unicast</h6><p className="text-xs text-white/60 font-light">預設使用組播 (224.0.0.18)，但在嚴格的網路環境中改用單播 (Unicast) 更為安全且可控。</p><Icon name="radio" size={32} className="text-white/10 mt-4 self-end"/></div>
-                    <div className="p-6 glass rounded-3xl flex flex-col justify-between border-white/5 shadow-xl"><h6 className="text-emerald-400 font-bold mb-3 uppercase tracking-tighter">Priority Election</h6><p className="text-xs text-white/60 font-light">數值較高者 (100 vs 50) 獲勝成為 Master。若數值相同，則 IP 較大者獲勝。</p><Icon name="award" size={32} className="text-white/10 mt-4 self-end"/></div>
-                    <div className="p-6 glass rounded-3xl flex flex-col justify-between border-white/5 shadow-xl"><h6 className="text-purple-400 font-bold mb-3 uppercase tracking-tighter">Timer Calculation</h6><p className="text-xs text-white/60 font-light">切換時間 = (3 * advert_int) + skew_time。advert_int 愈小，切換愈快但網路負擔愈重。</p><Icon name="clock" size={32} className="text-white/10 mt-4 self-end"/></div>
+            { id: '13-keepalived-vrrp-full', title: 'VRRP & GARP Animation', subtitle: 'Watch it Failover', description: '點擊 Trigger 按鈕，觀察 VRRP 中斷後 GARP 如何通知 Switch 更新轉發表。', gradient: 'gradient-slate', icon: 'play-circle', content: <VRRPAnimationFull /> },
+            { id: '14-keepalived-vrrp-details', title: 'VRRP Parameters', subtitle: 'Tuning the Election', description: '了解 VRRP 的核心參數，能幫助我們設計出更具韌性的架構。', gradient: 'gradient-slate', icon: 'sliders', content: (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-6 h-full">
+                    <div className="p-8 glass rounded-[30px] flex flex-col border-white/5">
+                        <h6 className="text-blue-400 font-black text-lg mb-4 uppercase tracking-tighter">Multicast vs Unicast</h6>
+                        <p className="text-xs text-white/60 font-light leading-relaxed">VRRP 預設使用組播位址 <code className="text-white">224.0.0.18</code>。但在公有雲或限制嚴格的內網，組播常被阻擋導致腦裂。最佳實踐是明確指定對方 IP，改走單播 (Unicast)。</p>
+                    </div>
+                    <div className="p-8 glass rounded-[30px] flex flex-col border-white/5">
+                        <h6 className="text-emerald-400 font-black text-lg mb-4 uppercase tracking-tighter">Priority (權重)</h6>
+                        <p className="text-xs text-white/60 font-light leading-relaxed">選舉的唯一依據 (0-255)。例如 LB-1 設 100，LB-2 設 50，則 LB-1 永遠是首選 Master。建議差距至少拉開 20 以上以便設定容錯腳本。</p>
+                    </div>
+                    <div className="p-8 glass rounded-[30px] flex flex-col border-white/5">
+                        <h6 className="text-purple-400 font-black text-lg mb-4 uppercase tracking-tighter">Timers</h6>
+                        <p className="text-xs text-white/60 font-light leading-relaxed">Master 廣播間隔為 <code className="text-white">advert_int</code> (秒)。Backup 的超時判定公式為：<code className="text-white">(3 * advert_int) + skew_time</code>。間隔越短發現越快，但網路負載越高。</p>
+                    </div>
                 </div>
             )},
-            { id: 'keepalived-config-full', title: 'Keepalived Config (BACKUP)', subtitle: 'Robustness over Preemption', description: '基於 nopreempt 與 BACKUP 模式的穩定配置，防止服務恢復時造成的二次連線中斷。', gradient: 'gradient-slate', icon: 'settings', content: (
+            { id: '15-keepalived-config-preempt', title: 'Keepalived Config', subtitle: 'The Flaw of Preemption', description: '新手常見的設定：一主一備。為什麼這種設定在生產環境中很危險？', gradient: 'gradient-rose', icon: 'settings', content: (
                 <div className="grid grid-cols-2 gap-8 py-4">
-                    <div className="code-block"><div className="text-white/30 text-[9px] mb-2 uppercase">/etc/keepalived/keepalived.conf</div>
+                    <div className="code-block h-fit"><div className="text-white/30 text-[9px] mb-2 uppercase">/etc/keepalived/keepalived.conf (LB-01)</div>
 {`vrrp_instance VI_1 {
-    state BACKUP       # 建議雙方都設為 BACKUP
-    interface eth0
-    virtual_router_id 51
-    priority 50        # Backup 設較低權重
-    advert_int 1
-    nopreempt          # 關鍵：禁止搶佔
-    unicast_src_ip 192.168.50.212
-    unicast_peer { 192.168.50.211 }
-    virtual_ipaddress {
-        192.168.50.250/24
-    }
-    track_script { check_haproxy }
+    state MASTER      # 設為 MASTER
+    priority 100
+    ...
 }`}
                     </div>
                     <div className="space-y-6">
-                        <div className="p-6 glass rounded-3xl border-l-4 border-blue-500 shadow-xl">
-                            <h6 className="font-bold text-sm text-blue-400 mb-2 uppercase tracking-widest">Why nopreempt?</h6>
-                            <p className="text-[11px] text-white/60 leading-relaxed font-light text-justify">
-                                在預設的「搶佔」模式下，高權重的節點一旦上線就會立刻奪回 VIP。如果該節點剛啟動還不穩定，或網路頻繁閃斷，就會導致 VIP 在兩台 LB 之間快速切換，造成所有長連線 (gRPC/Websocket) 毀滅性中斷。
-                            </p>
-                        </div>
-                        <div className="p-6 glass rounded-3xl border-l-4 border-emerald-500 shadow-xl">
-                            <h6 className="font-bold text-sm text-emerald-400 mb-2 uppercase tracking-widest">Initial State: BACKUP</h6>
-                            <p className="text-[11px] text-white/60 leading-relaxed font-light">
-                                當啟用了 <code className="text-emerald-300">nopreempt</code>，<code className="text-emerald-300">state</code> 必須設定為 <code className="text-emerald-300">BACKUP</code> 才能生效。
+                        <div className="p-6 glass rounded-3xl border-l-4 border-rose-500 bg-rose-500/5">
+                            <h6 className="font-bold text-sm text-rose-400 mb-2 uppercase">The Preemption Flap (搶佔抖動)</h6>
+                            <p className="text-xs text-white/70 leading-relaxed font-light">
+                                在這個預設設定下，如果 LB-1 斷電，VIP 會轉移到 LB-2。這很好。<br/><br/>
+                                但當 LB-1 重新修好開機時，因為它的設定是 <code className="text-rose-300">MASTER</code> 且權重較高，它會<span className="font-bold text-white">強制發送廣告搶回 VIP</span>。這會導致剛穩定的連線再次中斷，如果機器硬體不穩反覆重啟，VIP 就會瘋狂來回漂移。
                             </p>
                         </div>
                     </div>
                 </div>
             )},
-            { id: 'keepalived-track', title: 'Tracking Health', subtitle: 'The Glue of Synergy', description: 'Keepalived 不僅監測網路，還能聯動監測本地服務 (如 HAProxy)。', gradient: 'gradient-blue', icon: 'link', content: (
-                <div className="grid grid-cols-2 gap-10">
+            { id: '16-keepalived-config-nopreempt', title: 'Keepalived Config', subtitle: 'The Best Practice (nopreempt)', description: '企業級高可用標準設定：雙 BACKUP 搭配 nopreempt 參數。', gradient: 'gradient-emerald', icon: 'check-square', content: (
+                <div className="grid grid-cols-2 gap-8 py-4">
+                    <div className="code-block h-fit"><div className="text-white/30 text-[9px] mb-2 uppercase">/etc/keepalived/keepalived.conf (LB-01)</div>
+{`vrrp_instance VI_1 {
+    state BACKUP      # 雙方都設為 BACKUP
+    priority 100      # 靠 Priority 分出高下
+    nopreempt         # 關鍵：禁止搶佔
+    ...
+}`}
+                    </div>
                     <div className="space-y-6">
-                        <h5 className="font-black text-xl text-blue-400 uppercase tracking-tighter">Track Script Logic</h5>
-                        <p className="text-sm text-white/70 leading-relaxed font-light">這是一個定義在 Keepalived 中的監視腳本。它能感知 HAProxy 是否崩潰，並主動觸發權重扣除，實現業務感知的故障轉移。</p>
+                        <div className="p-6 glass rounded-3xl border-l-4 border-emerald-500 bg-emerald-500/5">
+                            <h6 className="font-bold text-sm text-emerald-400 mb-2 uppercase">The Silent Recovery</h6>
+                            <p className="text-xs text-white/70 leading-relaxed font-light">
+                                加上 <code className="text-emerald-300">nopreempt</code> (不搶佔) 參數後，當 LB-1 修復開機時，它會發現 LB-2 已經在當 Master 了。它會乖乖待在 Backup 狀態，不主動搶奪 VIP，讓現有流量平滑繼續。<br/><br/>
+                                <span className="text-[10px] text-white/40">* 註：nopreempt 只有在 state 設定為 BACKUP 時才會生效。</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )},
+            { id: '17-keepalived-full-config', title: 'Keepalived Complete Code', subtitle: 'Copy & Paste Ready', description: '結合 Unicast 與 nopreempt 的完整設定範例 (以 LB-02 為例)。', gradient: 'gradient-slate', icon: 'file-code', content: (
+                <div className="grid grid-cols-1 gap-8 py-2 w-full max-w-2xl mx-auto">
+                    <div className="code-block w-full">
+                        <div className="text-white/30 text-[9px] mb-2 uppercase">/etc/keepalived/keepalived.conf (LB-02 Node)</div>
+{`vrrp_instance VI_1 {
+    state BACKUP                 # Best Practice
+    interface eth0               # 綁定網卡
+    virtual_router_id 51         # 兩台必須相同
+    priority 50                  # LB-1 設 100，LB-2 設 50
+    advert_int 1                 # VRRP 頻率 1 秒
+    nopreempt                    # Best Practice: 防抖動
+    
+    unicast_src_ip 192.168.50.212 # 本機 IP
+    unicast_peer { 192.168.50.211 } # 對端 IP (Unicast)
+
+    authentication { auth_type PASS; auth_pass 1234 }
+
+    virtual_ipaddress { 192.168.50.250/24 } # 漂移 VIP
+}`}
+                    </div>
+                </div>
+            )},
+            { id: '18-keepalived-track', title: 'Tracking Health', subtitle: 'Binding Keepalived to HAProxy', description: '如果 LB 機器沒壞，但 HAProxy 程式死掉了怎麼辦？我們需要 Track Script。', gradient: 'gradient-blue', icon: 'link', content: (
+                <div className="grid grid-cols-2 gap-10 py-6 items-center">
+                    <div className="space-y-6">
+                        <p className="text-sm text-white/70 leading-relaxed font-light">這是一個定義在 Keepalived 中的監視腳本。它能主動探測本地 HAProxy 是否崩潰，並觸發「權重扣除」，實現業務層級的感知與故障轉移。</p>
                         <div className="code-block">
 {`vrrp_script check_haproxy {
-    script "/usr/bin/killall -0 haproxy" # 檢查進程
+    script "/usr/bin/killall -0 haproxy" 
     interval 2  # 每 2 秒檢查一次
-    weight -30  # 失敗時權重減 30
-    fall 2      # 失敗 2 次判定為故障
-    rise 2      # 成功 2 次判定為恢復
+    weight -30  # 失敗時 priority 減 30
+    fall 2      # 連續失敗 2 次才觸發
+    rise 2      # 連續成功 2 次才恢復
+}
+
+vrrp_instance VI_1 {
+    ...
+    track_script { check_haproxy }
 }`}
                         </div>
                     </div>
                     <div className="flex flex-col justify-center space-y-6">
-                        <div className="p-6 glass rounded-[40px] border-white/5 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 p-4 opacity-10"><Icon name="zap" size={60}/></div>
-                            <h6 className="font-bold text-emerald-400 mb-2">Automated Failover Trigger</h6>
-                            <p className="text-xs text-white/50 leading-relaxed font-light">若 LB-1 (Pri: 100) 的 HAProxy 崩潰，權重會降至 70。此時 Backup (Pri: 80) 的優先級更高，會自動接管 VIP。</p>
-                        </div>
-                        <div className="p-6 glass rounded-[40px] border-white/5">
-                            <h6 className="font-bold text-purple-400 mb-2">Full Transparency</h6>
-                            <p className="text-xs text-white/50 leading-relaxed font-light">對 K8s 客戶端而言，連線始終發往同一個 VIP，中間的權重變化與物理切換完全透明。</p>
+                        <div className="p-6 glass rounded-[40px] border-l-4 border-blue-500 shadow-xl relative overflow-hidden">
+                            <h6 className="font-bold text-blue-400 mb-2 uppercase tracking-tighter">Automated Failover Math</h6>
+                            <p className="text-xs text-white/60 leading-relaxed font-light">LB-1 的權重原本是 100。若 HAProxy 崩潰，<code className="text-blue-300">weight -30</code> 啟動，LB-1 的權重降為 70。<br/><br/>此時 LB-2 (權重 80) 會發現自己的權重大於對手，立刻發起選舉並接管 VIP。</p>
                         </div>
                     </div>
                 </div>
             )},
-            { id: 'scenario-failover', title: 'Scenario: Master Failure', subtitle: 'The Millisecond Sequence', description: '當 Master 節點發生不可抗力故障時，Keepalived 與網路設備的連動流程。', gradient: 'gradient-rose', icon: 'zap-off', content: (
+
+            // Part 4: Scenarios
+            { id: '19-scenario-intro', title: 'Part 3: Scenarios', subtitle: 'What Happens When...', description: '理論講完了，我們來拆解幾種真實生產環境中最常遇到的故障情境，以及系統的反應。', gradient: 'gradient-rose', icon: 'book-open', content: (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <Icon name="search" size={80} className="text-rose-400 mx-auto opacity-50 mb-8" />
+                    <h4 className="text-4xl font-black mb-4 tracking-tighter">Dissecting the Failures</h4>
+                    <p className="text-white/50 text-sm font-light uppercase tracking-[0.2em]">Scenario Analysis</p>
+                </div>
+            )},
+            { id: '20-scenario-hard-fail', title: 'Scenario A: Hard Failure', subtitle: 'Kernel Panic / Power Loss', description: '當 LB-1 實體機突然斷電。', gradient: 'gradient-rose', icon: 'zap-off', content: (
                 <div className="relative py-10 h-full">
-                    <div className="grid grid-cols-4 gap-6 h-full items-stretch">
-                        <div className="flex flex-col items-center gap-5 p-6 glass rounded-[40px] border-rose-500/10 shadow-2xl relative overflow-hidden">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-full items-stretch">
+                        <div className="flex flex-col items-center gap-5 p-6 glass rounded-[40px] border-rose-500/10 shadow-2xl">
                             <div className="text-rose-500 font-black text-2xl">0ms</div>
-                            <h6 className="text-[10px] font-black uppercase tracking-widest text-rose-300">Failure</h6>
-                            <p className="text-[10px] text-center text-white/40 leading-relaxed">Master 發生 Kernel Panic 或硬體故障。VRRP 廣告廣播立刻停止發送。</p>
+                            <h6 className="text-[10px] font-black uppercase tracking-widest text-rose-300">Power Off</h6>
+                            <p className="text-[10px] text-center text-white/40 leading-relaxed">LB-1 死亡。VRRP 封包立刻停止發送至網路上。</p>
                         </div>
                         <div className="flex flex-col items-center gap-5 p-6 glass rounded-[40px] border-rose-500/10 shadow-2xl">
                             <div className="text-rose-500 font-black text-2xl">3.6s</div>
                             <h6 className="text-[10px] font-black uppercase tracking-widest text-rose-300">Detection</h6>
-                            <p className="text-[10px] text-center text-white/40 leading-relaxed">Backup 計時器歸零。確認 Master 已死亡，將自身狀態由 BACKUP 轉為 MASTER。</p>
+                            <p className="text-[10px] text-center text-white/40 leading-relaxed">LB-2 計時器超時，確認 Master 離線，進入 MASTER 狀態。</p>
                         </div>
                         <div className="flex flex-col items-center gap-5 p-6 glass rounded-[40px] border-emerald-500/20 shadow-2xl">
                             <div className="text-emerald-500 font-black text-2xl">+10ms</div>
                             <h6 className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Activation</h6>
-                            <p className="text-[10px] text-center text-white/40 leading-relaxed">新 Master 將 VIP 綁定至網卡。並對外發送多組 Gratuitous ARP 廣播封包。</p>
+                            <p className="text-[10px] text-center text-white/40 leading-relaxed">LB-2 將 VIP 掛載至本地網卡，並狂發 GARP 封包。</p>
                         </div>
                         <div className="flex flex-col items-center gap-5 p-6 glass rounded-[40px] border-emerald-500/20 shadow-2xl">
                             <div className="text-emerald-500 font-black text-2xl">+50ms</div>
-                            <h6 className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Completion</h6>
-                            <p className="text-[10px] text-center text-white/40 leading-relaxed">Switch 更新轉發表。所有發往 VIP 的流量正式轉由新節點處理。</p>
+                            <h6 className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Rerouted</h6>
+                            <p className="text-[10px] text-center text-white/40 leading-relaxed">Switch 更新 MAC 表。外部流量無縫導向 LB-2，API 恢復。</p>
                         </div>
                     </div>
                 </div>
             )},
-            { id: 'scenario-restore', title: 'Scenario: Node Restore', subtitle: 'Stability vs. Preemption', description: '當舊 Master 節點修復並重新啟動時，系統的反應行為。', gradient: 'gradient-rose', icon: 'refresh-ccw', content: (
-                <div className="flex flex-col md:flex-row gap-8 items-center py-6 h-full">
-                    <div className="flex-1 p-10 glass rounded-[50px] border-rose-500/20 relative shadow-2xl h-full">
-                        <div className="absolute top-0 right-0 p-6 text-rose-500 opacity-20"><Icon name="x-circle" size={48}/></div>
-                        <h5 className="font-black text-xl text-rose-400 mb-6 uppercase tracking-tighter">Default (Preemption)</h5>
-                        <p className="text-xs text-white/50 mb-6 font-light">高權重節點一恢復就「強行搶回」VIP。</p>
-                        <ul className="space-y-4 text-xs text-white/80 font-light list-disc pl-5">
-                            <li>LB-1 發送高優先級 VRRP 宣告。</li>
-                            <li>LB-2 收到後立刻釋放 VIP，退回 Backup。</li>
-                            <li className="text-rose-300 font-bold">副作用：造成第二次業務中斷。</li>
-                        </ul>
-                    </div>
-                    <div className="flex-1 p-10 glass rounded-[50px] border-emerald-500/20 relative shadow-2xl h-full">
-                        <div className="absolute top-0 right-0 p-6 text-emerald-500 opacity-20"><Icon name="check-circle" size={48}/></div>
-                        <h5 className="font-black text-xl text-emerald-400 mb-6 uppercase tracking-tighter">Best Practice (nopreempt)</h5>
-                        <p className="text-xs text-white/50 mb-6 font-light">恢復後安靜地進入 Backup 狀態，不干擾當前服務。</p>
-                        <ul className="space-y-4 text-xs text-white/80 font-light list-disc pl-5">
-                            <li>LB-1 恢復後偵測到已有 Master 存在。</li>
-                            <li>LB-1 保持 Backup，直到 LB-2 下次故障。</li>
-                            <li className="text-emerald-300 font-bold">優點：提供最高等級的網路穩定性。</li>
-                        </ul>
+            { id: '21-scenario-soft-fail', title: 'Scenario B: Soft Failure', subtitle: 'HAProxy Service Crash', description: '當 LB-1 機器沒事，但 HAProxy 因為 OOM 被系統殺掉。', gradient: 'gradient-rose', icon: 'x-circle', content: (
+                <div className="relative py-10 h-full flex items-center justify-center">
+                    <div className="w-full max-w-3xl space-y-6">
+                        <div className="p-6 glass rounded-[30px] border-white/5 flex gap-6 items-center">
+                            <div className="w-16 text-center font-black text-rose-500">T=0s</div>
+                            <div className="flex-1"><h6 className="font-bold text-white mb-1">Service Crashed</h6><p className="text-xs text-white/50">HAProxy 進程消失，但 Keepalived 依然在運行並發送 VRRP 100。</p></div>
+                        </div>
+                        <div className="p-6 glass rounded-[30px] border-white/5 flex gap-6 items-center">
+                            <div className="w-16 text-center font-black text-amber-500">T=4s</div>
+                            <div className="flex-1"><h6 className="font-bold text-white mb-1">Track Script Triggers</h6><p className="text-xs text-white/50">Keepalived 的 script 檢查失敗兩次 (fall 2)。LB-1 的權重瞬間扣除 30，降為 70。</p></div>
+                        </div>
+                        <div className="p-6 glass rounded-[30px] border-white/5 flex gap-6 items-center">
+                            <div className="w-16 text-center font-black text-emerald-500">T=4.1s</div>
+                            <div className="flex-1"><h6 className="font-bold text-white mb-1">Priority Override & GARP</h6><p className="text-xs text-white/50">LB-2 (權重 80) 收到來自 LB-1 的廣播發現對方權重比自己低，立刻接管 VIP 並發送 GARP 導流。</p></div>
+                        </div>
                     </div>
                 </div>
             )},
-            { id: 'synergy-flow', title: 'Better Together', subtitle: 'The 1+1 > 2 Architecture', description: '總結：Keepalived 解決 HAProxy 的單點問題，HAProxy 解決 API 的擴展問題。', gradient: 'gradient-emerald', icon: 'users', content: (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 py-10">
-                    <div className="p-10 glass rounded-[50px] space-y-5 text-center border-b-4 border-b-blue-500 shadow-2xl relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <Icon name="map-pin" className="text-blue-400" size={48}/><h5 className="font-black text-xl uppercase tracking-tighter">Stability</h5>
-                        <p className="text-xs text-white/50 leading-relaxed">Keepalived 確保 VIP 永遠存在，成為 K8s 控制平面的唯一信任入口。</p>
-                    </div>
-                    <div className="p-10 glass rounded-[50px] space-y-5 text-center border-b-4 border-b-emerald-500 shadow-2xl relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <Icon name="git-merge" className="text-emerald-400" size={48}/><h5 className="font-black text-xl uppercase tracking-tighter">Efficiency</h5>
-                        <p className="text-xs text-white/50 leading-relaxed">HAProxy 根據權重與負載，將流量公平地分攤至多台 API Server，最大化資源利用率。</p>
-                    </div>
-                    <div className="p-10 glass rounded-[50px] space-y-5 text-center border-b-4 border-b-purple-500 shadow-2xl relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <Icon name="life-buoy" className="text-purple-400" size={48}/><h5 className="font-black text-xl uppercase tracking-tighter">Redundancy</h5>
-                        <p className="text-xs text-white/50 leading-relaxed">無論是 LB 損壞還是 API Server 崩潰，系統都能在毫秒級完成偵測與繞過。</p>
-                    </div>
-                </div>
-            )},
-            { id: 'arch-flow-diagram', title: 'Complete Architecture', subtitle: 'The End-to-End Journey', description: '從 kubectl 客戶端到後端 3 台 API Server 的完整負載均衡路徑回顧。', gradient: 'gradient-blue', icon: 'network', content: (
+
+            // Part 5: Architecture, Troubleshooting & End
+            { id: '22-arch-flow-diagram', title: 'Complete Architecture', subtitle: 'The End-to-End Journey', description: '經過前面的探討，我們再次檢視從 Client 到 API Server 的完整路徑。', gradient: 'gradient-blue', icon: 'network', content: (
                 <div className="flex flex-col items-center space-y-12 py-8">
                     <div className="flex flex-col md:flex-row items-center gap-10 w-full justify-center">
                         <div className="flex flex-col items-center"><div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-2 text-blue-400 border-blue-500/30"><Icon name="terminal" size={32} /></div><span className="text-[10px] font-black uppercase tracking-widest text-white/60">Client</span></div>
@@ -548,69 +609,96 @@
                     <div className="grid grid-cols-3 gap-10 w-full max-w-4xl text-[10px] font-black font-mono text-center text-white/30 uppercase tracking-tighter"><div>[Network] VRRP/GARP Keeps VIP Up</div><div>[HAProxy] L4 Forwarding Decides Target</div><div>[Backend] Active Health Checks Monitor Status</div></div>
                 </div>
             )},
-            { id: 'common-errors', title: 'Troubleshooting Guide', subtitle: 'Operational Insights', description: '整理了在部署與維護這套 HA 架構時，最容易遇到的三大陷阱。', gradient: 'gradient-rose', icon: 'wrench', content: (
-                <div className="grid grid-cols-2 gap-8 h-full py-4">
-                    <div className="space-y-4 h-[420px] overflow-y-auto pr-4">
-                        <div className="p-6 glass rounded-3xl border-l-4 border-rose-500 shadow-xl relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 p-2 opacity-5"><Icon name="alert-circle" size={40}/></div>
-                            <h6 className="font-bold text-blue-400 mb-2 uppercase tracking-widest text-[11px]">VIP 無法通訊？</h6>
-                            <p className="text-[10px] text-white/60 leading-relaxed font-light">檢查 Linux 核心是否允許應用程序綁定到非本機 IP。需設定：<code className="bg-black/40 text-rose-300 px-1 rounded font-mono">net.ipv4.ip_nonlocal_bind=1</code>。</p>
-                        </div>
-                        <div className="p-6 glass rounded-3xl border-l-4 border-rose-500 shadow-xl relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 p-2 opacity-5"><Icon name="split" size={40}/></div>
-                            <h6 className="font-bold text-blue-400 mb-2 uppercase tracking-widest text-[11px]">Split-Brain 腦裂？</h6>
-                            <p className="text-[10px] text-white/60 leading-relaxed font-light">兩台節點同時持有 VIP。通常是因為防火牆攔截了 VRRP (IP Protocol 112) 通訊，導致雙方都認為對方已掛。需開啟 UDP 112 放行。</p>
-                        </div>
-                        <div className="p-6 glass rounded-3xl border-l-4 border-rose-500 shadow-xl relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 p-2 opacity-5"><Icon name="activity" size={40}/></div>
-                            <h6 className="font-bold text-blue-400 mb-2 uppercase tracking-widest text-[11px]">HAProxy 重啟變慢？</h6>
-                            <p className="text-[10px] text-white/60 leading-relaxed font-light">如果後端伺服器過多且健康檢查頻率過高，啟動時會消耗大量時間在偵測。建議將 <code className="bg-black/40 px-1 rounded font-mono">inter</code> 設定在合理的 2s-5s 之間。</p>
+            { id: '23-synergy-flow', title: 'Better Together', subtitle: 'The 1+1 > 2 Synergy', description: '總結：為何這兩個開源軟體是天作之合。', gradient: 'gradient-emerald', icon: 'users', content: (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 py-10">
+                    <div className="p-10 glass rounded-[50px] space-y-5 text-center border-b-4 border-b-blue-500 shadow-2xl">
+                        <Icon name="map-pin" className="text-blue-400 mx-auto" size={48}/><h5 className="font-black text-xl uppercase tracking-tighter">Stability</h5>
+                        <p className="text-xs text-white/50 leading-relaxed font-light">Keepalived 確保 VIP 永遠存在，成為 K8s 控制平面的唯一信任入口，解決 HAProxy 的單點弱點。</p>
+                    </div>
+                    <div className="p-10 glass rounded-[50px] space-y-5 text-center border-b-4 border-b-emerald-500 shadow-2xl">
+                        <Icon name="git-merge" className="text-emerald-400 mx-auto" size={48}/><h5 className="font-black text-xl uppercase tracking-tighter">Efficiency</h5>
+                        <p className="text-xs text-white/50 leading-relaxed font-light">HAProxy 根據負載與健康度，將流量動態分攤至多台 Master，解決 API Server 擴展性問題。</p>
+                    </div>
+                    <div className="p-10 glass rounded-[50px] space-y-5 text-center border-b-4 border-b-purple-500 shadow-2xl">
+                        <Icon name="life-buoy" className="text-purple-400 mx-auto" size={48}/><h5 className="font-black text-xl uppercase tracking-tighter">Redundancy</h5>
+                        <p className="text-xs text-white/50 leading-relaxed font-light">完美覆蓋軟體 (Crash) 與硬體 (Power Off) 故障，系統都能在毫秒級完成偵測與繞過。</p>
+                    </div>
+                </div>
+            )},
+            { id: '24-troubleshooting-1', title: 'Troubleshooting: Network', subtitle: 'Operational Insights', description: '部署過程中最常遇到的網路相關報錯。', gradient: 'gradient-amber', icon: 'alert-octagon', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-4 items-center h-full">
+                    <div className="p-8 glass rounded-[40px] border-l-4 border-amber-500 shadow-xl space-y-4">
+                        <h6 className="font-bold text-amber-400 text-lg">Error: Cannot bind to VIP</h6>
+                        <p className="text-xs text-white/60 leading-relaxed font-light">當 HAProxy 啟動時報錯無法 bind 192.168.50.250，這是因為該 VIP 目前在另一台機器上，Linux 核心預設不允許綁定不存在的 IP。</p>
+                        <div className="mt-4 p-4 bg-black/40 rounded-xl border border-white/5">
+                            <span className="text-[10px] text-emerald-400 font-bold block mb-1">Solution (sysctl.conf)</span>
+                            <code className="text-[10px] font-mono text-white/80">net.ipv4.ip_nonlocal_bind=1</code>
                         </div>
                     </div>
-                    <div className="flex flex-col justify-center items-center p-12 bg-blue-500/5 rounded-[60px] border border-white/5 shadow-inner">
-                        <Icon name="help-circle" size={64} className="text-blue-500/30 mb-8 animate-pulse"/>
-                        <h5 className="text-xl font-black mb-4 uppercase tracking-tighter">Debug Commands</h5>
-                        <div className="space-y-3 w-full">
-                            <div className="bg-black/40 p-4 rounded-2xl font-mono text-[9px] text-blue-300 border border-white/5">$ ip addr show eth0 # 檢查 VIP 是否掛載</div>
-                            <div className="bg-black/40 p-4 rounded-2xl font-mono text-[9px] text-emerald-300 border border-white/5">$ tcpdump -i any vrrp # 捕捉 VRRP 廣播封包</div>
+                    <div className="p-8 glass rounded-[40px] border-l-4 border-amber-500 shadow-xl space-y-4">
+                        <h6 className="font-bold text-amber-400 text-lg">Error: Split-Brain (腦裂)</h6>
+                        <p className="text-xs text-white/60 leading-relaxed font-light">兩台節點「同時」持有 VIP。通常是因為防火牆攔截了節點間的 VRRP 封包，導致雙方都認為對方已死，自己當上 Master。</p>
+                        <div className="mt-4 p-4 bg-black/40 rounded-xl border border-white/5">
+                            <span className="text-[10px] text-emerald-400 font-bold block mb-1">Solution (ufw / iptables)</span>
+                            <code className="text-[10px] font-mono text-white/80">放行 VRRP 協定 (IP Protocol 112)</code>
                         </div>
                     </div>
                 </div>
             )},
-            { id: 'best-practices-extended', title: 'Advanced Best Practices', subtitle: 'Production Ready', description: '針對大型 K8s 叢集生產環境的進階調優建議。', gradient: 'gradient-slate', icon: 'award', content: (
+            { id: '25-troubleshooting-2', title: 'Debug Commands', subtitle: 'CLI Tools for the Admin', description: '日常維運時必備的快速檢測指令。', gradient: 'gradient-slate', icon: 'terminal', content: (
+                <div className="flex flex-col items-center py-6">
+                    <div className="w-full max-w-3xl space-y-6">
+                        <div className="p-6 bg-black/60 rounded-3xl border border-white/10 shadow-2xl flex flex-col gap-2">
+                            <span className="text-xs text-blue-400 font-bold tracking-widest uppercase">檢查 VIP 狀態</span>
+                            <code className="text-sm font-mono text-white/80">$ ip addr show eth0 | grep 192.168.50.250</code>
+                        </div>
+                        <div className="p-6 bg-black/60 rounded-3xl border border-white/10 shadow-2xl flex flex-col gap-2">
+                            <span className="text-xs text-purple-400 font-bold tracking-widest uppercase">檢查 VRRP 廣播封包 (tcpdump)</span>
+                            <code className="text-sm font-mono text-white/80">$ tcpdump -i eth0 vrrp</code>
+                            <p className="text-[10px] text-white/40 mt-2 font-light">如果沒有輸出，代表防火牆阻擋或 Keepalived 未正確啟動。</p>
+                        </div>
+                        <div className="p-6 bg-black/60 rounded-3xl border border-white/10 shadow-2xl flex flex-col gap-2">
+                            <span className="text-xs text-emerald-400 font-bold tracking-widest uppercase">檢查即時日誌</span>
+                            <code className="text-sm font-mono text-white/80">$ journalctl -u keepalived -f</code>
+                            <p className="text-[10px] text-white/40 mt-2 font-light">可以清楚看到 state transition (BACKUP -> MASTER) 的過程。</p>
+                        </div>
+                    </div>
+                </div>
+            )},
+            { id: '26-best-practices', title: 'Production Best Practices', subtitle: 'Advanced Configurations', description: '針對大型 K8s 叢集生產環境的進階調優建議。', gradient: 'gradient-slate', icon: 'award', content: (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-6">
                     <div className="p-10 glass rounded-[50px] space-y-6 shadow-2xl">
                         <h5 className="font-black text-xl text-emerald-400 border-l-4 border-emerald-500 pl-6 uppercase tracking-tighter">Reliability Layer</h5>
                         <ul className="space-y-5 text-sm text-white/70 font-light">
                             <li className="flex gap-4"><Icon name="check" size={16} className="text-emerald-400 flex-shrink-0"/> <span className="text-white font-bold">實體隔離：</span> 將兩台 LB 部署在不同實體機或不同機架以防電源/Switch 故障。</li>
-                            <li className="flex gap-4"><Icon name="check" size={16} className="text-emerald-400 flex-shrink-0"/> <span className="text-white font-bold">連線限制：</span> 設定 <code className="text-emerald-300">maxconn</code> 保護 LB 本身不被過多連線拖垮。</li>
-                            <li className="flex gap-4"><Icon name="check" size={16} className="text-emerald-400 flex-shrink-0"/> <span className="text-white font-bold">安全性：</span> 務必使用 VRRP 認證密碼防止未授權設備搶佔 VIP。</li>
+                            <li className="flex gap-4"><Icon name="check" size={16} className="text-emerald-400 flex-shrink-0"/> <span className="text-white font-bold">連線限制：</span> 設定 HAProxy <code className="text-emerald-300">maxconn</code> 保護 LB 本身不被過多連線拖垮引發 OOM。</li>
+                            <li className="flex gap-4"><Icon name="check" size={16} className="text-emerald-400 flex-shrink-0"/> <span className="text-white font-bold">定期切換演練：</span> 每個季度手動觸發一次 Failover (Chaos Testing)，確保機制有效。</li>
                         </ul>
                     </div>
                     <div className="p-10 glass rounded-[50px] space-y-6 bg-blue-500/5 shadow-2xl">
                         <h5 className="font-black text-xl text-blue-400 border-l-4 border-blue-500 pl-6 uppercase tracking-tighter">Automation Layer</h5>
                         <ul className="space-y-5 text-sm text-white/70 font-light">
-                            <li className="flex gap-4"><Icon name="check" size={16} className="text-blue-400 flex-shrink-0"/> <span className="text-white font-bold">自動化部署：</span> 嚴禁手動改 Config，應使用 Ansible 確保兩台 LB 設定一致。</li>
-                            <li className="flex gap-4"><Icon name="check" size={16} className="text-blue-400 flex-shrink-0"/> <span className="text-white font-bold">監控聯動：</span> 當 Failover 發生時，應立即發送 Slack 或 Teams 通知運維人員。</li>
-                            <li className="flex gap-4"><Icon name="check" size={16} className="text-blue-400 flex-shrink-0"/> <span className="text-white font-bold">日誌管理：</span> 將 HAProxy 的 access log 送往 ELK 或 Loki，便於進行慢查詢分析。</li>
+                            <li className="flex gap-4"><Icon name="check" size={16} className="text-blue-400 flex-shrink-0"/> <span className="text-white font-bold">基礎設施即代碼 (IaC)：</span> 嚴禁手動改 Config，應使用 Ansible 確保兩台 LB 設定一致且可復原。</li>
+                            <li className="flex gap-4"><Icon name="check" size={16} className="text-blue-400 flex-shrink-0"/> <span className="text-white font-bold">告警整合：</span> 聯動 Prometheus Alertmanager，當 Failover 發生時立即發送 Slack 通知。</li>
+                            <li className="flex gap-4"><Icon name="check" size={16} className="text-blue-400 flex-shrink-0"/> <span className="text-white font-bold">日誌集中：</span> 將日誌送往 ELK/Loki，便於排查問題。</li>
                         </ul>
                     </div>
                 </div>
             )},
-            { id: 'resource-links', title: 'Resources & References', subtitle: 'Continue Learning', description: '更多詳細的技術規格與實作腳本，可參閱以下官方連結。', gradient: 'gradient-slate', icon: 'link-2', content: (
+            { id: '27-resources', title: 'Resources & References', subtitle: 'Continue Learning', description: '更多詳細的技術規格與自動化腳本，可參閱以下連結。', gradient: 'gradient-slate', icon: 'link-2', content: (
                 <div className="flex flex-col items-center py-10">
                     <div className="grid grid-cols-2 gap-10 w-full max-w-3xl">
                         <div className="p-10 glass rounded-[50px] hover:bg-white/5 transition-all text-center group border border-white/5 shadow-2xl relative">
                             <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-[50px]"></div>
-                            <Icon name="book" size={48} className="text-blue-400 mb-6 group-hover:scale-110 transition-transform"/>
+                            <Icon name="book" size={48} className="text-blue-400 mb-6 mx-auto group-hover:scale-110 transition-transform"/>
                             <h6 className="font-black text-lg mb-2 uppercase tracking-widest">Official Docs</h6>
                             <p className="text-[10px] text-white/30 font-mono">haproxy.org<br/>keepalived.org</p>
                         </div>
                         <div className="p-10 glass rounded-[50px] hover:bg-white/5 transition-all text-center group border border-white/5 shadow-2xl relative">
                             <div className="absolute inset-0 bg-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-[50px]"></div>
-                            <Icon name="github" size={48} className="text-purple-400 mb-6 group-hover:scale-110 transition-transform"/>
-                            <h6 className="font-black text-lg mb-2 uppercase tracking-widest">Lab Scripts</h6>
-                            <p className="text-[10px] text-white/30 font-mono">MansionLai / notebook<br/>(Multipass + Ansible)</p>
+                            <Icon name="github" size={48} className="text-purple-400 mb-6 mx-auto group-hover:scale-110 transition-transform"/>
+                            <h6 className="font-black text-lg mb-2 uppercase tracking-widest">Lab Source Code</h6>
+                            <p className="text-[10px] text-white/30 font-mono">MansionLai / notebook<br/>(Multipass VMs + Ansible Playbooks)</p>
                         </div>
                     </div>
                     <div className="mt-16 p-8 glass rounded-[40px] border-emerald-500/10 flex items-center gap-8 max-w-2xl shadow-xl">
@@ -619,7 +707,7 @@
                     </div>
                 </div>
             )},
-            { id: 'qa', title: 'Q&A Session', subtitle: 'Discussion & Deep Dive', description: '歡迎針對任何實作細節、核心參數或場景設計進行討論。', gradient: 'gradient-blue', icon: 'messages-square', content: (
+            { id: '28-qa', title: 'Q&A Session', subtitle: 'Discussion & Deep Dive', description: '歡迎針對任何實作細節、核心參數或網路架構進行討論。', gradient: 'gradient-blue', icon: 'messages-square', content: (
                 <div className="flex flex-col items-center justify-center py-20 text-center relative overflow-hidden">
                     <div className="absolute inset-0 bg-blue-500/5 blur-3xl opacity-50"></div>
                     <Icon name="help-circle" size={120} className="text-blue-400/20 mb-10 animate-pulse relative z-10"/>
@@ -627,36 +715,36 @@
                     <p className="text-white/40 text-lg font-light relative z-10 max-w-xl mx-auto leading-relaxed">我們剛探討了 VIP 漂移、L4 負載均衡與 GARP 通知，現在換您提問了。</p>
                     <div className="mt-16 flex gap-6 relative z-10">
                         <div className="px-8 py-3 glass rounded-full text-xs font-black uppercase tracking-widest text-blue-300 border border-blue-500/30">Open Discussion</div>
-                        <div className="px-8 py-3 glass rounded-full text-xs font-black uppercase tracking-widest text-emerald-300 border border-emerald-500/30">Live Lab View</div>
+                        <div className="px-8 py-3 glass rounded-full text-xs font-black uppercase tracking-widest text-emerald-300 border border-emerald-500/30">Live Lab View Next</div>
                     </div>
                 </div>
             )},
-            { id: 'conclusion', title: 'Conclusion', subtitle: 'The Path Forward', description: '透過雙層高可用設計，打造穩定、可靠、可擴展的 K8s 基礎設施。', gradient: 'gradient-emerald', icon: 'flag', content: (
+            { id: '29-conclusion', title: 'Conclusion', subtitle: 'The Path Forward', description: '一個堅固的系統，建立在優良的架構設計之上。', gradient: 'gradient-emerald', icon: 'flag', content: (
                 <div className="flex flex-col items-center py-10">
-                    <div className="p-12 glass rounded-[80px] max-w-5xl border-emerald-500/20 relative shadow-2xl">
-                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-40 h-40 bg-emerald-500 rounded-full blur-[100px] opacity-10"></div>
-                        <h5 className="text-4xl font-black text-center mb-12 uppercase tracking-tighter">Essential HA Pillars</h5>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                            <div className="flex flex-col items-center text-center p-6 bg-white/5 rounded-3xl group transition-all hover:bg-white/10">
+                    <div className="p-12 glass rounded-[80px] max-w-5xl border-emerald-500/20 relative shadow-2xl overflow-hidden">
+                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-40 h-40 bg-emerald-500 rounded-full blur-[100px] opacity-20"></div>
+                        <h5 className="text-4xl font-black text-center mb-12 uppercase tracking-tighter relative z-10">Essential HA Pillars</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative z-10">
+                            <div className="flex flex-col items-center text-center p-6 bg-black/20 rounded-[40px] group transition-all hover:bg-black/40 border border-white/5">
                                 <div className="w-16 h-16 glass rounded-2xl flex items-center justify-center text-blue-400 font-black text-2xl mb-6 shadow-xl border border-blue-500/20">01</div>
-                                <h6 className="font-black text-sm mb-3 uppercase">Traffic Distribution</h6>
-                                <p className="text-[10px] text-white/40 leading-relaxed font-light">HAProxy 將負載平均分配至所有控制平面節點，消滅效能樽頸。</p>
+                                <h6 className="font-black text-sm mb-3 uppercase tracking-widest">Traffic Control</h6>
+                                <p className="text-[10px] text-white/50 leading-relaxed font-light">HAProxy 將龐大的 K8s API 請求平均分配，消滅了控制平面的效能樽頸。</p>
                             </div>
-                            <div className="flex flex-col items-center text-center p-6 bg-white/5 rounded-3xl group transition-all hover:bg-white/10">
+                            <div className="flex flex-col items-center text-center p-6 bg-black/20 rounded-[40px] group transition-all hover:bg-black/40 border border-white/5">
                                 <div className="w-16 h-16 glass rounded-2xl flex items-center justify-center text-emerald-400 font-black text-2xl mb-6 shadow-xl border border-emerald-500/20">02</div>
-                                <h6 className="font-black text-sm mb-3 uppercase">VIP Guarantee</h6>
-                                <p className="text-[10px] text-white/40 leading-relaxed font-light">Keepalived 透過 VRRP 確保 VIP 入口永不中斷，即便是 LB 硬體故障。</p>
+                                <h6 className="font-black text-sm mb-3 uppercase tracking-widest">VIP Guarantee</h6>
+                                <p className="text-[10px] text-white/50 leading-relaxed font-light">Keepalived 透過 VRRP/GARP 確保入口 IP 永不中斷，保護 LB 不成為單點故障。</p>
                             </div>
-                            <div className="flex flex-col items-center text-center p-6 bg-white/5 rounded-3xl group transition-all hover:bg-white/10">
-                                <div className="w-16 h-16 glass rounded-2xl flex items-center justify-center text-purple-400 font-black text-2xl mb-6 shadow-xl border-purple-500/20">03</div>
-                                <h6 className="font-black text-sm mb-3 uppercase">Active Self-Healing</h6>
-                                <p className="text-[10px] text-white/40 leading-relaxed font-light">系統全自動偵測故障並重路由流量，實現「零人工干預」的維運目標。</p>
+                            <div className="flex flex-col items-center text-center p-6 bg-black/20 rounded-[40px] group transition-all hover:bg-black/40 border border-white/5">
+                                <div className="w-16 h-16 glass rounded-2xl flex items-center justify-center text-purple-400 font-black text-2xl mb-6 shadow-xl border border-purple-500/20">03</div>
+                                <h6 className="font-black text-sm mb-3 uppercase tracking-widest">Active Healing</h6>
+                                <p className="text-[10px] text-white/50 leading-relaxed font-light">系統結合 Track Scripts，能在毫秒級偵測軟硬體故障並重路由，實現零人工干預。</p>
                             </div>
                         </div>
                     </div>
                 </div>
             )},
-            { id: 'final', title: 'The End', subtitle: 'Thank You for Your Time', description: 'Prepared by Gemini CLI Agent for MansionLai.', gradient: 'gradient-slate', icon: 'heart', content: (
+            { id: '30-final', title: 'The End', subtitle: 'Thank You for Your Time', description: 'Prepared by Gemini CLI Agent for MansionLai.', gradient: 'gradient-slate', icon: 'heart', content: (
                 <div className="flex flex-col items-center justify-center h-full text-center py-20 relative">
                     <motion.div animate={{ y: [0, -10, 0] }} transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}>
                         <Icon name="rocket" size={100} className="text-blue-500 mb-10 drop-shadow-[0_0_30px_rgba(59,130,246,0.6)]"/>
@@ -665,7 +753,7 @@
                         Build Stronger.
                         <div className="absolute -bottom-2 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50"></div>
                     </h5>
-                    <p className="text-white/20 text-sm font-mono uppercase tracking-[0.6em] mt-4">K8s HA Stack Lab • 2026</p>
+                    <p className="text-white/20 text-sm font-mono uppercase tracking-[0.6em] mt-6">K8s HA Stack Lab • 2026</p>
                 </div>
             )}
         ];
