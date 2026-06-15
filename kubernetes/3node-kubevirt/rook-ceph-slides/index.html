@@ -6,603 +6,709 @@
     <title>Rook-Ceph Deep Dive</title>
     <link rel="icon" type="image/svg+xml" href="/notebook/kubernetes/3node-kubevirt/rook-ceph-slides/favicon.svg" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #000; color: white; overflow: hidden; margin: 0; }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #050505;
+            color: white;
+            overflow: hidden;
+            margin: 0;
+        }
+
         .font-mono { font-family: 'JetBrains Mono', monospace; }
-        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .gradient-blue { background: linear-gradient(135deg, #1e3a8a 0%, #1e1b4b 50%, #000 100%); }
-        .gradient-purple { background: linear-gradient(135deg, #4c1d95 0%, #2e1065 50%, #000 100%); }
-        .gradient-emerald { background: linear-gradient(135deg, #064e3b 0%, #022c22 50%, #000 100%); }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .gradient-blue { background: linear-gradient(135deg, #0f172a 0%, #082f49 50%, #000 100%); }
+        .gradient-cyan { background: linear-gradient(135deg, #083344 0%, #164e63 50%, #000 100%); }
         .gradient-slate { background: linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #000 100%); }
-        .gradient-crimson { background: linear-gradient(135deg, #7f1d1d 0%, #450a0a 50%, #000 100%); }
-        .gradient-amber { background: linear-gradient(135deg, #78350f 0%, #451a03 50%, #000 100%); }
+        .gradient-purple { background: linear-gradient(135deg, #2e1065 0%, #1e1b4b 50%, #000 100%); }
+
         ::-webkit-scrollbar { display: none; }
-        code { color: #93c5fd; }
+
+        .slide-content-container {
+            max-height: 72vh;
+            overflow-y: auto;
+            scrollbar-width: none;
+            padding-right: 10px;
+        }
+        
+        .code-block {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.25rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: #67e8f9;
+            line-height: 1.6;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        .scenario-box { transition: all 0.3s ease; }
+        .scenario-box:hover { background: rgba(255, 255, 255, 0.06); transform: translateY(-2px); }
     </style>
 </head>
 <body>
     <div id="root"></div>
+
     <script type="text/babel">
-        const { useState, useEffect, useCallback } = React;
+        const { useState, useEffect, useCallback, useRef } = React;
         const MotionLib = window.Motion || window.FramerMotion;
-        const motion = MotionLib.motion;
-        const AnimatePresence = MotionLib.AnimatePresence;
+        const { motion, AnimatePresence } = MotionLib;
 
-        const Icon = ({ name, size = 24, className = "" }) => (
-            <iconify-icon icon={`lucide:${name}`} style={{ fontSize: size, color: 'currentColor' }} class={className}></iconify-icon>
-        );
+        // --- Icons Wrapper ---
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const iconRef = useRef(null);
+            useEffect(() => {
+                const timer = setInterval(() => {
+                    if (window.lucide && window.lucide.createIcons && iconRef.current) {
+                        window.lucide.createIcons({
+                            attrs: { class: className, 'stroke-width': 2, 'width': size, 'height': size },
+                            nameAttr: 'data-lucide'
+                        });
+                        clearInterval(timer);
+                    }
+                }, 100);
+                return () => clearInterval(timer);
+            }, [name, size, className]);
+            return (
+                <div className={`inline-flex items-center justify-center ${className}`} style={{ width: size, height: size }}>
+                    <i ref={iconRef} data-lucide={name} style={{ width: size, height: size }}></i>
+                </div>
+            );
+        };
 
+        // --- Slide Content Definitions ---
         const slides = [
-            {
-                id: 'hero',
-                title: 'Rook-Ceph v1.17',
-                subtitle: 'Deep Dive: Cloud Native Storage for KubeVirt',
-                description: '在 K8s 叢集實現高效、穩定的外部 Ceph 整合與儲存編排',
-                gradient: 'gradient-blue',
-                icon: 'database',
-                content: (
-                    <div className="flex flex-col items-center justify-center text-center space-y-8">
-                        <div className="flex gap-6">
-                            <div className="px-6 py-2 glass rounded-full text-blue-400 font-mono text-sm">External Cluster Mode</div>
-                            <div className="px-6 py-2 glass rounded-full text-purple-400 font-mono text-sm">RBD Provisioner</div>
+            // Topic: Intro to Rook (0 - 3)
+            { id: '1-hero', title: 'Rook-Ceph Deep Dive', subtitle: 'Storage Orchestration for Kubernetes', description: '讓 Kubernetes 自行管理儲存基礎設施的終極解決方案。', gradient: 'gradient-blue', icon: 'database', content: (
+                <div className="flex flex-col items-center justify-center text-center space-y-12 py-10">
+                    <Icon name="layers" size={120} className="text-cyan-400 drop-shadow-[0_0_30px_rgba(34,211,238,0.5)]" />
+                    <div className="grid grid-cols-2 gap-8 w-full max-w-3xl">
+                        <div className="p-8 glass rounded-[40px] text-left border-l-4 border-l-cyan-400 shadow-2xl">
+                            <h4 className="font-black text-xl mb-2 text-cyan-300 uppercase tracking-tighter">Cloud-Native Storage</h4>
+                            <p className="text-xs text-white/50 leading-relaxed font-light">將 Ceph 從獨立的硬體叢集，完美轉型為 Kubernetes 原生運行的 Pod 服務。</p>
                         </div>
-                        <div className="mt-12 grid grid-cols-3 gap-8 w-full max-w-4xl">
-                            <div className="p-6 glass rounded-3xl text-center">
-                                <Icon name="server" className="mx-auto mb-4 text-blue-400" size={32} />
-                                <h4 className="font-bold">Infrastructure</h4>
-                                <p className="text-xs text-white/50 mt-2">K8s Cluster</p>
-                            </div>
-                            <div className="p-6 glass rounded-3xl text-center border-blue-500/30">
-                                <Icon name="box" className="mx-auto mb-4 text-purple-400" size={32} />
-                                <h4 className="font-bold">Orchestrator</h4>
-                                <p className="text-xs text-white/50 mt-2">Rook Operator</p>
-                            </div>
-                            <div className="p-6 glass rounded-3xl text-center">
-                                <Icon name="hard-drive" className="mx-auto mb-4 text-emerald-400" size={32} />
-                                <h4 className="font-bold">Storage</h4>
-                                <p className="text-xs text-white/50 mt-2">Ceph Cluster</p>
-                            </div>
+                        <div className="p-8 glass rounded-[40px] text-left border-l-4 border-l-blue-500 shadow-2xl">
+                            <h4 className="font-black text-xl mb-2 text-blue-400 uppercase tracking-tighter">Automated Operations</h4>
+                            <p className="text-xs text-white/50 leading-relaxed font-light">透過 Rook Operator 模式，將「人類儲存管理員」的智慧寫入軟體中自動執行。</p>
                         </div>
                     </div>
-                )
-            },
-            {
-                id: 'agenda',
-                title: 'Agenda',
-                subtitle: '今日探討重點',
-                description: '從基礎概念到進階營運與故障排除',
-                gradient: 'gradient-slate',
-                icon: 'list',
-                content: (
-                    <div className="grid grid-cols-2 gap-8">
-                        <ul className="space-y-4 text-sm text-white/70">
-                            <li className="flex items-center gap-3"><span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px] font-bold">01</span> Ceph 與 Rook 簡介</li>
-                            <li className="flex items-center gap-3"><span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px] font-bold">02</span> Rook-Ceph 核心架構</li>
-                            <li className="flex items-center gap-3"><span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px] font-bold">03</span> 對接模式：Internal vs External</li>
-                            <li className="flex items-center gap-3"><span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px] font-bold">04</span> 核心資源 (CRDs) 詳解</li>
-                        </ul>
-                        <ul className="space-y-4 text-sm text-white/70">
-                            <li className="flex items-center gap-3"><span className="w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-[10px] font-bold">05</span> KubeVirt 與儲存整合</li>
-                            <li className="flex items-center gap-3"><span className="w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-[10px] font-bold">06</span> 進階營運場景 (Migration)</li>
-                            <li className="flex items-center gap-3"><span className="w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-[10px] font-bold">07</span> 故障排除與監控</li>
-                            <li className="flex items-center gap-3"><span className="w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-[10px] font-bold">08</span> 最佳實踐建議</li>
-                        </ul>
+                </div>
+            )},
+            { id: '2-what-is-rook', title: 'What is Rook?', subtitle: 'The Storage Operator', description: 'Rook 不是儲存系統，它是「儲存系統的管理員」。', gradient: 'gradient-slate', icon: 'cpu', content: (
+                <div className="flex flex-col md:flex-row gap-10 py-6 items-center">
+                    <div className="flex-1 space-y-6">
+                        <h5 className="font-black text-2xl text-white mb-4">Rook is an Operator</h5>
+                        <p className="text-sm text-white/70 leading-relaxed font-light">
+                            在過去，部署 Ceph 需要手動設定 Mon、OSD、MDS，並撰寫複雜的 Ansible 腳本。<br/><br/>
+                            Rook 作為 CNCF 的畢業專案，它將 Ceph 的部署、擴容、升級、災難恢復等邏輯，封裝成 Kubernetes 認識的 <strong>Operator 模式</strong>。你只需要給 Kubernetes 遞交一份 YAML (CRD)，Rook 就會自動把 Ceph 叢集長出來。
+                        </p>
                     </div>
-                )
-            },
-            {
-                id: 'what-is-ceph',
-                title: 'What is Ceph?',
-                subtitle: '統一、分散式儲存系統',
-                description: '提供 Object, Block, and File 儲存能力的開源旗艦',
-                gradient: 'gradient-emerald',
-                icon: 'database',
-                content: (
-                    <div className="grid grid-cols-3 gap-6">
-                        <div className="p-6 glass rounded-3xl text-center space-y-4">
-                            <Icon name="layout-grid" className="text-blue-400" size={32} />
-                            <h5 className="font-bold">RADOS</h5>
-                            <p className="text-xs text-white/50">可靠、自主、分散式的物件儲存底座</p>
-                        </div>
-                        <div className="p-6 glass rounded-3xl text-center space-y-4 border-blue-500/30">
-                            <Icon name="box" className="text-purple-400" size={32} />
-                            <h5 className="font-bold">RBD</h5>
-                            <p className="text-xs text-white/50">RADOS Block Device<br/>(本專案 KubeVirt 使用重點)</p>
-                        </div>
-                        <div className="p-6 glass rounded-3xl text-center space-y-4">
-                            <Icon name="file-text" className="text-emerald-400" size={32} />
-                            <h5 className="font-bold">CephFS</h5>
-                            <p className="text-xs text-white/50">符合 POSIX 標準的分散式檔案系統</p>
-                        </div>
+                    <div className="flex-1 p-8 glass rounded-[40px] border-cyan-500/20 relative overflow-hidden shadow-2xl text-center">
+                        <Icon name="bot" size={80} className="text-cyan-500 mx-auto mb-6" />
+                        <h6 className="font-black text-lg text-cyan-400 mb-2 uppercase tracking-widest">Robot Storage Admin</h6>
+                        <p className="text-xs text-white/50 leading-relaxed font-light">Rook Operator 在背景 24/7 監控你的儲存叢集，當有節點故障時自動觸發修復，完全無需人工介入。</p>
                     </div>
-                )
-            },
-            {
-                id: 'k8s-storage-pain',
-                title: 'Storage Challenges',
-                subtitle: 'K8s 儲存的痛點',
-                description: '為什麼我們需要像 Rook 這樣的編排器？',
-                gradient: 'gradient-crimson',
-                icon: 'frown',
-                content: (
-                    <div className="space-y-4">
-                        <div className="p-4 glass rounded-xl border-red-500/20 flex gap-4">
-                            <Icon name="alert-circle" className="text-red-400" />
-                            <p className="text-sm">複雜的部署與配置：手動安裝 MON, OSD 極易出錯</p>
+                </div>
+            )},
+            { id: '3-why-rook', title: 'Why Rook + Ceph?', subtitle: 'The Perfect Match', description: '為何不把 Ceph 架設在外部？為何要放在 K8s 裡面？', gradient: 'gradient-cyan', icon: 'check-circle', content: (
+                <div className="grid grid-cols-3 gap-6 py-6 h-full">
+                    <div className="p-8 glass rounded-3xl flex flex-col justify-between border-white/5 hover:border-cyan-500/50 transition-colors">
+                        <h6 className="text-cyan-300 font-bold mb-3 uppercase tracking-tighter">Unified Control Plane</h6>
+                        <p className="text-xs text-white/60 font-light leading-relaxed">不再需要兩套管理工具。儲存與運算都用 <code className="text-cyan-200">kubectl</code> 統一管理，大幅降低維運複雜度與學習曲線。</p>
+                        <Icon name="command" size={32} className="text-white/10 mt-6 self-end"/>
+                    </div>
+                    <div className="p-8 glass rounded-3xl flex flex-col justify-between border-white/5 hover:border-cyan-500/50 transition-colors">
+                        <h6 className="text-cyan-300 font-bold mb-3 uppercase tracking-tighter">Hyper-Converged</h6>
+                        <p className="text-xs text-white/60 font-light leading-relaxed">運算節點 (Worker) 也是儲存節點 (OSD)。K8s 的 Pod 可以直接存取本地硬碟，實現超融合架構 (HCI)，最大化硬體價值。</p>
+                        <Icon name="layers" size={32} className="text-white/10 mt-6 self-end"/>
+                    </div>
+                    <div className="p-8 glass rounded-3xl flex flex-col justify-between border-white/5 hover:border-cyan-500/50 transition-colors">
+                        <h6 className="text-cyan-300 font-bold mb-3 uppercase tracking-tighter">Dynamic Provisioning</h6>
+                        <p className="text-xs text-white/60 font-light leading-relaxed">結合 CSI，當開發者要求 PVC (PersistentVolumeClaim) 時，Rook-Ceph 會在毫秒級動態切分 Volume，完全自動化。</p>
+                        <Icon name="zap" size={32} className="text-white/10 mt-6 self-end"/>
+                    </div>
+                </div>
+            )},
+
+            // Topic: Architecture (4 - 9)
+            { id: '4-arch-overview', title: 'Rook Architecture', subtitle: 'How it works together', description: 'Rook 與 Ceph 在 Kubernetes 中的層級關係。', gradient: 'gradient-blue', icon: 'git-merge', content: (
+                <div className="flex flex-col items-center py-6">
+                    <div className="w-full max-w-4xl space-y-4">
+                        <div className="p-6 bg-blue-500/10 border border-blue-500/30 rounded-2xl flex items-center gap-6">
+                            <div className="w-24 text-center font-black text-blue-400">Layer 1</div>
+                            <div className="flex-1"><h6 className="font-bold">Kubernetes API & CRDs</h6><p className="text-[10px] text-white/50">人類或 CI/CD 與儲存溝通的介面 (YAML)。</p></div>
                         </div>
-                        <div className="p-4 glass rounded-xl border-red-500/20 flex gap-4">
-                            <Icon name="refresh-cw" className="text-red-400" />
-                            <p className="text-sm">維運困難：Endpoints 異動時，CSI config 需要同步更新</p>
+                        <div className="p-6 bg-cyan-500/10 border border-cyan-500/30 rounded-2xl flex items-center gap-6">
+                            <div className="w-24 text-center font-black text-cyan-400">Layer 2</div>
+                            <div className="flex-1"><h6 className="font-bold">Rook Operator</h6><p className="text-[10px] text-white/50">控制迴圈 (Control Loop)。將使用者的期望狀態 (CRD) 轉換為實際的 Ceph 動作。</p></div>
                         </div>
-                        <div className="p-4 glass rounded-xl border-red-500/20 flex gap-4">
-                            <Icon name="shield-off" className="text-red-400" />
-                            <p className="text-sm">缺乏生命週期管理：升級 Ceph 可能導致 K8s 儲存中斷</p>
+                        <div className="p-6 bg-purple-500/10 border border-purple-500/30 rounded-2xl flex items-center gap-6">
+                            <div className="w-24 text-center font-black text-purple-400">Layer 3</div>
+                            <div className="flex-1"><h6 className="font-bold">Ceph Daemons (MON, MGR, OSD)</h6><p className="text-[10px] text-white/50">實際執行儲存寫入的進程，現在都被打包成 Kubernetes Pods 運行。</p></div>
+                        </div>
+                        <div className="p-6 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center gap-6">
+                            <div className="w-24 text-center font-black text-emerald-400">Layer 4</div>
+                            <div className="flex-1"><h6 className="font-bold">Raw Block Devices</h6><p className="text-[10px] text-white/50">實體機上的裸磁碟 (如 /dev/sdb, NVMe)，被 OSD 直接掛載使用。</p></div>
                         </div>
                     </div>
-                )
-            },
-            {
-                id: 'intro-to-rook',
-                title: 'Introduction to Rook',
-                subtitle: 'Cloud Native Storage Orchestrator',
-                description: 'CNCF 畢業項目，將儲存轉化為自我修復、自我管理的服務',
-                gradient: 'gradient-blue',
-                icon: 'zap',
-                content: (
-                    <div className="grid grid-cols-2 gap-12 items-center">
-                        <div className="space-y-6">
-                            <h4 className="text-xl font-bold text-blue-300">Rook 的核心價值</h4>
-                            <ul className="space-y-4">
-                                <li className="flex gap-3"><Icon name="check-square" className="text-green-400" /> 自動化部署與營運</li>
-                                <li className="flex gap-3"><Icon name="check-square" className="text-green-400" /> 透過 CRD 實現聲明式配置</li>
-                                <li className="flex gap-3"><Icon name="check-square" className="text-green-400" /> 無縫整合 CSI 驅動程式</li>
-                                <li className="flex gap-3"><Icon name="check-square" className="text-green-400" /> 支援多種儲存後端</li>
-                            </ul>
-                        </div>
-                        <div className="p-8 glass rounded-3xl text-center border-blue-500/20">
-                            <Icon name="box" className="text-blue-400 mb-6" size={64} />
-                            <p className="text-lg font-mono">"Operator" Pattern</p>
-                            <p className="text-xs text-white/40 mt-4 italic">將維運知識寫入代碼，實現自動調和</p>
-                        </div>
-                    </div>
-                )
-            },
-            {
-                id: 'rook-arch-detail',
-                title: 'Rook-Ceph Architecture',
-                subtitle: '架構深度解析',
-                description: 'Operator, Daemons, and CSI 組成的完整體系',
-                gradient: 'gradient-purple',
-                icon: 'layers',
-                content: (
+                </div>
+            )},
+            { id: '5-the-operator', title: 'The Rook Operator', subtitle: 'The Brain of the Operation', description: 'Operator 是整個系統的大腦，負責所有生命週期管理。', gradient: 'gradient-slate', icon: 'cpu', content: (
+                <div className="grid grid-cols-2 gap-10 py-4 h-full items-center">
                     <div className="space-y-6">
-                        <div className="grid grid-cols-2 gap-6">
-                            <div className="p-5 glass rounded-2xl border-purple-500/30">
-                                <h5 className="font-bold text-sm mb-2">Control Plane (Operator)</h5>
-                                <p className="text-[10px] text-white/60">管理集群狀態、Watch CRD 變更、部署 Daemons、更新 Config</p>
-                            </div>
-                            <div className="p-5 glass rounded-2xl border-blue-500/30">
-                                <h5 className="font-bold text-sm mb-2">Data Plane (Daemons)</h5>
-                                <p className="text-[10px] text-white/60">MON, OSD, MGR, RGW (Internal 模式下由 Rook 跑 Pod)</p>
-                            </div>
+                        <div className="p-6 glass rounded-3xl border-l-4 border-cyan-500 bg-cyan-500/5 shadow-xl">
+                            <h6 className="font-bold text-sm text-cyan-400 mb-2 uppercase">1. Watch & Reconcile</h6>
+                            <p className="text-xs text-white/70 leading-relaxed font-light">
+                                Operator 向 K8s API 註冊 Watcher，持續監聽 Ceph 相關的 CRD 變化。<br/>
+                                當你建立一個 <code className="text-cyan-300">CephCluster</code>，它會立刻解析，並啟動對應的 DaemonSet/Deployment。
+                            </p>
                         </div>
-                        <div className="p-6 glass rounded-2xl border-emerald-500/30">
-                            <h5 className="font-bold text-sm mb-4">Storage Consumer (CSI)</h5>
-                            <div className="flex justify-between items-center text-[10px]">
-                                <div className="text-center"><Icon name="cpu" size={24} className="mb-2 mx-auto text-white/40"/><br/>Pod Request</div>
-                                <Icon name="arrow-right" className="text-white/20"/>
-                                <div className="text-center font-mono text-emerald-300">CSI Provisioner<br/>(RPC)</div>
-                                <Icon name="arrow-right" className="text-white/20"/>
-                                <div className="text-center font-mono text-blue-300">CSI Node Plugin<br/>(Mount)</div>
-                                <Icon name="arrow-right" className="text-white/20"/>
-                                <div className="text-center"><Icon name="hard-drive" size={24} className="mb-2 mx-auto text-white/40"/><br/>Ceph Device</div>
-                            </div>
+                        <div className="p-6 glass rounded-3xl border-l-4 border-cyan-500 bg-cyan-500/5 shadow-xl">
+                            <h6 className="font-bold text-sm text-cyan-400 mb-2 uppercase">2. Health Management</h6>
+                            <p className="text-xs text-white/70 leading-relaxed font-light">
+                                如果某個 Worker Node 掛了，對應的 OSD Pod 也會死掉。<br/>
+                                Operator 會偵測到狀態改變，並在硬體恢復時自動拉起新的 OSD，或是執行 Ceph 的資料重平衡。
+                            </p>
                         </div>
                     </div>
-                )
-            },
-            {
-                id: 'external-mode-deep-dive',
-                title: 'External Cluster Mode',
-                subtitle: '本專案採用的對接模式',
-                description: '連結既有的、由外部管理 (Ansible/Cephadm) 的 Ceph 集群',
-                gradient: 'gradient-slate',
-                icon: 'external-link',
-                content: (
-                    <div className="flex flex-col gap-6">
-                        <div className="p-6 glass rounded-3xl border-blue-500/20">
-                            <h5 className="text-blue-300 font-bold mb-4">為什麼選擇 External Mode?</h5>
-                            <ul className="grid grid-cols-2 gap-4 text-xs">
-                                <li className="flex gap-2"><Icon name="shield-check" size={14} className="text-blue-400"/> 資源隔離：儲存效能不影響 K8s Node</li>
-                                <li className="flex gap-2"><Icon name="shield-check" size={14} className="text-blue-400"/> 獨立維護：K8s 故障不影響儲存層</li>
-                                <li className="flex gap-2"><Icon name="shield-check" size={14} className="text-blue-400"/> 多叢集共享：同一個 Ceph 給多個 K8s</li>
-                                <li className="flex gap-2"><Icon name="shield-check" size={14} className="text-blue-400"/> 延用舊有資產：連接已建立的儲存叢集</li>
+                    <div className="flex flex-col items-center justify-center p-12 glass rounded-[50px] border border-white/5 shadow-inner relative overflow-hidden">
+                        <Icon name="refresh-cw" size={80} className="text-cyan-400 mb-6 animate-spin-slow" />
+                        <h5 className="text-xl font-black mb-2 uppercase tracking-widest text-center">Continuous<br/>Reconciliation</h5>
+                        <p className="text-[10px] text-white/40 text-center">Desired State == Actual State</p>
+                    </div>
+                </div>
+            )},
+            { id: '6-discovery', title: 'Rook Discover Daemon', subtitle: 'Finding Your Disks', description: 'Rook 如何知道 K8s 節點上有哪些硬碟可以使用？', gradient: 'gradient-blue', icon: 'search', content: (
+                <div className="flex flex-col md:flex-row gap-8 py-6 items-center h-full">
+                    <div className="flex-1 p-8 glass rounded-[40px] border-cyan-500/20 relative shadow-2xl h-full">
+                        <div className="absolute top-0 right-0 p-6 text-cyan-500 opacity-20"><Icon name="eye" size={48}/></div>
+                        <h5 className="font-black text-xl text-cyan-400 mb-6 uppercase tracking-tighter">The Discover DaemonSet</h5>
+                        <p className="text-xs text-white/70 leading-relaxed font-light mb-6">
+                            Rook 會在每一個 K8s 節點上部署一個 <code className="text-cyan-300 font-bold">rook-discover</code> 的 Pod。它會掃描該節點上的所有區塊裝置 (Block Devices)，並將結果寫入 ConfigMap 中。
+                        </p>
+                        <div className="p-4 bg-black/40 rounded-xl border border-white/5">
+                            <span className="text-[10px] text-cyan-400 font-bold block mb-1">What it looks for:</span>
+                            <ul className="list-disc pl-4 text-[10px] text-white/60 space-y-1">
+                                <li>空的磁碟 (未格式化, 未分區)</li>
+                                <li>沒有檔案系統 (No filesystem)</li>
+                                <li>不是 K8s 根目錄所使用的磁碟</li>
                             </ul>
                         </div>
-                        <div className="p-4 glass rounded-2xl bg-blue-500/5 text-center font-mono text-xs text-blue-400 italic border border-blue-500/10">
-                            Rook 在此模式下「不跑」OSD，僅充當「CSI 配置與授權中心」
+                    </div>
+                </div>
+            )},
+            { id: '7-osd-provisioning', title: 'OSD Provisioning', subtitle: 'Turning Disks into Storage', description: '發現硬碟後，Rook 如何將它們轉化為 Ceph OSD？', gradient: 'gradient-slate', icon: 'hard-drive', content: (
+                <div className="flex flex-col items-center py-6">
+                    <div className="w-full max-w-4xl space-y-4">
+                        <div className="p-6 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-6">
+                            <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 font-black">1</div>
+                            <div className="flex-1"><h6 className="font-bold text-blue-300">Preparation Job</h6><p className="text-[11px] text-white/50 leading-relaxed font-light">Operator 發起一個一次性 Job (<code className="text-white">rook-ceph-osd-prepare</code>)，在目標節點上執行。它會利用 LVM 初始化硬碟，創建 OSD 所需的 metadata。</p></div>
+                        </div>
+                        <Icon name="arrow-down" size={24} className="text-white/20 mx-auto" />
+                        <div className="p-6 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-6">
+                            <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center text-cyan-400 font-black">2</div>
+                            <div className="flex-1"><h6 className="font-bold text-cyan-300">OSD Deployment</h6><p className="text-[11px] text-white/50 leading-relaxed font-light">一旦硬碟初始化完成，Operator 會動態建立一個對應的 Deployment (<code className="text-white">rook-ceph-osd-0</code>)。</p></div>
+                        </div>
+                        <Icon name="arrow-down" size={24} className="text-white/20 mx-auto" />
+                        <div className="p-6 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-6">
+                            <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 font-black">3</div>
+                            <div className="flex-1"><h6 className="font-bold text-emerald-300">Bluestore Engine</h6><p className="text-[11px] text-white/50 leading-relaxed font-light">OSD Pod 啟動，接管裸硬碟。現在資料會透過 Ceph 的 Bluestore 引擎直接寫入硬碟，繞過作業系統的檔案系統，達到極致效能。</p></div>
                         </div>
                     </div>
-                )
-            },
-            {
-                id: 'internal-vs-external',
-                title: 'Internal vs External',
-                subtitle: '兩者模式對比',
-                description: '根據場景選擇合適的架構',
-                gradient: 'gradient-slate',
-                icon: 'repeat',
-                content: (
-                    <table className="w-full text-xs border-collapse">
-                        <thead>
-                            <tr className="border-b border-white/10">
-                                <th className="py-3 text-left font-bold text-white/40 uppercase">特性</th>
-                                <th className="py-3 text-left font-bold text-blue-400">Internal</th>
-                                <th className="py-3 text-left font-bold text-emerald-400">External</th>
-                            </tr>
-                        </thead>
-                        <tbody className="text-white/70">
-                            <tr className="border-b border-white/5">
-                                <td className="py-4 font-bold">OSD 運行位置</td>
-                                <td className="py-4">K8s Node (Pod)</td>
-                                <td className="py-4">外部實體機 / VM</td>
-                            </tr>
-                            <tr className="border-b border-white/5">
-                                <td className="py-4 font-bold">部署複雜度</td>
-                                <td className="py-4">低 (One-click)</td>
-                                <td className="py-4">中 (需匯入資訊)</td>
-                            </tr>
-                            <tr className="border-b border-white/5">
-                                <td className="py-4 font-bold">管理責任</td>
-                                <td className="py-4">由 Rook 全權負責</td>
-                                <td className="py-4">外部工具 + Rook</td>
-                            </tr>
-                            <tr>
-                                <td className="py-4 font-bold">典型場景</td>
-                                <td className="py-4">小型開發</td>
-                                <td className="py-4">生產環境</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                )
-            },
-            {
-                id: 'crd-cephcluster',
-                title: 'CRD: CephCluster',
-                subtitle: '集群的根定義',
-                description: '定義與外部叢集的對接關係',
-                gradient: 'gradient-purple',
-                icon: 'file-code',
-                content: (
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                            <p className="text-sm text-white/70">在 External 模式下，最重要的欄位是 <code>external: enable: true</code>。</p>
-                            <ul className="text-xs space-y-2 text-white/50 italic">
-                                <li>- 指定 namespace (rook-ceph)</li>
-                                <li>- 指定 ceph version</li>
-                                <li>- 配置監控整合</li>
-                            </ul>
+                </div>
+            )},
+            { id: '8-mon-quorum', title: 'MON Quorum', subtitle: 'The Source of Truth', description: 'Ceph 依賴 MON (Monitor) 來維護叢集地圖 (Cluster Map)。Rook 如何管理它們？', gradient: 'gradient-purple', icon: 'share-2', content: (
+                <div className="grid grid-cols-2 gap-8 py-4 items-center">
+                    <div className="space-y-6">
+                        <div className="p-6 glass rounded-3xl border-l-4 border-purple-500 bg-purple-500/5 shadow-xl">
+                            <h6 className="font-bold text-sm text-purple-400 mb-2 uppercase">Quorum (多數決)</h6>
+                            <p className="text-xs text-white/70 leading-relaxed font-light">
+                                Ceph MON 使用 Paxos 演算法。必須有「多數」的 MON 存活，叢集才能讀寫。<br/>
+                                (例如：3 個 MON 需要 2 個存活；5 個需要 3 個存活)。
+                            </p>
                         </div>
-                        <div className="p-4 glass rounded-xl font-mono text-[9px] text-purple-300 leading-relaxed overflow-hidden">
-                            apiVersion: ceph.rook.io/v1<br/>
-                            kind: CephCluster<br/>
-                            metadata:<br/>
-                            &nbsp;&nbsp;name: rook-ceph-external<br/>
-                            spec:<br/>
-                            &nbsp;&nbsp;external:<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;enable: true<br/>
-                            &nbsp;&nbsp;dataDirHostPath: /var/lib/rook
+                        <div className="p-6 glass rounded-3xl border-l-4 border-purple-500 bg-purple-500/5 shadow-xl">
+                            <h6 className="font-bold text-sm text-purple-400 mb-2 uppercase">Rook's MON Management</h6>
+                            <p className="text-xs text-white/70 leading-relaxed font-light">
+                                Rook Operator 會自動將 3 個 MON Pod 分散部署到<strong>不同的實體 Node 上</strong> (Anti-Affinity)。<br/>
+                                若某個 MON 掛了，Operator 會自動清理其狀態，並在健康的節點上拉起一個新的 MON 來恢復 Quorum。
+                            </p>
                         </div>
                     </div>
-                )
-            },
-            {
-                id: 'crd-pool-sc',
-                title: 'Pool & StorageClass',
-                subtitle: '資源交付機制',
-                description: '如何讓開發者看到儲存資源？',
-                gradient: 'gradient-emerald',
-                icon: 'share-2',
-                content: (
-                    <div className="grid grid-cols-2 gap-8">
-                        <div className="space-y-4">
-                            <h5 className="font-bold text-sm">CephBlockPool</h5>
-                            <p className="text-xs text-white/60">在 External 模式下，這只是個邏輯參照，確保 Rook 知道要對接哪個現成的 Pool。</p>
-                            <div className="h-px bg-white/10 my-4"></div>
-                            <h5 className="font-bold text-sm">StorageClass</h5>
-                            <p className="text-xs text-white/60">定義 Provisioner 為 <code>rook-ceph.rbd.csi.ceph.com</code>。</p>
+                    <div className="flex justify-center relative h-64">
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-16 rounded-full bg-purple-500/30 flex items-center justify-center border border-purple-400 font-bold">MON-A</div>
+                        <div className="absolute bottom-0 left-4 w-16 h-16 rounded-full bg-purple-500/30 flex items-center justify-center border border-purple-400 font-bold">MON-B</div>
+                        <div className="absolute bottom-0 right-4 w-16 h-16 rounded-full bg-purple-500/30 flex items-center justify-center border border-purple-400 font-bold">MON-C</div>
+                        <Icon name="refresh-cw" size={40} className="text-purple-300/50 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin-slow" />
+                    </div>
+                </div>
+            )},
+            { id: '9-mgr-dashboard', title: 'Ceph Manager & Dashboard', subtitle: 'Visibility into Ceph', description: 'MGR 提供叢集指標收集與原生的 Web Dashboard 介面。', gradient: 'gradient-slate', icon: 'pie-chart', content: (
+                <div className="flex flex-col md:flex-row gap-8 py-6 items-center">
+                    <div className="flex-1 space-y-6">
+                        <div className="p-6 glass rounded-3xl border-white/5 shadow-xl">
+                            <h5 className="font-bold text-cyan-400 mb-2">The MGR Daemon</h5>
+                            <p className="text-xs text-white/60 font-light leading-relaxed">負責追蹤執行期的叢集指標 (PG states, OSD usage)。Rook 通常會部署 1 Active + 1 Standby 的 MGR 確保高可用。</p>
                         </div>
-                        <div className="p-4 glass rounded-xl space-y-4">
-                            <div className="flex gap-3 items-center">
-                                <Icon name="layers" className="text-blue-400" size={16}/><span className="text-xs font-mono">SC: ceph-rbd</span>
-                            </div>
-                            <div className="flex gap-3 items-center"><Icon name="arrow-down" className="text-white/20" size={16}/></div>
-                            <div className="flex gap-3 items-center">
-                                <Icon name="box" className="text-purple-400" size={16}/><span className="text-xs font-mono">PVC: vm-disk-01</span>
-                            </div>
-                            <div className="flex gap-3 items-center"><Icon name="arrow-down" className="text-white/20" size={16}/></div>
-                            <div className="flex gap-3 items-center">
-                                <Icon name="hard-drive" className="text-emerald-400" size={16}/><span className="text-xs font-mono">External RBD Image</span>
-                            </div>
+                        <div className="p-6 glass rounded-3xl border-white/5 shadow-xl">
+                            <h5 className="font-bold text-cyan-400 mb-2">Native Dashboard Integration</h5>
+                            <p className="text-xs text-white/60 font-light leading-relaxed">Rook 預設會啟動 Ceph Dashboard，你可以透過建立 Kubernetes Service / Ingress 來直接存取這個強大的視覺化介面，查看 IOPS 與容量。</p>
                         </div>
                     </div>
-                )
-            },
-            {
-                id: 'snapshot-crd',
-                title: 'VolumeSnapshot',
-                subtitle: '資料保護能力',
-                description: '透過 VolumeSnapshotClass 實現快照',
-                gradient: 'gradient-amber',
-                icon: 'camera',
-                content: (
-                    <div className="grid grid-cols-2 gap-8 items-center">
-                        <div className="space-y-4">
-                            <p className="text-sm">支援 K8s 標準 Snapshot API，允許開發者：</p>
-                            <ul className="text-xs space-y-2 text-white/60">
-                                <li className="flex gap-2"><Icon name="check" size={14} className="text-amber-400"/> 為運行中的 VM 建立磁碟快照</li>
-                                <li className="flex gap-2"><Icon name="check" size={14} className="text-amber-400"/> 從快照還原至新 Volume</li>
-                                <li className="flex gap-2"><Icon name="check" size={14} className="text-amber-400"/> 跨 Namespace 克隆 Volume</li>
-                            </ul>
-                        </div>
-                        <div className="p-6 glass rounded-3xl border-amber-500/30 text-center">
-                            <Icon name="history" size={48} className="text-amber-400 mb-4"/>
-                            <h5 className="font-bold text-sm">Point-in-time Recovery</h5>
-                        </div>
+                </div>
+            )},
+
+            // Topic: CRDs (10 - 15)
+            { id: '10-crd-intro', title: 'Custom Resource Definitions (CRDs)', subtitle: 'Infrastructure as Code', description: 'Rook 的精華在於 CRD。你不再下達 Linux 指令，而是撰寫 YAML。', gradient: 'gradient-blue', icon: 'file-json', content: (
+                <div className="grid grid-cols-2 gap-6 py-6 h-full">
+                    <div className="p-6 bg-black/40 rounded-3xl border border-white/10 hover:border-cyan-500/50 transition-colors">
+                        <h6 className="font-bold text-cyan-400 mb-2 text-sm">CephCluster</h6>
+                        <p className="text-[10px] text-white/50 leading-relaxed">定義叢集範圍。指定要使用哪些節點、哪些硬碟 (useAllDevices)，以及 MON 的數量。</p>
                     </div>
-                )
-            },
-            {
-                id: 'endpoints-config',
-                title: 'The MON Endpoints',
-                subtitle: '連線的生命線',
-                description: 'ConfigMap: rook-ceph-mon-endpoints',
-                gradient: 'gradient-slate',
-                icon: 'network',
-                content: (
-                    <div className="space-y-6 text-sm">
-                        <p className="text-white/70">這是 K8s 獲取外部 Ceph MON 地址的首要途徑。</p>
-                        <div className="p-4 bg-black/40 rounded-xl border border-white/5 font-mono text-[10px]">
-                            data:<br/>
-                            &nbsp;&nbsp;data: 192.168.1.10:6789,192.168.1.11:6789,192.168.1.12:6789
-                        </div>
-                        <div className="flex gap-4">
-                            <div className="flex-1 p-3 glass rounded-lg border-blue-500/20 text-[10px]">包含所有活動中的 MON 地址</div>
-                            <div className="flex-1 p-3 glass rounded-lg border-purple-500/20 text-[10px]">格式錯誤將導致掛載失敗</div>
-                        </div>
+                    <div className="p-6 bg-black/40 rounded-3xl border border-white/10 hover:border-blue-500/50 transition-colors">
+                        <h6 className="font-bold text-blue-400 mb-2 text-sm">CephBlockPool</h6>
+                        <p className="text-[10px] text-white/50 leading-relaxed">定義 RBD 區塊儲存池。決定資料的副本數 (Replication) 或糾刪碼 (Erasure Coding) 策略。</p>
                     </div>
-                )
-            },
-            {
-                id: 'authentication-secret',
-                title: 'Authentication',
-                subtitle: '連線授權 (Secrets)',
-                description: '如何安全地存取外部叢集',
-                gradient: 'gradient-slate',
-                icon: 'key',
-                content: (
-                    <div className="grid grid-cols-2 gap-8">
-                        <div className="p-5 glass rounded-2xl space-y-3">
-                            <h5 className="font-bold text-sm text-yellow-400">rook-ceph-mon</h5>
-                            <p className="text-[10px] text-white/50">存放 admin keyring。Rook Operator 使用。</p>
-                        </div>
-                        <div className="p-5 glass rounded-2xl space-y-3">
-                            <h5 className="font-bold text-sm text-blue-400">csi-rbd-secret</h5>
-                            <p className="text-[10px] text-white/50">存放 user keyring。CSI 驅動使用。</p>
+                    <div className="p-6 bg-black/40 rounded-3xl border border-white/10 hover:border-emerald-500/50 transition-colors">
+                        <h6 className="font-bold text-emerald-400 mb-2 text-sm">CephFileSystem</h6>
+                        <p className="text-[10px] text-white/50 leading-relaxed">建立共享檔案系統 (CephFS)。自動拉起 MDS (Metadata Server) 負責管理目錄樹。</p>
+                    </div>
+                    <div className="p-6 bg-black/40 rounded-3xl border border-white/10 hover:border-purple-500/50 transition-colors">
+                        <h6 className="font-bold text-purple-400 mb-2 text-sm">CephObjectStore</h6>
+                        <p className="text-[10px] text-white/50 leading-relaxed">建立相容於 Amazon S3 的物件儲存。自動部署 RGW (RADOS Gateway)。</p>
+                    </div>
+                </div>
+            )},
+            { id: '11-cephcluster-yaml', title: 'CRD: CephCluster', subtitle: 'The Foundation', description: '這是一切的起點，定義如何吸收硬體資源。', gradient: 'gradient-slate', icon: 'server', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    <div className="code-block w-full">
+{`apiVersion: ceph.rook.io/v1
+kind: CephCluster
+metadata:
+  name: rook-ceph
+  namespace: rook-ceph
+spec:
+  cephVersion:
+    image: quay.io/ceph/ceph:v18.2.1
+  mon:
+    count: 3
+    allowMultiplePerNode: false
+  storage:
+    useAllNodes: true
+    useAllDevices: true # 自動吸納所有空硬碟`}
+                    </div>
+                    <div className="space-y-6">
+                        <div className="p-4 glass rounded-2xl border-l-2 border-cyan-500 bg-cyan-500/5">
+                            <span className="text-cyan-400 font-bold block mb-1 text-sm">useAllDevices: true</span>
+                            <p className="text-[11px] text-white/60 font-light leading-relaxed text-justify">Rook 會自動將集群內所有節點上「未被格式化的裸磁碟」轉化為 OSD。這極大簡化了初期擴容，只要把新硬碟插上伺服器，容量就會自動增長。</p>
                         </div>
                     </div>
-                )
-            },
-            {
-                id: 'data-path-rbd',
-                title: 'Data Path: RBD',
-                subtitle: '資料流向分析',
-                description: '從 KubeVirt VM 到 Ceph OSD 的旅程',
-                gradient: 'gradient-blue',
-                icon: 'activity',
-                content: (
-                    <div className="relative">
-                        <div className="flex justify-between items-center px-4 mb-8">
-                            <div className="text-center"><Icon name="monitor" className="mb-2 mx-auto"/><span className="text-[10px]">VM</span></div>
-                            <div className="text-center"><Icon name="box" className="mb-2 mx-auto"/><span className="text-[10px]">PVC</span></div>
-                            <div className="text-center"><Icon name="zap" className="mb-2 mx-auto"/><span className="text-[10px]">CSI</span></div>
-                            <div className="text-center"><Icon name="server" className="mb-2 mx-auto"/><span className="text-[10px]">Kernel</span></div>
-                            <div className="text-center"><Icon name="database" className="mb-2 mx-auto"/><span className="text-[10px]">OSD</span></div>
-                        </div>
-                        <div className="p-4 glass rounded-xl text-[10px] text-white/60 text-center italic">
-                            資料透過 Host Kernel RBD 模組直接發往外部 Ceph 網路
-                        </div>
+                </div>
+            )},
+            { id: '12-cephblockpool-yaml', title: 'CRD: CephBlockPool', subtitle: 'Block Storage Provisioning', description: '建立供 RWO (ReadWriteOnce) 使用的區塊儲存池。', gradient: 'gradient-slate', icon: 'hard-drive', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    <div className="code-block w-full">
+{`apiVersion: ceph.rook.io/v1
+kind: CephBlockPool
+metadata:
+  name: replicapool
+  namespace: rook-ceph
+spec:
+  failureDomain: host
+  replicated:
+    size: 3
+    requireSafeReplicaSize: true`}
                     </div>
-                )
-            },
-            {
-                id: 'lab-topology',
-                title: 'Lab Topology',
-                subtitle: 'K8s Cluster Setup',
-                description: '本專案的實體與邏輯拓撲',
-                gradient: 'gradient-slate',
-                icon: 'map',
-                content: (
-                    <div className="grid grid-cols-2 gap-8 items-center">
-                        <div className="p-6 glass rounded-3xl space-y-6">
-                            <div className="flex justify-between items-center"><span className="text-xs font-bold">Azure Cluster</span><Icon name="cloud" className="text-blue-400" size={16}/></div>
-                            <div className="flex gap-2">
-                                <div className="flex-1 h-12 glass rounded bg-blue-500/20 flex items-center justify-center text-[8px]">Master</div>
-                                <div className="flex-1 h-12 glass rounded bg-blue-500/20 flex items-center justify-center text-[8px]">Worker 1</div>
-                                <div className="flex-1 h-12 glass rounded bg-blue-500/20 flex items-center justify-center text-[8px]">Worker 2</div>
-                            </div>
-                            <div className="text-center"><Icon name="arrow-down" className="text-white/20"/></div>
-                            <div className="p-3 glass rounded-xl border-emerald-500/30 text-center"><span className="text-[10px] font-bold text-emerald-300">External Ceph Cluster</span></div>
+                    <div className="space-y-6">
+                        <div className="p-4 glass rounded-2xl border-l-2 border-blue-500 bg-blue-500/5">
+                            <span className="text-blue-400 font-bold block mb-1 text-sm">failureDomain: host</span>
+                            <p className="text-[11px] text-white/60 font-light leading-relaxed text-justify">這告訴 Ceph：這 3 份副本，必須存放在「不同的實體伺服器 (host)」上。這樣即使整台機器斷電，資料依然安全。</p>
                         </div>
-                        <ul className="text-xs space-y-4 text-white/70">
-                            <li className="flex gap-3"><Icon name="network" className="text-blue-400" size={16}/> 所有節點透過 VNet 直接對接 Ceph MON</li>
-                            <li className="flex gap-3"><Icon name="check-circle" className="text-blue-400" size={16}/> Rook Operator 運行於 Master 節點</li>
-                        </ul>
-                    </div>
-                )
-            },
-            {
-                id: 'phase-3-steps',
-                title: 'Deployment Steps',
-                subtitle: '實作流程回顧',
-                description: 'Phase 3 的關鍵操作步驟',
-                gradient: 'gradient-blue',
-                icon: 'play',
-                content: (
-                    <div className="space-y-3">
-                        <div className="p-3 glass rounded-xl text-xs">1. 部署 <code>rook-ceph-operator</code></div>
-                        <div className="p-3 glass rounded-xl text-xs">2. 建立 <code>ceph-external-cluster</code> 並匯入憑證</div>
-                        <div className="p-3 glass rounded-xl text-xs">3. 套用 <code>CephCluster</code> CR 並觀察 <code>Connected</code></div>
-                        <div className="p-3 glass rounded-xl text-xs">4. 建立 <code>StorageClass</code> 驗證 Provisioning</div>
-                    </div>
-                )
-            },
-            {
-                id: 'kubevirt-integration',
-                title: 'KubeVirt Integration',
-                subtitle: '儲存與虛擬機的結合',
-                description: '透過 DataVolume 簡化 VM 磁碟管理',
-                gradient: 'gradient-purple',
-                icon: 'vibrate',
-                content: (
-                    <div className="grid grid-cols-2 gap-8">
-                        <div className="space-y-4 text-xs">
-                            <p>KubeVirt 的 <code>DataVolume</code> 可以直接引用 Rook 的 <code>StorageClass</code>。</p>
-                            <ul className="space-y-2 text-white/50">
-                                <li>- 自動建立 PVC</li>
-                                <li>- 支援鏡像匯入</li>
-                            </ul>
-                        </div>
-                        <div className="p-4 glass rounded-xl font-mono text-[9px] text-purple-300">
-                            spec:<br/>
-                            &nbsp;&nbsp;storage:<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;storageClassName: rook-ceph-rbd<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;resources:<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;requests:<br/>
-                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;storage: 20Gi
+                        <div className="p-4 glass rounded-2xl border-l-2 border-blue-500 bg-blue-500/5">
+                            <span className="text-blue-400 font-bold block mb-1 text-sm">replicated size: 3</span>
+                            <p className="text-[11px] text-white/60 font-light leading-relaxed text-justify">標準的 3 副本策略。每一次寫入都會同步複製三份，確保資料極高可靠性。</p>
                         </div>
                     </div>
-                )
-            },
-            {
-                id: 'op-scenario-mon-migration',
-                title: 'Op: MON Migration',
-                subtitle: '進階維運：MON 遷移',
-                description: '當外部 Ceph 節點異動時的處理流程',
-                gradient: 'gradient-slate',
-                icon: 'shuffle',
-                content: (
-                    <div className="p-6 glass rounded-3xl space-y-4 border-blue-500/20 text-xs">
-                        <h5 className="font-bold flex items-center gap-2"><Icon name="info" size={16} className="text-blue-400"/> Add-before-Remove 策略</h5>
-                        <p>1. 新增 MON -> 2. 更新 ConfigMap -> 3. 移除舊 MON -> 4. 再次更新 ConfigMap</p>
+                </div>
+            )},
+            { id: '13-cephfilesystem-yaml', title: 'CRD: CephFileSystem', subtitle: 'Shared File Storage', description: '建立供 RWX (ReadWriteMany) 使用的共享資料夾。', gradient: 'gradient-slate', icon: 'folder', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    <div className="code-block w-full">
+{`apiVersion: ceph.rook.io/v1
+kind: CephFileSystem
+metadata:
+  name: myfs
+  namespace: rook-ceph
+spec:
+  metadataPool:
+    replicated:
+      size: 3
+  dataPools:
+    - replicated:
+        size: 3
+  metadataServer:
+    activeCount: 1
+    activeStandby: true`}
                     </div>
-                )
-            },
-            {
-                id: 'observability',
-                title: 'Observability',
-                subtitle: '監控與視覺化',
-                description: '如何掌握儲存的健康狀況？',
-                gradient: 'gradient-emerald',
-                icon: 'bar-chart-3',
-                content: (
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="p-5 glass rounded-2xl text-center space-y-3">
-                            <Icon name="activity" className="text-blue-400" size={32} />
-                            <h5 className="font-bold text-xs">Ceph Exporter</h5>
-                        </div>
-                        <div className="p-5 glass rounded-2xl text-center space-y-3">
-                            <Icon name="monitor" className="text-emerald-400" size={32} />
-                            <h5 className="font-bold text-xs">Grafana</h5>
+                    <div className="space-y-6">
+                        <div className="p-4 glass rounded-2xl border-l-2 border-emerald-500 bg-emerald-500/5">
+                            <span className="text-emerald-400 font-bold block mb-1 text-sm">The MDS Daemon</span>
+                            <p className="text-[11px] text-white/60 font-light leading-relaxed text-justify">不同於 Block Storage，檔案系統需要管理資料夾樹狀結構、權限 (Metadata)。Rook 會根據此 YAML 自動部署 <code className="text-emerald-300">MDS (Metadata Server)</code> Pod 來處理這件事。</p>
                         </div>
                     </div>
-                )
-            },
-            {
-                id: 'troubleshooting-tolerations',
-                title: 'Troubleshooting #1',
-                subtitle: '常見問題：掛載失敗',
-                description: 'driver name rook-ceph.rbd.csi.ceph.com not found',
-                gradient: 'gradient-crimson',
-                icon: 'alert-triangle',
-                content: (
-                    <div className="space-y-4 text-xs">
-                        <p>原因：CSI DaemonSet 沒跑在具有 Taint 的節點。</p>
-                        <div className="p-4 glass rounded-xl border-emerald-500/30">
-                            <h5 className="font-bold text-emerald-400 mb-2">解決方案：Patch Tolerations</h5>
-                            <p>手動 Patch 以確保全叢集覆蓋。</p>
+                </div>
+            )},
+            { id: '14-cephobjectstore-yaml', title: 'CRD: CephObjectStore', subtitle: 'S3 Compatible API', description: '自建相容 S3 的物件儲存伺服器。', gradient: 'gradient-slate', icon: 'cloud', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    <div className="code-block w-full">
+{`apiVersion: ceph.rook.io/v1
+kind: CephObjectStore
+metadata:
+  name: my-store
+  namespace: rook-ceph
+spec:
+  metadataPool:
+    replicated:
+      size: 3
+  dataPool:
+    replicated:
+      size: 3
+  gateway:
+    port: 80
+    instances: 2`}
+                    </div>
+                    <div className="space-y-6">
+                        <div className="p-4 glass rounded-2xl border-l-2 border-purple-500 bg-purple-500/5">
+                            <span className="text-purple-400 font-bold block mb-1 text-sm">RADOS Gateway (RGW)</span>
+                            <p className="text-[11px] text-white/60 font-light leading-relaxed text-justify">Rook 會啟動 2 個 RGW Pods，它們將底層的 RADOS 協定轉換為標準的 RESTful HTTP (S3) API。你的應用程式只需使用 AWS S3 SDK 即可存取。</p>
                         </div>
                     </div>
-                )
-            },
-            {
-                id: 'troubleshooting-connection',
-                title: 'Troubleshooting #2',
-                subtitle: '常見問題：連線超時',
-                description: 'RBD Map 緩慢或 Timeout',
-                gradient: 'gradient-crimson',
-                icon: 'wifi-off',
-                content: (
-                    <div className="grid grid-cols-2 gap-6 text-xs">
-                        <div className="p-5 glass rounded-2xl space-y-4"><h5 className="font-bold text-red-400">網路 MTU 檢查</h5></div>
-                        <div className="p-5 glass rounded-2xl space-y-4"><h5 className="font-bold text-red-400">NSG / Firewall</h5></div>
+                </div>
+            )},
+            { id: '15-crd-summary', title: 'CRD Recap', subtitle: 'The Swiss Army Knife of Storage', description: '透過 Rook CRDs，單一叢集即可提供所有儲存類型。', gradient: 'gradient-blue', icon: 'layers', content: (
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <div className="w-full max-w-4xl p-10 glass rounded-[60px] border-cyan-500/20 shadow-2xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 blur-3xl"></div>
+                        <h4 className="text-3xl font-black mb-8 text-cyan-400">One Cluster, Three Protocols</h4>
+                        <div className="grid grid-cols-3 gap-6">
+                            <div className="p-6 bg-black/40 rounded-3xl border border-white/5"><Icon name="hard-drive" size={40} className="text-blue-400 mx-auto mb-4"/><h6 className="font-bold">Block (RBD)</h6><p className="text-[10px] text-white/50 mt-2">Databases, VMs</p></div>
+                            <div className="p-6 bg-black/40 rounded-3xl border border-white/5"><Icon name="folder" size={40} className="text-emerald-400 mx-auto mb-4"/><h6 className="font-bold">File (CephFS)</h6><p className="text-[10px] text-white/50 mt-2">Shared Web Roots</p></div>
+                            <div className="p-6 bg-black/40 rounded-3xl border border-white/5"><Icon name="cloud" size={40} className="text-purple-400 mx-auto mb-4"/><h6 className="font-bold">Object (S3)</h6><p className="text-[10px] text-white/50 mt-2">Images, Backups</p></div>
+                        </div>
                     </div>
-                )
-            },
-            {
-                id: 'best-practices',
-                title: 'Best Practices',
-                subtitle: '最佳實踐建議',
-                description: '讓您的儲存環境更穩定、更安全',
-                gradient: 'gradient-emerald',
-                icon: 'award',
-                content: (
-                    <div className="grid grid-cols-2 gap-4 text-[10px]">
-                        <div className="p-4 glass rounded-xl flex gap-3"><Icon name="check-circle" className="text-green-400" size={16}/><div><h6 className="font-bold">版本對齊</h6></div></div>
-                        <div className="p-4 glass rounded-xl flex gap-3"><Icon name="check-circle" className="text-green-400" size={16}/><div><h6 className="font-bold">資源限制</h6></div></div>
+                </div>
+            )},
+
+            // Topic: CSI Integration (16 - 20)
+            { id: '16-csi-intro', title: 'CSI Integration', subtitle: 'Container Storage Interface', description: 'Rook 準備好了儲存池，那 Pod 該如何掛載？透過 CSI。', gradient: 'gradient-cyan', icon: 'plug', content: (
+                <div className="grid grid-cols-2 gap-10 py-6 items-center">
+                    <div className="space-y-6">
+                        <p className="text-sm text-white/70 leading-relaxed font-light">
+                            CSI (Container Storage Interface) 是 Kubernetes 標準的儲存掛載介面。<br/><br/>
+                            Rook 會自動為你部署 <strong>Ceph CSI 插件</strong>。它負責攔截 K8s 的 PVC 請求，向 Ceph 發出切割容量的指令，最後將 Block 或 File System 掛載到 Node 上供 Pod 使用。
+                        </p>
                     </div>
-                )
-            },
-            {
-                id: 'summary',
-                title: 'Summary',
-                subtitle: '結語與展望',
-                description: 'Rook-Ceph 是連接 K8s 與高效儲存的橋樑',
-                gradient: 'gradient-blue',
-                icon: 'flag',
-                content: (
-                    <div className="flex flex-col items-center justify-center text-center space-y-6">
-                        <p className="text-sm italic">"獲得與 K8s 原生工作流一致的維運體驗。"</p>
+                    <div className="p-8 glass rounded-[40px] border-cyan-500/20 relative shadow-xl text-center">
+                        <Icon name="link" size={60} className="text-cyan-400 mx-auto mb-6" />
+                        <h6 className="font-black text-lg text-cyan-300 mb-2 uppercase tracking-widest">The Bridge</h6>
+                        <p className="text-[11px] text-white/50 leading-relaxed font-light">CSI 是 Kubernetes (運算) 與 Ceph (儲存) 之間的官方橋樑，實現了 Dynamic Provisioning。</p>
                     </div>
-                )
-            },
-            {
-                id: 'qa',
-                title: 'Q & A',
-                subtitle: '交流與討論',
-                description: '歡迎提問！任何關於 Rook-Ceph 的疑難雜症',
-                gradient: 'gradient-slate',
-                icon: 'message-circle',
-                content: (
-                    <div className="flex flex-col items-center justify-center h-full space-y-8">
-                        <div className="w-24 h-24 glass rounded-full flex items-center justify-center bg-white/5 animate-pulse"><Icon name="help-circle" size={48} className="text-blue-400" /></div>
-                        <p className="text-2xl font-bold">Thank You!</p>
+                </div>
+            )},
+            { id: '17-csi-components', title: 'CSI Architecture', subtitle: 'Provisioners & NodePlugins', description: 'CSI 在背景是如何運作的？', gradient: 'gradient-slate', icon: 'layers', content: (
+                <div className="flex flex-col md:flex-row gap-8 py-6 h-full">
+                    <div className="flex-1 p-8 glass rounded-[40px] border-blue-500/20 relative overflow-hidden h-full">
+                        <h5 className="font-black text-xl text-blue-400 mb-4 tracking-tighter uppercase">1. CSI Provisioner</h5>
+                        <p className="text-xs text-white/70 leading-relaxed font-light mb-4">
+                            以 Deployment 形式運行 (通常 2 副本)。<br/><br/>負責監聽 API Server 的 <code className="text-white font-bold">PersistentVolumeClaim (PVC)</code>。當有新請求時，它會透過 gRPC 呼叫 Ceph 創建真實的 Image 或 Subvolume。
+                        </p>
+                        <div className="px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-lg text-[9px] font-mono text-blue-300 w-fit">Control Plane</div>
                     </div>
-                )
-            }
+                    <div className="flex-1 p-8 glass rounded-[40px] border-emerald-500/20 relative overflow-hidden h-full">
+                        <h5 className="font-black text-xl text-emerald-400 mb-4 tracking-tighter uppercase">2. CSI NodePlugin</h5>
+                        <p className="text-xs text-white/70 leading-relaxed font-light mb-4">
+                            以 DaemonSet 形式運行 (每個 Node 上都有)。<br/><br/>當 Pod 被調度到某個 Node 上時，kubelet 會呼叫該節點的 NodePlugin，由它負責執行 <code className="text-white font-bold">rbd map</code> 或 <code className="text-white font-bold">mount -t ceph</code>，將儲存空間掛載進 Pod 的目錄。
+                        </p>
+                        <div className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[9px] font-mono text-emerald-300 w-fit">Data Plane</div>
+                    </div>
+                </div>
+            )},
+            { id: '18-storageclass-rbd', title: 'StorageClass: RBD', subtitle: 'For Block Storage (RWO)', description: '設定讓 Kubernetes 知道如何向 Rook 索取區塊儲存。', gradient: 'gradient-slate', icon: 'file-code', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    <div className="code-block w-full text-[9px]">
+{`apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+   name: rook-ceph-block
+provisioner: rook-ceph.rbd.csi.ceph.com
+parameters:
+    clusterID: rook-ceph
+    pool: replicapool
+    imageFormat: "2"
+    imageFeatures: layering
+    csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+    csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+reclaimPolicy: Delete
+allowVolumeExpansion: true`}
+                    </div>
+                    <div className="space-y-6">
+                        <div className="p-4 glass rounded-2xl border-l-2 border-blue-500 bg-blue-500/5">
+                            <span className="text-blue-400 font-bold block mb-1 text-sm">provisioner</span>
+                            <p className="text-[11px] text-white/60 font-light leading-relaxed">明確指定交由 Ceph RBD CSI 處理。</p>
+                        </div>
+                        <div className="p-4 glass rounded-2xl border-l-2 border-blue-500 bg-blue-500/5">
+                            <span className="text-blue-400 font-bold block mb-1 text-sm">allowVolumeExpansion</span>
+                            <p className="text-[11px] text-white/60 font-light leading-relaxed">支援動態擴容！如果 Pod 容量滿了，只需修改 PVC YAML 的 size 即可，CSI 會在背景動態放大檔案系統，無需重啟 Pod。</p>
+                        </div>
+                    </div>
+                </div>
+            )},
+            { id: '19-storageclass-cephfs', title: 'StorageClass: CephFS', subtitle: 'For Shared Filesystems (RWX)', description: '設定讓 Kubernetes 知道如何向 Rook 索取共享儲存。', gradient: 'gradient-slate', icon: 'file-code', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    <div className="code-block w-full text-[9px]">
+{`apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: rook-cephfs
+provisioner: rook-ceph.cephfs.csi.ceph.com
+parameters:
+  clusterID: rook-ceph
+  fsName: myfs
+  pool: myfs-data0
+  csi.storage.k8s.io/provisioner-secret-name: rook-csi-cephfs-provisioner
+  csi.storage.k8s.io/node-stage-secret-name: rook-csi-cephfs-node
+reclaimPolicy: Delete`}
+                    </div>
+                    <div className="space-y-6">
+                        <div className="p-4 glass rounded-2xl border-l-2 border-emerald-500 bg-emerald-500/5">
+                            <span className="text-emerald-400 font-bold block mb-1 text-sm">RWX (ReadWriteMany)</span>
+                            <p className="text-[11px] text-white/60 font-light leading-relaxed text-justify">RBD (區塊) 只能被一個 Node 掛載。而 CephFS 允許多個位於不同 Node 的 Pods <strong>同時讀寫同一個 PVC</strong>。非常適合用作 WordPress 共享圖片庫、AI 訓練資料集讀取。</p>
+                        </div>
+                    </div>
+                </div>
+            )},
+            { id: '20-pvc-flow', title: 'The PVC Journey', subtitle: 'End-to-End Orchestration', description: '從開發者提交 YAML，到最終硬碟掛載的自動化旅程。', gradient: 'gradient-blue', icon: 'arrow-right-circle', content: (
+                <div className="flex flex-col items-center py-6">
+                    <div className="w-full max-w-4xl space-y-4">
+                        <div className="p-4 glass border border-white/5 rounded-2xl flex items-center gap-6"><div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 font-black text-[10px]">1</div><div className="flex-1"><h6 className="font-bold text-xs text-white">User creates PVC</h6><p className="text-[10px] text-white/50">請求 10Gi 且 StorageClass 為 rook-ceph-block。</p></div></div>
+                        <div className="p-4 glass border border-white/5 rounded-2xl flex items-center gap-6"><div className="w-8 h-8 bg-cyan-500/20 rounded-full flex items-center justify-center text-cyan-400 font-black text-[10px]">2</div><div className="flex-1"><h6 className="font-bold text-xs text-white">CSI Provisioner Intercepts</h6><p className="text-[10px] text-white/50">向 Ceph 叢集下達指令，建立名為 csi-vol-xxx 的 10Gi RBD Image。</p></div></div>
+                        <div className="p-4 glass border border-white/5 rounded-2xl flex items-center gap-6"><div className="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 font-black text-[10px]">3</div><div className="flex-1"><h6 className="font-bold text-xs text-white">PV Created</h6><p className="text-[10px] text-white/50">K8s 自動生成 PersistentVolume 並與 PVC 綁定 (Bound)。</p></div></div>
+                        <div className="p-4 glass border border-white/5 rounded-2xl flex items-center gap-6"><div className="w-8 h-8 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 font-black text-[10px]">4</div><div className="flex-1"><h6 className="font-bold text-xs text-white">CSI NodePlugin Mounts</h6><p className="text-[10px] text-white/50">當 Pod 調度到節點時，本機的 NodePlugin 執行 rbd map 並格式化 (ext4/xfs)，掛載給 Pod。</p></div></div>
+                    </div>
+                </div>
+            )},
+
+            // Topic: Operations (21 - 25)
+            { id: '21-ops-intro', title: 'Day 2 Operations', subtitle: 'Living with Rook', description: '部署很簡單，但維運才是真正的挑戰。Rook 是如何協助我們進行日常操作的？', gradient: 'gradient-cyan', icon: 'settings', content: (
+                <div className="flex flex-col items-center justify-center text-center py-20">
+                    <Icon name="tool" size={80} className="text-cyan-400 mx-auto opacity-50 mb-8" />
+                    <h4 className="text-4xl font-black mb-4 tracking-tighter">Automating the Hard Parts</h4>
+                    <p className="text-white/50 text-sm font-light uppercase tracking-[0.2em]">Scaling, Upgrading, Healing</p>
+                </div>
+            )},
+            { id: '22-scaling-osd', title: 'Scaling Storage', subtitle: 'Adding Capacity', description: '當儲存空間不足時，如何透過 Rook 無痛擴容？', gradient: 'gradient-slate', icon: 'maximize', content: (
+                <div className="grid grid-cols-2 gap-10 py-6 h-full items-center">
+                    <div className="p-8 glass rounded-[40px] border-cyan-500/20 shadow-xl space-y-6">
+                        <h6 className="font-black text-xl text-cyan-400 tracking-tighter">Scale Up (Scale Vertically)</h6>
+                        <p className="text-xs text-white/70 leading-relaxed font-light">
+                            如果在原有伺服器上插入新的實體硬碟 (例如 /dev/sdc)。<br/><br/>
+                            因為我們在 CephCluster 設定了 <code className="text-cyan-300">useAllDevices: true</code>，Rook Discover 偵測到新硬碟後，Operator 會自動觸發 Prepare Job，並立刻起一個新的 OSD Pod 吸收容量，資料會自動啟動背景重平衡 (Rebalance)。
+                        </p>
+                    </div>
+                    <div className="p-8 glass rounded-[40px] border-blue-500/20 shadow-xl space-y-6">
+                        <h6 className="font-black text-xl text-blue-400 tracking-tighter">Scale Out (Scale Horizontally)</h6>
+                        <p className="text-xs text-white/70 leading-relaxed font-light">
+                            如果在叢集中加入一台全新的 K8s Worker Node (且帶有空硬碟)。<br/><br/>
+                            同樣地，Operator 發現新節點符合資源條件後，會自動在該節點部署新的 OSD Pods，無縫提升叢集總容量與 IOPS。
+                        </p>
+                    </div>
+                </div>
+            )},
+            { id: '23-node-reboots', title: 'Node Reboots & Drains', subtitle: 'Handling Disruptions', description: '當需要對 K8s 節點進行維護或重啟時。', gradient: 'gradient-slate', icon: 'power', content: (
+                <div className="flex flex-col md:flex-row gap-8 py-6 items-center">
+                    <div className="flex-1 space-y-6">
+                        <div className="p-6 glass rounded-3xl border-l-4 border-amber-500 bg-amber-500/5">
+                            <h5 className="font-bold text-amber-400 mb-2">The Danger of Draining</h5>
+                            <p className="text-xs text-white/60 font-light leading-relaxed">
+                                使用 <code className="text-amber-300">kubectl drain</code> 時，會將節點上的 Pod 驅逐。如果該節點上有 OSD Pod，它會被強制終止。若同時驅逐太多節點，可能導致 Ceph 失去 Quorum 或副本數不足導致資料損毀。
+                            </p>
+                        </div>
+                        <div className="p-6 glass rounded-3xl border-l-4 border-emerald-500 bg-emerald-500/5">
+                            <h5 className="font-bold text-emerald-400 mb-2">Pod Disruption Budgets (PDB)</h5>
+                            <p className="text-xs text-white/60 font-light leading-relaxed">
+                                Rook 預設會為 MON 與 OSD 部署 K8s 的 PDB。<br/>
+                                這能防止管理員一次 Drain 太多儲存節點。K8s 拒絕驅逐命令，直到 Ceph 資料同步完畢，確保最嚴格的資料安全性。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )},
+            { id: '24-upgrades', title: 'Automated Upgrades', subtitle: 'Zero Downtime', description: '升級 Ceph 版本曾經是惡夢，現在變成更改一行 YAML。', gradient: 'gradient-purple', icon: 'arrow-up-circle', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start py-4">
+                    <div className="code-block w-full text-[10px]">
+{`apiVersion: ceph.rook.io/v1
+kind: CephCluster
+metadata:
+  name: rook-ceph
+spec:
+  cephVersion:
+    # 更改這個 Image Tag 即可觸發升級
+    image: quay.io/ceph/ceph:v18.2.2`}
+                    </div>
+                    <div className="space-y-6">
+                        <div className="p-6 glass rounded-[30px] border-white/5 shadow-xl">
+                            <h6 className="font-bold text-purple-400 mb-3">The Upgrade Sequence</h6>
+                            <ol className="list-decimal pl-4 text-xs text-white/60 space-y-3 font-light">
+                                <li>Operator 偵測到 Image 版本改變。</li>
+                                <li><strong>逐一</strong> 重啟 MON Pods，確認 Quorum 維持正常。</li>
+                                <li><strong>逐一</strong> 重啟 MGR Pods。</li>
+                                <li><strong>逐一</strong> (或依據 failure domain) 重啟 OSD Pods。確保資料副本始終完整。</li>
+                                <li>全程無痛，上層應用 (Pod) IO 不會中斷。</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            )},
+            { id: '25-snapshots', title: 'Snapshots & Clones', subtitle: 'Advanced Storage Features', description: '結合 K8s CSI Snapshot 功能，實現秒級備份。', gradient: 'gradient-blue', icon: 'camera', content: (
+                <div className="flex flex-col items-center py-6">
+                    <div className="w-full max-w-4xl space-y-6 text-center">
+                        <Icon name="copy" size={64} className="text-blue-400 mx-auto opacity-80" />
+                        <h5 className="text-2xl font-black text-white">VolumeSnapshotClass</h5>
+                        <p className="text-sm text-white/60 leading-relaxed font-light">
+                            Ceph RBD 支援 Copy-on-Write (CoW) 快照。<br/><br/>
+                            透過宣告 <code className="text-blue-300">VolumeSnapshot</code> CRD，Rook 會呼叫 Ceph 瞬間建立磁碟快照，這完全不消耗額外容量 (直到資料被修改)。你也可以隨時從 Snapshot 中 Clone 出一個全新的 PVC 供除錯或資料分析使用。
+                        </p>
+                    </div>
+                </div>
+            )},
+
+            // Topic: Troubleshooting (26 - 30)
+            { id: '26-troubleshoot-intro', title: 'Part 4: Troubleshooting', subtitle: 'When Things Break', description: '即便有 Operator 保護，了解如何排查底層錯誤依然是必修課。', gradient: 'gradient-rose', icon: 'wrench', content: (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <Icon name="alert-octagon" size={80} className="text-rose-400 mx-auto opacity-50 mb-8" />
+                    <h4 className="text-4xl font-black mb-4 tracking-tighter">Looking Under the Hood</h4>
+                    <p className="text-white/50 text-sm font-light uppercase tracking-[0.2em]">Tools and Techniques</p>
+                </div>
+            )},
+            { id: '27-toolbox', title: 'The Rook Toolbox', subtitle: 'Your Swiss Army Knife', description: 'Rook 提供了一個特殊的 Pod，裡面打包了所有原生的 Ceph CLI 工具。', gradient: 'gradient-slate', icon: 'terminal', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start py-4">
+                    <div className="code-block w-full text-[10px]">
+{`# 1. 部署 Toolbox Pod
+kubectl apply -f toolbox.yaml
+
+# 2. 進入 Toolbox 終端機
+kubectl -n rook-ceph exec -it deploy/rook-ceph-tools -- bash
+
+# 3. 執行原生 Ceph 指令
+ceph status
+ceph osd tree
+rados df`}
+                    </div>
+                    <div className="space-y-4">
+                        <div className="p-6 glass rounded-[30px] border-emerald-500/20 shadow-xl bg-emerald-500/5">
+                            <h6 className="font-bold text-emerald-400 mb-2">ceph status (ceph -s)</h6>
+                            <p className="text-xs text-white/60 font-light leading-relaxed">這是排查的第一步。它會告訴你叢集健康度 (HEALTH_OK / HEALTH_WARN / HEALTH_ERR)，MON 是否達到 Quorum，以及 OSD 的存活數量。</p>
+                        </div>
+                    </div>
+                </div>
+            )},
+            { id: '28-operator-logs', title: 'Checking Operator Logs', subtitle: 'Why did the automated task fail?', description: '當 OSD 沒有如預期被創建時，第一時間該找誰？找 Operator。', gradient: 'gradient-slate', icon: 'file-text', content: (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start py-4">
+                    <div className="space-y-6">
+                        <div className="p-6 glass rounded-[30px] border-blue-500/20 shadow-xl bg-blue-500/5">
+                            <h6 className="font-bold text-blue-400 mb-2">The Brain's Diary</h6>
+                            <p className="text-xs text-white/60 font-light leading-relaxed">Operator 記錄了它解析 CRD 與調用 Ceph 指令的所有過程。如果硬碟沒被格式化，通常能在這裡看到 LVM 或儲存路徑報錯。</p>
+                        </div>
+                    </div>
+                    <div className="code-block w-full text-[9px]">
+{`# 查看 Operator 日誌
+kubectl -n rook-ceph logs deploy/rook-ceph-operator -f
+
+# 常見錯誤範例：
+# "failed to provision OSD: device /dev/sdb has a filesystem"
+# (硬碟不乾淨，Rook 拒絕使用以防覆蓋使用者資料)`}
+                    </div>
+                </div>
+            )},
+            { id: '29-wipe-disks', title: 'Cleaning Disks', subtitle: 'The Reset Button', description: 'Rook 對於硬碟的潔癖：只使用徹底乾淨的裸碟。', gradient: 'gradient-rose', icon: 'trash-2', content: (
+                <div className="flex flex-col md:flex-row gap-8 py-6 items-center">
+                    <div className="flex-1 space-y-6">
+                        <div className="p-6 glass rounded-3xl border-l-4 border-rose-500 bg-rose-500/5">
+                            <h5 className="font-bold text-rose-400 mb-2">Wiping a Disk</h5>
+                            <p className="text-xs text-white/60 font-light leading-relaxed">
+                                如果你曾經在硬碟上安裝過其他檔案系統，或者重裝了 Kubernetes，Rook 會拒絕納管這顆硬碟。<br/><br/>
+                                你必須登入該實體 Node，使用 <code className="text-rose-300">dd</code> 或 <code className="text-rose-300">sgdisk</code> 徹底清除分區表與 metadata。
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex-1 code-block text-[9px]">
+{`# SSH 登入目標 Node
+ssh root@worker-node-1
+
+# 警告：這會刪除硬碟上所有資料
+sgdisk --zap-all /dev/sdb
+dd if=/dev/zero of=/dev/sdb bs=1M count=100 oflag=direct,dsync
+
+# 清除殘留的 LVM metadata
+wipefs -a /dev/sdb`}
+                    </div>
+                </div>
+            )},
+            { id: '30-final', title: 'The End', subtitle: 'Thank You for Your Time', description: 'Prepared by Gemini CLI Agent for MansionLai.', gradient: 'gradient-slate', icon: 'heart', content: (
+                <div className="flex flex-col items-center justify-center h-full text-center py-20 relative">
+                    <motion.div animate={{ y: [0, -10, 0] }} transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}>
+                        <Icon name="database" size={100} className="text-cyan-500 mb-10 drop-shadow-[0_0_30px_rgba(34,211,238,0.6)]"/>
+                    </motion.div>
+                    <h5 className="text-7xl font-black uppercase tracking-tighter mb-6 relative">
+                        Rook Solid.
+                        <div className="absolute -bottom-2 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-50"></div>
+                    </h5>
+                    <p className="text-white/20 text-sm font-mono uppercase tracking-[0.6em] mt-6">Rook-Ceph Lab • 2026</p>
+                </div>
+            )}
         ];
 
+        const topics = [
+            { name: 'Intro', slideIndex: 0 },
+            { name: 'Architecture', slideIndex: 4 },
+            { name: 'CRDs', slideIndex: 9 },
+            { name: 'CSI Integration', slideIndex: 15 },
+            { name: 'Operations', slideIndex: 20 },
+            { name: 'Troubleshooting', slideIndex: 25 }
+        ];
+
+        // --- App Component ---
         const App = () => {
             const [currentSlide, setCurrentSlide] = useState(0);
             const [direction, setDirection] = useState(0);
-            const nextSlide = useCallback(() => { if (currentSlide < slides.length - 1) { setDirection(1); setCurrentSlide(prev => prev + 1); } }, [currentSlide]);
-            const prevSlide = useCallback(() => { if (currentSlide > 0) { setDirection(-1); setCurrentSlide(prev => prev - 1); } }, [currentSlide]);
+
+            const jumpTo = useCallback((index) => {
+                if (index !== currentSlide) {
+                    setDirection(index > currentSlide ? 1 : -1);
+                    setCurrentSlide(index);
+                }
+            }, [currentSlide]);
+
+            const nextSlide = useCallback(() => { if (currentSlide < slides.length - 1) { jumpTo(currentSlide + 1); } }, [currentSlide, jumpTo]);
+            const prevSlide = useCallback(() => { if (currentSlide > 0) { jumpTo(currentSlide - 1); } }, [currentSlide, jumpTo]);
+
             useEffect(() => {
                 const handleKeyDown = (e) => {
                     if (e.key === 'ArrowRight' || e.key === ' ') nextSlide();
@@ -611,39 +717,79 @@
                 window.addEventListener('keydown', handleKeyDown);
                 return () => window.removeEventListener('keydown', handleKeyDown);
             }, [nextSlide, prevSlide]);
+
             const slide = slides[currentSlide];
+
             return (
                 <div className={`h-screen w-screen overflow-hidden relative transition-colors duration-1000 ${slide.gradient}`}>
                     <div className="absolute top-0 left-0 h-1 bg-white/10 w-full z-50">
-                        <motion.div className="h-full bg-blue-400" initial={{ width: 0 }} animate={{ width: `${((currentSlide + 1) / slides.length) * 100}%` }} />
+                        <motion.div className="h-full bg-cyan-400" initial={{ width: 0 }} animate={{ width: `${((currentSlide + 1) / slides.length) * 100}%` }} transition={{ duration: 0.3 }} />
                     </div>
-                    <div className="relative z-10 h-full flex flex-col p-12 max-w-7xl mx-auto">
-                        <header className="flex justify-between items-start mb-12">
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 glass rounded-2xl"><Icon name={slide.icon} className="text-white" size={24} /></div>
-                                <div><h1 className="text-2xl font-black tracking-tighter uppercase">{slide.title}</h1><p className="text-xs text-white/50 font-mono">{slide.subtitle}</p></div>
+
+                    <div className="absolute inset-0 opacity-10 pointer-events-none">
+                        <div className="absolute top-[-15%] left-[-15%] w-[55%] h-[55%] bg-cyan-500 rounded-full blur-[160px]"></div>
+                        <div className="absolute bottom-[-15%] right-[-15%] w-[55%] h-[55%] bg-blue-500 rounded-full blur-[160px]"></div>
+                    </div>
+
+                    <div className="relative z-10 h-full flex flex-col p-10 max-w-7xl mx-auto">
+                        <header className="flex justify-between items-center mb-6">
+                            <div className="flex items-center gap-6">
+                                <div className="p-3.5 glass rounded-2xl flex items-center justify-center shadow-2xl border-white/15">
+                                    <Icon name={slide.icon} className="text-white" size={30} />
+                                </div>
+                                <div>
+                                    <h1 className="text-3xl font-black tracking-tighter uppercase leading-none">{slide.title}</h1>
+                                    <p className="text-[10px] text-white/40 font-mono mt-2 uppercase tracking-[0.2em] leading-none">{slide.subtitle}</p>
+                                </div>
                             </div>
-                            <div className="text-[10px] font-mono text-white/20 text-right">ROOK-CEPH DEEP DIVE<br/>SLIDE {String(currentSlide + 1).padStart(2, '0')}</div>
+                            
+                            {/* Topic Navigation Buttons */}
+                            <div className="flex gap-2">
+                                {topics.map((topic, i) => {
+                                    const nextTopicIndex = topics[i + 1] ? topics[i + 1].slideIndex : slides.length;
+                                    const isActive = currentSlide >= topic.slideIndex && currentSlide < nextTopicIndex;
+                                    return (
+                                        <button 
+                                            key={topic.name}
+                                            onClick={() => jumpTo(topic.slideIndex)}
+                                            className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all duration-300 ${
+                                                isActive 
+                                                ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(34,211,238,0.5)]' 
+                                                : 'bg-white/5 text-white/40 hover:bg-white/15 hover:text-white'
+                                            }`}
+                                        >
+                                            {topic.name}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </header>
-                        <main className="flex-1 relative flex flex-col justify-center">
+
+                        <main className="flex-1 relative overflow-hidden flex flex-col pt-4">
                             <AnimatePresence mode="wait" custom={direction}>
-                                <motion.div key={currentSlide} custom={direction} initial={{ opacity: 0, x: direction * 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: direction * -50 }} transition={{ duration: 0.3 }} className="w-full">
-                                    <div className="mb-10 max-w-3xl"><p className="text-lg text-white/80 leading-relaxed font-light">{slide.description}</p></div>
-                                    <div className="min-h-[300px]">{slide.content}</div>
+                                <motion.div key={currentSlide} custom={direction} initial={{ opacity: 0, x: direction * 100, scale: 0.98, filter: 'blur(15px)' }} animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }} exit={{ opacity: 0, x: direction * -100, scale: 1.02, filter: 'blur(15px)' }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }} className="w-full h-full flex flex-col">
+                                    <div className="mb-8 max-w-5xl">
+                                        <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="text-lg text-white/80 leading-relaxed font-light tracking-tight italic border-l-2 border-cyan-500/30 pl-6">"{slide.description}"</motion.p>
+                                    </div>
+                                    <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="flex-1 slide-content-container">
+                                        {slide.content}
+                                    </motion.div>
                                 </motion.div>
                             </AnimatePresence>
                         </main>
-                        <footer className="mt-12 flex justify-between items-center border-t border-white/10 pt-8">
-                            <div className="text-[10px] font-mono text-white/20 uppercase tracking-[0.2em]">3-Node KubeVirt Lab • Phase 3</div>
-                            <div className="flex gap-4">
-                                <button onClick={prevSlide} disabled={currentSlide === 0} className={`p-4 rounded-full glass ${currentSlide === 0 ? 'opacity-10' : 'hover:bg-white/10'}`}><Icon name="chevron-left" /></button>
-                                <button onClick={nextSlide} disabled={currentSlide === slides.length - 1} className={`p-4 rounded-full glass ${currentSlide === slides.length - 1 ? 'opacity-10' : 'hover:bg-white/10'}`}><Icon name="chevron-right" /></button>
+
+                        <footer className="mt-6 flex justify-between items-center border-t border-white/5 pt-6">
+                            <div className="text-[10px] font-black font-mono text-white/20 uppercase tracking-[0.4em]">Rook-Ceph Deep Dive • 2026</div>
+                            <div className="flex gap-6">
+                                <button onClick={prevSlide} disabled={currentSlide === 0} className={`p-5 rounded-full glass transition-all border-white/10 ${currentSlide === 0 ? 'opacity-10' : 'hover:bg-white/10 hover:scale-110 active:scale-95 shadow-xl'}`}><Icon name="chevron-left" size={24}/></button>
+                                <button onClick={nextSlide} disabled={currentSlide === slides.length - 1} className={`p-5 rounded-full glass transition-all border-white/10 ${currentSlide === slides.length - 1 ? 'opacity-10' : 'hover:bg-white/10 hover:scale-110 active:scale-95 shadow-xl'}`}><Icon name="chevron-right" size={24}/></button>
                             </div>
                         </footer>
                     </div>
                 </div>
             );
         };
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
