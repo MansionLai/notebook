@@ -390,7 +390,7 @@ frontend stats
                     <div className="space-y-4">
                         <h6 className="font-bold text-emerald-400 mb-4">Key Metrics to Alert On</h6>
                         <div className="space-y-3">
-                            <div className="p-4 glass rounded-2xl border-l-2 border-emerald-500"><div className="text-[10px] font-mono text-emerald-300">haproxy_backend_active_servers</div><div className="text-[10px] text-white/50 mt-1 font-light">可用伺服器數量。若 < 3 應發出警告。</div></div>
+                            <div className="p-4 glass rounded-2xl border-l-2 border-emerald-500"><div className="text-[10px] font-mono text-emerald-300">haproxy_backend_active_servers</div><div className="text-[10px] text-white/50 mt-1 font-light">可用伺服器數量。若 &lt; 3 應發出警告。</div></div>
                             <div className="p-4 glass rounded-2xl border-l-2 border-emerald-500"><div className="text-[10px] font-mono text-emerald-300">haproxy_frontend_current_sessions</div><div className="text-[10px] text-white/50 mt-1 font-light">當前活躍連線數。用於判斷負載是否達上限。</div></div>
                             <div className="p-4 glass rounded-2xl border-l-2 border-emerald-500"><div className="text-[10px] font-mono text-emerald-300">haproxy_backend_response_time_average</div><div className="text-[10px] text-white/50 mt-1 font-light">後端平均響應時間 (ms)。</div></div>
                         </div>
@@ -609,7 +609,7 @@ vrrp_instance VI_1 {
                     <div className="grid grid-cols-3 gap-10 w-full max-w-4xl text-[10px] font-black font-mono text-center text-white/30 uppercase tracking-tighter"><div>[Network] VRRP/GARP Keeps VIP Up</div><div>[HAProxy] L4 Forwarding Decides Target</div><div>[Backend] Active Health Checks Monitor Status</div></div>
                 </div>
             )},
-            { id: '23-synergy-flow', title: 'Better Together', subtitle: 'The 1+1 > 2 Synergy', description: '總結：為何這兩個開源軟體是天作之合。', gradient: 'gradient-emerald', icon: 'users', content: (
+            { id: '23-synergy-flow', title: 'Better Together', subtitle: 'The 1+1 &gt; 2 Synergy', description: '總結：為何這兩個開源軟體是天作之合。', gradient: 'gradient-emerald', icon: 'users', content: (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 py-10">
                     <div className="p-10 glass rounded-[50px] space-y-5 text-center border-b-4 border-b-blue-500 shadow-2xl">
                         <Icon name="map-pin" className="text-blue-400 mx-auto" size={48}/><h5 className="font-black text-xl uppercase tracking-tighter">Stability</h5>
