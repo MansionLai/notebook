@@ -69,7 +69,7 @@
     <script type="text/babel">
         const { useState, useEffect, useCallback, useRef } = React;
         const MotionLib = window.Motion || window.FramerMotion;
-        const { motion, AnimatePresence } = MotionLib;
+        const { motion, AnimatePresence } = MotionLib || { motion: (props) => <div {...props} />, AnimatePresence: ({children}) => children };
 
         // --- Icons Wrapper ---
         const Icon = ({ name, size = 24, className = "" }) => {

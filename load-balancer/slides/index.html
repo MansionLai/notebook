@@ -59,6 +59,8 @@
             color: #93c5fd;
             line-height: 1.6;
             box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+            white-space: pre;
+            overflow-x: auto;
         }
 
         .config-grid {
@@ -67,15 +69,23 @@
             gap: 1.5rem;
             align-items: center;
         }
+        
+        .scenario-box {
+            transition: all 0.3s ease;
+        }
+        .scenario-box:hover {
+            background: rgba(255, 255, 255, 0.06);
+            transform: translateY(-2px);
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useCallback, useRef } = React;
+        const { useState, useEffect, useCallback, useRef, useMemo } = React;
         const MotionLib = window.Motion || window.FramerMotion;
-        const { motion, AnimatePresence } = MotionLib;
+        const { motion, AnimatePresence } = MotionLib || { motion: (props) => <div {...props} />, AnimatePresence: ({children}) => children };
 
         // --- Icons Wrapper ---
         const Icon = ({ name, size = 24, className = "" }) => {
@@ -230,6 +240,11 @@
                             ))}
                         </div>
                     </div>
+                    <div className="p-8 glass rounded-3xl border-emerald-500/20 max-w-2xl text-center">
+                        <p className="text-sm text-white/80 font-light leading-relaxed">
+                            <span className="text-emerald-400 font-black uppercase tracking-widest">核心價值：</span> 當後端服務故障（如進程崩潰或網路中斷）時，HAProxy 的 <code className="bg-black/40 px-1.5 py-0.5 rounded text-blue-300">check</code> 指令會立刻發現異常，並在秒級內將該節點從分配名單中移除，確保客戶端 <code className="text-white font-mono">kubectl</code> 請求永不落空。
+                        </p>
+                    </div>
                 </div>
             );
         };
@@ -243,6 +258,16 @@
                         <div className="flex flex-col items-center"><div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-3 text-emerald-400 border border-emerald-400/20 shadow-xl"><Icon name="cpu" size={32}/></div><span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">HAProxy</span></div>
                         <div className="flex flex-col items-center"><div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-3 text-blue-400 border border-blue-400/20 shadow-xl"><Icon name="activity" size={32}/></div><span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Keepalived</span></div>
                         <div className="flex flex-col items-center"><div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-3 text-purple-400 border border-purple-400/20 shadow-xl"><Icon name="box" size={32}/></div><span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">K8s API</span></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-8 w-full max-w-3xl">
+                        <div className="p-8 glass rounded-[40px] text-left border-l-4 border-l-emerald-500 shadow-[0_20px_50px_rgba(16,185,129,0.1)]">
+                            <h4 className="font-black text-xl mb-2 text-emerald-400 uppercase tracking-tighter">L4 Load Balancing (HAProxy)</h4>
+                            <p className="text-xs text-white/50 leading-relaxed font-light">高效能的流量轉發中樞，將大量的 K8s API 請求均勻分配至後端多台 Master 節點。</p>
+                        </div>
+                        <div className="p-8 glass rounded-[40px] text-left border-l-4 border-l-blue-500 shadow-[0_20px_50px_rgba(59,130,246,0.1)]">
+                            <h4 className="font-black text-xl mb-2 text-blue-400 uppercase tracking-tighter">VRRP Redundancy (Keepalived)</h4>
+                            <p className="text-xs text-white/50 leading-relaxed font-light">提供「負載均衡器本身」的高可用。透過 VRRP 協定建立主備冗餘，確保 VIP 永不離線。</p>
+                        </div>
                     </div>
                 </div>
             )},
@@ -758,13 +783,28 @@ vrrp_instance VI_1 {
             )}
         ];
 
+        const topics = [
+            { name: 'Intro', slideIndex: 0 },
+            { name: 'HAProxy', slideIndex: 3 },
+            { name: 'Keepalived', slideIndex: 10 },
+            { name: 'Scenarios', slideIndex: 18 },
+            { name: 'Troubleshooting', slideIndex: 23 }
+        ];
+
         // --- App Component ---
         const App = () => {
             const [currentSlide, setCurrentSlide] = useState(0);
             const [direction, setDirection] = useState(0);
 
-            const nextSlide = useCallback(() => { if (currentSlide < slides.length - 1) { setDirection(1); setCurrentSlide(prev => prev + 1); } }, [currentSlide]);
-            const prevSlide = useCallback(() => { if (currentSlide > 0) { setDirection(-1); setCurrentSlide(prev => prev - 1); } }, [currentSlide]);
+            const jumpTo = useCallback((index) => {
+                if (index !== currentSlide) {
+                    setDirection(index > currentSlide ? 1 : -1);
+                    setCurrentSlide(index);
+                }
+            }, [currentSlide]);
+
+            const nextSlide = useCallback(() => { if (currentSlide < slides.length - 1) { jumpTo(currentSlide + 1); } }, [currentSlide, jumpTo]);
+            const prevSlide = useCallback(() => { if (currentSlide > 0) { jumpTo(currentSlide - 1); } }, [currentSlide, jumpTo]);
 
             useEffect(() => {
                 const handleKeyDown = (e) => {
@@ -779,6 +819,10 @@ vrrp_instance VI_1 {
 
             return (
                 <div className={`h-screen w-screen overflow-hidden relative transition-colors duration-1000 ${slide.gradient}`}>
+                    <div className="absolute top-0 left-0 h-1 bg-white/10 w-full z-50">
+                        <motion.div className="h-full bg-blue-400" initial={{ width: 0 }} animate={{ width: `${((currentSlide + 1) / slides.length) * 100}%` }} transition={{ duration: 0.3 }} />
+                    </div>
+
                     <div className="absolute inset-0 opacity-20 pointer-events-none">
                         <div className="absolute top-[-15%] left-[-15%] w-[55%] h-[55%] bg-blue-500 rounded-full blur-[160px]"></div>
                         <div className="absolute bottom-[-15%] right-[-15%] w-[55%] h-[55%] bg-purple-500 rounded-full blur-[160px]"></div>
@@ -795,10 +839,26 @@ vrrp_instance VI_1 {
                                     <p className="text-[10px] text-white/40 font-mono mt-2 uppercase tracking-[0.2em] leading-none">{slide.subtitle}</p>
                                 </div>
                             </div>
-                            <div className="flex gap-2.5">
-                                {slides.map((_, i) => (
-                                    <div key={i} onClick={() => { setDirection(i > currentSlide ? 1 : -1); setCurrentSlide(i); }} className={`h-1.5 rounded-full transition-all duration-500 cursor-pointer ${i === currentSlide ? 'w-12 bg-white' : 'w-2 bg-white/10 hover:bg-white/30'}`} />
-                                ))}
+                            
+                            {/* Topic Navigation Buttons */}
+                            <div className="flex gap-2">
+                                {topics.map((topic, i) => {
+                                    const nextTopicIndex = topics[i + 1] ? topics[i + 1].slideIndex : slides.length;
+                                    const isActive = currentSlide >= topic.slideIndex && currentSlide < nextTopicIndex;
+                                    return (
+                                        <button 
+                                            key={topic.name}
+                                            onClick={() => jumpTo(topic.slideIndex)}
+                                            className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all duration-300 ${
+                                                isActive 
+                                                ? 'bg-blue-500 text-black shadow-[0_0_15px_rgba(59,130,246,0.5)]' 
+                                                : 'bg-white/5 text-white/40 hover:bg-white/15 hover:text-white'
+                                            }`}
+                                        >
+                                            {topic.name}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </header>
 
