@@ -75,3 +75,58 @@ Kubernetes 在近年引入了 `AdminNetworkPolicy` (ANP) 與 `BaselineAdminNetwo
    # 2. 使用 nsenter 查看該 namespace 的 iptables 規則
    nsenter -t <Pause_Container_PID> -n iptables -nvL --line-numbers
    ```
+
+---
+
+## 實務案例分析：使用 Allow Log 驗證特定 IP 的流量匹配與規則遮蔽（Shadowing）問題
+
+### 1. 場景描述
+* **Rule A (主要規則)**：允許 10 個 IP（`192.168.1.1` ~ `192.168.1.10`）通行，但**未啟用** Allow Log 功能（以節省記錄空間）。
+* **Rule B (測試/驗證規則)**：僅允許 `192.168.1.1` 通行，且**啟用** Allow Log 功能（透過 NFLOG 搭配 fluent-bit 將日誌送至 OpenSearch）。
+* **目的**：想藉由 Rule B 產生的日誌，來驗證 `192.168.1.1` 是否真的有流量通過。如果沒有收到日誌，則計劃將 Rule A 縮減，排除 `192.168.1.1`。
+
+### 2. 潛在風險：iptables 規則遮蔽（Shadowing）產生的「偽陰性（False Negative）」
+由於 `MultiNetworkPolicy` 會被編譯成 `iptables` 鏈中的多條規則，若直接同時套用這兩筆 Policy，會遇到 `iptables` 從上到下比對的順序問題：
+
+* **當 Rule A 被排在 Rule B 上方時**：
+  1. 來自 `192.168.1.1` 的封包到達次要網路介面。
+  2. 比對到 Rule A，因為符合 `192.168.1.1 ~ 10` 的範圍，封包直接被 `ACCEPT` 並結束比對。
+  3. 由於 Rule A 沒有設定 NFLOG，因此**不會產生任何日誌**。
+  4. 封包根本沒有機會走到下方的 Rule B。
+  * **結果**：OpenSearch 中完全找不到 `192.168.1.1` 的日誌，這會讓您誤以為 `192.168.1.1` 沒有任何匹配流量，進而錯誤地將其從 Rule A 中剔除。然而此時流量其實是一直正常通行的，只是被 Rule A 「遮蔽」了日誌。
+
+* **當 Rule B 被排在 Rule A 上方時**：
+  1. 來自 `192.168.1.1` 的封包先比對到 Rule B。
+  2. 符合 `192.168.1.1` 且觸發 NFLOG 記錄，封包被 `ACCEPT`。
+  3. 其他 IP（`192.168.1.2 ~ 10`）不符合 Rule B，繼續往下比對，最後符合 Rule A 被 `ACCEPT`。
+  * **結果**：日誌能夠正常產生並送至 OpenSearch，測試成功。
+
+由於無法保證 `multi-networkpolicy-iptables` 在 Pod 中建立這兩筆 Policy 規則時的順序（通常為非決定性，或依名稱排序），因此直接同時 Apply 兩筆 Policy 進行測試是非常危險且不可靠的。
+
+---
+
+### 3. 推薦的驗證方案
+
+為了解決上述 Shadowing 導致的偽陰性問題，建議採用以下三種方案之一進行測試：
+
+#### 方案一：先在 Rule A 中將該 IP 排他（最推薦，最穩健）
+這是最可靠的測試方式，完全避開了 iptables 規則先後順序的干擾。
+1. **修改 Rule A**：將 Rule A 的範圍限制在 `192.168.1.2 ~ 192.168.1.10`（暫時排除 `192.168.1.1`）。
+2. **套用 Rule B**：建立 Rule B（允許 `192.168.1.1` 且開啟 NFLOG）。
+3. **驗證**：
+   * **情境一**：如果 `192.168.1.1` 有流量，它只能匹配 Rule B，您一定會在 OpenSearch 中收到日誌。此時代表該 IP 有流量匹配。
+   * **情境二**：如果一段時間內 OpenSearch 都沒有收到日誌，則可確認 `192.168.1.1` 確實無匹配流量，您可以維持修改後的 Rule A，並刪除臨時的 Rule B。
+4. **還原（若有流量）**：若確認有流量且需要繼續保留，則將 `192.168.1.1` 加回 Rule A，並移除 Rule B。
+
+#### 方案二：直接在 Rule A 上暫時啟用 Allow Log
+若 Rule A 可以隨時變更，直接對 Rule A 進行短時間的診斷是更簡單的做法：
+1. **修改 Rule A**：暫時開啟 Rule A 的 Allow Log 功能。
+2. **過濾日誌**：在 OpenSearch 中，以 `source.ip: "192.168.1.1"` 作為關鍵字過濾日誌。
+3. **關閉日誌**：確認完畢後，將 Rule A 的 Allow Log 功能關閉，以避免持續產生海量日誌。
+* **優點**：不需建立額外的 Policy，也不必擔心 iptables 的順序問題。
+
+#### 方案三：利用命名排序規則（若 Controller 支援）
+如果您的 `multi-networkpolicy-iptables` 版本被證實是依據 Policy 的 `metadata.name` 字母順序（Alphabetical Order）來決定 iptables 鏈中規則的先後順序：
+* **作法**：可以將 Rule B 命名為 `00-log-192-168-1-1`，將 Rule A 命名為 `99-allow-rule-a`。
+* **警告**：此方法極度依賴特定版本的實作細節，若未來升級 Kubernetes、Multus 或是換成 `nftables` 後端，排序邏輯可能會改變，因此不適合作為生產環境的標準流程。
+
