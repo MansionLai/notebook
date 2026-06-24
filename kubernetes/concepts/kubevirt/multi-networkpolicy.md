@@ -130,3 +130,32 @@ Kubernetes 在近年引入了 `AdminNetworkPolicy` (ANP) 與 `BaselineAdminNetwo
 * **作法**：可以將 Rule B 命名為 `00-log-192-168-1-1`，將 Rule A 命名為 `99-allow-rule-a`。
 * **警告**：此方法極度依賴特定版本的實作細節，若未來升級 Kubernetes、Multus 或是換成 `nftables` 後端，排序邏輯可能會改變，因此不適合作為生產環境的標準流程。
 
+---
+
+### 4. Azure Lab 實地驗證與可行性結論（2026-06-24 驗證）
+
+我們在 Azure 3-Node KubeVirt 環境下，針對上述三種驗證方案進行了實地測試，以下是驗證結果與可行性結論：
+
+#### 🔴 核心發現：`multi-networkpolicy-iptables` 控制器規則生成缺陷
+在進入 KubeVirt VM Pod 的網路命名空間（Namespace）檢查實際生成的 `iptables` 規則時，我們發現該控制器存在一個關鍵的實作 Bug。在 `MULTI-INGRESS` 鏈中，控制器在跳轉到個別 Policy 鏈後，會無條件插入一條 `-j RETURN` 規則：
+```text
+-A MULTI-INGRESS -i pod56d8eadccf2 -m comment --comment "policy:99-policy-a" -j MULTI-0-INGRESS
+-A MULTI-INGRESS -j RETURN
+```
+這導致不論封包是否匹配 `MULTI-0-INGRESS` 鏈的規則（即是否符合白名單 IP 範圍），都會觸發這條無條件的 `RETURN` 規則，直接回到 `INPUT` 鏈（預設 `ACCEPT` 透過）。因此，**所有流量皆會被無條件放行，後續的其他 Policy 鏈與最終的 `DROP` 規則形同虛設**。
+* **實驗驗證**：在 Worker 節點的橋接介面配置一個完全不在白名單內的測試 IP `192.168.1.50`，對 VM 進行 ping 測試，依然能夠 100% 成功連線，證明策略已失效。
+
+---
+
+#### 📋 方案可行性評估結果
+
+| 方案 | 可行性 | 實地測試與分析結論 |
+|:---|:---|:---|
+| **方案一：IP 排他法** | **不可行 / 失效** | 受限於上述 `RETURN` 缺陷，即使將 IP 從 Rule A 排除並放到 Rule B，非白名單流量與 Rule B 的流量都會被放行。此外，控制器並不支援 NFLOG / 記錄等機制，無法原生產生測試日誌。 |
+| **方案二：啟用 Allow Log** | **不可行** | `MultiNetworkPolicy` API 與該控制器原生**不支援**任何日誌記錄動作（如 `-j NFLOG`）。手動進入 Namespace 修改規則會立即被控制器的 Reconciliation Loop 覆寫還原。 |
+| **方案三：命名排序** | **不可行** | 經測試，命名為 `00-policy-b`、`05-policy-c` 與 `99-policy-a` 後，`iptables` 鏈中的比對順序為 `05` $\rightarrow$ `00` $\rightarrow$ `99`（與建立順序或 ResourceVersion 相關），**並不依循字母排序**。且由於 `RETURN` Bug，第一筆 Policy 比對後即會 short-circuit 放行所有流量。 |
+
+#### 💡 最終建議
+在 `multi-networkpolicy-iptables` 架構下，最穩健且唯一可行的網路安全存取控制（含日誌記錄與 Deny 機制）是**回歸到 VM Guest OS 內部防火牆進行控制（方案 A）**，可配合 `cloud-init` 進行自動化配置與日誌輸出，此法完全不受 Kubernetes 控制器 Bug 或 Reconciliation Loop 影響。
+
+
