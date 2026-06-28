@@ -156,6 +156,65 @@ Kubernetes 在近年引入了 `AdminNetworkPolicy` (ANP) 與 `BaselineAdminNetwo
 | **方案三：命名排序** | **不可行** | 經測試，命名為 `00-policy-b`、`05-policy-c` 與 `99-policy-a` 後，`iptables` 鏈中的比對順序為 `05` $\rightarrow$ `00` $\rightarrow$ `99`（與建立順序或 ResourceVersion 相關），**並不依循字母排序**。且由於 `RETURN` Bug，第一筆 Policy 比對後即會 short-circuit 放行所有流量。 |
 
 #### 💡 最終建議
-在 `multi-networkpolicy-iptables` 架構下，最穩健且唯一可行的網路安全存取控制（含日誌記錄與 Deny 機制）是**回歸到 VM Guest OS 內部防火牆進行控制（方案 A）**，可配合 `cloud-init` 進行自動化配置與日誌輸出，此法完全不受 Kubernetes 控制器 Bug 或 Reconciliation Loop 影響。
+在 `multi-networkpolicy-iptables` 架構下：
+1.  **若可進入 Guest OS 內部**：最穩健且唯一可行的網路安全存取控制（含日誌記錄與 Deny 機制）是**回歸到 VM Guest OS 內部防火牆進行控制（方案 A）**，配合 `cloud-init` 進行自動化配置，此法不受 Kubernetes 控制器 Bug 或 Reconciliation Loop 影響。
+2.  **若無法進入 Guest OS 內部（如 Cluster Admin 權限受限）**：由於控制器的 `RETURN` 生成 Bug 與原生對 logging 欄位的缺乏支援，無法直接透過 Apply 多筆 MultiNetworkPolicy 來進行流量稽核與規則收斂。此時必須使用 **全域自訂規則（Custom Rules ConfigMap）** 在鏈的前端攔截並寫入日誌，詳見下文。
+
+---
+
+### 5. Cluster Admin 權限下的替代驗證方案：利用全域自訂規則（Custom Rules ConfigMap）
+
+如果我們作為 **Cluster Admin** 無法進入 VM Guest OS 內部調整防火牆，但又需要透過「暫時啟用日誌」來驗證特定 IP 範圍是否確實有流量通過（例如：評估是否能將舊的 `ruleA: 10.10.1.1~10.10.1.100` 縮減為 `ruleB: 10.10.1.1~10.10.1.10`），我們可以使用 `multi-networkpolicy-iptables` 提供之 **ConfigMap 自訂規則機制**。
+
+#### 🛠️ 運作原理與優勢
+1.  **繞過 `RETURN` 缺陷**：控制器會將 ConfigMap 內定義的規則編譯進 `MULTI-INGRESS-COMMON` 鏈。該鏈在 `MULTI-INGRESS` 鏈的最起點即被呼叫，此時還未進入個別 Policy 的 sub-chain，因此完全不受 unconditional `RETURN` 規則的干擾。
+2.  **日誌收集相容性**：透過在 ConfigMap 中寫入 `iptables -j LOG` 規則，封包會被記錄到宿主機的 `syslog` / `dmesg` 中。若 fluent-bit 有收集節點日誌，即可自動將其送往 OpenSearch。
+3.  **無須存取 Guest OS**：所有變更均在 Kubernetes 控制面（ConfigMap）進行，VM 內部完全無感。
+
+#### 📝 設定步驟
+
+##### Step 1: 修改 kube-system 中的自訂規則 ConfigMap
+修改 `kube-system` 命名空間下的 `multi-networkpolicy-custom-v4-rules` ConfigMap。
+利用 `iprange` 模組指定需要監控的來源 IP 範圍，並將目標 IP 鎖定在該 VM 的附加網路 IP（如 `10.10.100.100`）：
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: multi-networkpolicy-custom-v4-rules
+  namespace: kube-system
+data:
+  custom-v4-rules.txt: |
+    # 1. 既有 ICMP 規則 (保留)
+    -p icmp --icmp-type redirect -j ACCEPT
+    -p icmp --icmp-type fragmentation-needed -j ACCEPT
+    
+    # 2. 流量稽核日誌規則：針對目標 VM 與預計保留的 IP 範圍進行 LOG 記錄
+    -d 10.10.100.100 -m iprange --src-range 10.10.1.1-10.10.1.10 -j LOG --log-prefix "KUBEVIRT-INGRESS-AUDIT: "
+```
+
+##### Step 2: 重啟控制器以載入規則
+重啟各個 Worker 節點上的 `multi-networkpolicy` 守護行程（DaemonSet），以將新規則同步進 Pod 的 Network Namespace：
+```bash
+kubectl rollout restart daemonset multi-networkpolicy-ds-amd64 -n kube-system
+```
+
+##### Step 3: 進入 Pod Namespace 檢查規則是否生效
+在 Worker 節點上執行以下指令，確認 `MULTI-INGRESS-COMMON` 內已成功載入自訂 LOG 規則：
+```bash
+sudo nsenter -t <virt-launcher-PID> -n iptables -t filter -S MULTI-INGRESS-COMMON
+# 預期輸出包含：
+# -A MULTI-INGRESS-COMMON -d 10.10.100.100/32 -m iprange --src-range 10.10.1.1-10.10.1.10 -j LOG --log-prefix "KUBEVIRT-INGRESS-AUDIT: "
+```
+
+##### Step 4: 流量觀測與策略收斂
+1.  **維持舊 RuleA 運作**：此時 `MultiNetworkPolicy` 中的舊 `ruleA`（放行 `10.10.1.1 ~ 100`）依然維持原狀，確保業務流量不中斷。
+2.  **檢視 OpenSearch 日誌**：在 OpenSearch Dashboards 中搜尋關鍵字 `KUBEVIRT-INGRESS-AUDIT:`：
+    *   **有日誌產生**：代表 `10.10.1.1 ~ 10` 確實有匹配的流量通過。
+    *   **無日誌產生**（經過一段觀察期）：代表該範圍可能無流量。
+3.  **執行收斂（Shrink）**：
+    *   確認新的縮減範圍（`10` 以內）確實涵蓋了主要流量後，大膽地將 `MultiNetworkPolicy` 中的 `ruleA` 編輯為僅放行 `10.10.1.1 ~ 10.10.1.10`（更新 CRD）。
+4.  **清理環境**：收斂完成後，將 ConfigMap 中新增的 `LOG` 規則刪除，並再次重啟 DaemonSet，以避免長久下來產生海量日誌影響硬碟與系統效能。
+
 
 
