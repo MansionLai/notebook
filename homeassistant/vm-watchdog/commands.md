@@ -24,19 +24,26 @@ mkdir -p ~/.local/bin
 # 建立 watchdog 腳本
 cat > ~/.local/bin/homeassistant-vm-watchdog.sh << 'EOF'
 #!/bin/bash
-# HomeAssistant VM Watchdog
+# ─────────────────────────────────────────────────────────────────
+# HomeAssistant VM Watchdog + Cloudflare Tunnel
 # • 開機自動啟動 VirtualBox VM（headless 模式）
 # • VM crash 後自動重啟
-# • 若 VM 已在運行，靜候直到結束再重啟
+# • 啟動並持續監控 Cloudflare Tunnel（ha.mansionlai.com）
+# • Tunnel 異常退出後自動重啟
 # • Log rotation：超過 1MB 自動輪替，保留最近 7 天
+# ─────────────────────────────────────────────────────────────────
 
 VM_NAME="HomeAssistant"
 VBOX_HEADLESS="/usr/local/bin/VBoxHeadless"
 VBOX_MANAGE="/usr/local/bin/VBoxManage"
+CLOUDFLARED="/opt/homebrew/bin/cloudflared"
+CF_CONFIG="${HOME}/.cloudflared/config.yml"
 LOG_FILE="${HOME}/Library/Logs/homeassistant-vm.log"
 LOG_MAX_BYTES=$((1024 * 1024))   # 1 MB
 LOG_MAX_DAYS=7                   # 保留天數
-POLL_INTERVAL=60                 # 秒：偵測 VM 狀態的輪詢間隔（1 分鐘）
+POLL_INTERVAL=60                 # 秒：偵測狀態的輪詢間隔
+
+CF_PID=""
 
 # ── Log 工具 ──────────────────────────────────────────────────────
 log() {
@@ -46,7 +53,6 @@ log() {
 rotate_log() {
     [ ! -f "$LOG_FILE" ] && return
 
-    # 大於 1MB → 輪替（加時間戳後綴）
     local size
     size=$(stat -f%z "$LOG_FILE" 2>/dev/null || echo 0)
     if [ "$size" -gt "$LOG_MAX_BYTES" ]; then
@@ -56,11 +62,22 @@ rotate_log() {
         log "Log rotated (was ${size} bytes → archived as .${ts})"
     fi
 
-    # 刪除超過 7 天的舊輪替檔
     find "$(dirname "$LOG_FILE")" \
         -name "$(basename "$LOG_FILE").*" \
         -mtime +${LOG_MAX_DAYS} \
         -delete 2>/dev/null
+}
+
+# ── Cloudflare Tunnel 管理 ─────────────────────────────────────────
+start_cloudflared() {
+    log "Starting Cloudflare Tunnel (ha.mansionlai.com)..."
+    "$CLOUDFLARED" tunnel --config "$CF_CONFIG" --no-autoupdate run >> "$LOG_FILE" 2>&1 &
+    CF_PID=$!
+    log "Cloudflare Tunnel started (PID=$CF_PID)"
+}
+
+is_cloudflared_running() {
+    [ -n "$CF_PID" ] && kill -0 "$CF_PID" 2>/dev/null
 }
 
 # ── VM 狀態查詢 ───────────────────────────────────────────────────
@@ -69,11 +86,23 @@ get_vm_state() {
         | grep '^VMState=' | cut -d'"' -f2
 }
 
-# ── 主迴圈 ────────────────────────────────────────────────────────
-log "Watchdog started for VM: $VM_NAME (interval=${POLL_INTERVAL}s, maxLog=${LOG_MAX_BYTES}B, retention=${LOG_MAX_DAYS}d)"
+# ── 啟動 ──────────────────────────────────────────────────────────
+log "Watchdog started (VM=$VM_NAME, interval=${POLL_INTERVAL}s, maxLog=${LOG_MAX_BYTES}B, retention=${LOG_MAX_DAYS}d)"
 
+# 先啟動 Cloudflare Tunnel
+start_cloudflared
+
+# ── 主迴圈 ────────────────────────────────────────────────────────
 while true; do
     rotate_log
+
+    # ── 監控 Cloudflare Tunnel ────────────────────────────────────
+    if ! is_cloudflared_running; then
+        log "Cloudflare Tunnel (PID=$CF_PID) has stopped, restarting..."
+        start_cloudflared
+    fi
+
+    # ── 監控 VirtualBox VM ────────────────────────────────────────
     STATE=$(get_vm_state)
 
     case "$STATE" in
@@ -255,8 +284,67 @@ VBoxManage list vms
 
 ---
 
+## Cloudflare Tunnel 管理指令
+
+> 設定日期：2026-07-26
+
+### 查看狀態
+
+```bash
+# 確認 cloudflared 是否正在執行（第一欄為 PID）
+launchctl list | grep cloudflare
+
+# 查看即時 tunnel log
+tail -f ~/.cloudflared/tunnel.log
+
+# 確認 Tunnel 對外連線正常
+curl -si https://ha.mansionlai.com/ | head -5
+```
+
+### 停止 / 重啟 Tunnel
+
+```bash
+# 停止 Tunnel（會同時停止監控 VM 的 Watchdog）
+launchctl unload ~/Library/LaunchAgents/com.user.homeassistant-vm.plist
+
+# 重新啟動 Tunnel 和 Watchdog
+launchctl load ~/Library/LaunchAgents/com.user.homeassistant-vm.plist
+
+# 查詢現有 Tunnel 清單
+cloudflared tunnel list
+```
+
+### 完整移除 Cloudflare Tunnel
+
+```bash
+# 停止 LaunchAgent
+launchctl unload ~/Library/LaunchAgents/com.user.homeassistant-vm.plist
+
+# 從 watchdog 腳本中移除 cloudflared 相關程式碼，再重新載入
+# （修改 ~/.local/bin/homeassistant-vm-watchdog.sh）
+launchctl load ~/Library/LaunchAgents/com.user.homeassistant-vm.plist
+
+# 移除 Cloudflare 設定檔
+rm -rf ~/.cloudflared
+
+# （選用）在 Cloudflare Dashboard 刪除 Tunnel 和 DNS 紀錄
+```
+
+### 檔案位置速查
+
+| 檔案 | 路徑 |
+|------|------|
+| Tunnel 設定 | `~/.cloudflared/config.yml` |
+| Tunnel 金鑰 | `~/.cloudflared/a430f2b4-fd44-4967-abee-b9a37938cd1a.json` |
+| Cloudflare 憑證 | `~/.cloudflared/cert.pem` |
+| LaunchAgent plist | `~/Library/LaunchAgents/com.user.homeassistant-vm.plist` |
+
+---
+
 ## 參考資料
 
 - [launchd.info — plist 設定詳解](https://www.launchd.info/)
 - [VirtualBox CLI 文件](https://www.virtualbox.org/manual/ch08.html)
 - [Apple launchctl man page](https://ss64.com/osx/launchctl.html)
+- [Cloudflare Tunnel 文件](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
+- [HA HTTP 整合設定](https://www.home-assistant.io/integrations/http/)
