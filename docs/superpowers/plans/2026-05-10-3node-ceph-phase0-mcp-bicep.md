@@ -247,7 +247,7 @@ Expected: These files still describe Phase 0 generically as Azure resource creat
 Replace the current Phase 0 row with wording like:
 
 ```md
-| Phase 0 | [Azure 資源建立](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-0/) | Azure MCP + Bicep 建立 RG、VNet、NSG、雙 NIC、三磁碟 |
+| Phase 0 | [Azure 資源建立](/storage/3node-ceph/phase-0/) | Azure MCP + Bicep 建立 RG、VNet、NSG、雙 NIC、三磁碟 |
 ```
 
 Expected: The buildup page explicitly advertises the new recommended approach.

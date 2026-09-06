@@ -14,17 +14,17 @@ permalink: /kubernetes/3node-kubevirt/buildup/
 
 | Phase | 連結 | 說明 |
 |------|------|------|
-| Phase 0 | [Azure 資源建立](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/phase-0/) | Azure VM、VNet、NSG、Worker 第 2 張 NIC；含 Option A / Option B |
-| Phase 1 | [OS 基礎 + kubeadm + Cilium](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/phase-1/) | 主機初始化與叢集建立 |
-| Phase 2 | [Multus CNI](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/phase-2/) | Multus 安裝與驗證 |
-| Phase 3 | [Rook-Ceph](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/phase-3/) | Rook-Ceph v1.17，連線外部 Ceph cluster，建立 StorageClass & VolumeSnapshotClass |
-| Phase 4 | [Observability](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/phase-4/) | Prometheus、OpenSearch、Dashboards、Fluent Bit |
-| Phase 5 | [KubeVirt 平台層](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/phase-5/) | KubeVirt、NAD、network policy |
-| Phase 6 | [VM Workload](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/phase-6/) | ub24-01 VM 建立與外網連線 |
+| Phase 0 | [Azure 資源建立](/kubernetes/3node-kubevirt/phase-0/) | Azure VM、VNet、NSG、Worker 第 2 張 NIC；含 Option A / Option B |
+| Phase 1 | [OS 基礎 + kubeadm + Cilium](/kubernetes/3node-kubevirt/phase-1/) | 主機初始化與叢集建立 |
+| Phase 2 | [Multus CNI](/kubernetes/3node-kubevirt/phase-2/) | Multus 安裝與驗證 |
+| Phase 3 | [Rook-Ceph](/kubernetes/3node-kubevirt/phase-3/) | Rook-Ceph v1.17，連線外部 Ceph cluster，建立 StorageClass & VolumeSnapshotClass |
+| Phase 4 | [Observability](/kubernetes/3node-kubevirt/phase-4/) | Prometheus、OpenSearch、Dashboards、Fluent Bit |
+| Phase 5 | [KubeVirt 平台層](/kubernetes/3node-kubevirt/phase-5/) | KubeVirt、NAD、network policy |
+| Phase 6 | [VM Workload](/kubernetes/3node-kubevirt/phase-6/) | ub24-01 VM 建立與外網連線 |
 
 ## Reference Docs
 
-- [Architecture](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/architecture/)
-- [Commands](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/commands/)
-- [Setup Flowchart](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/flowchart/)
-- [Project Agenda](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/)
+- [Architecture](/kubernetes/3node-kubevirt/architecture/)
+- [Commands](/kubernetes/3node-kubevirt/commands/)
+- [Setup Flowchart](/kubernetes/3node-kubevirt/flowchart/)
+- [Project Agenda](/kubernetes/3node-kubevirt/)

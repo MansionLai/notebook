@@ -14,7 +14,7 @@ permalink: /storage/3node-ceph/phase-4/
 
 ## 前置條件
 
-- 已完成 [Phase 3](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-3/)
+- 已完成 [Phase 3](/storage/3node-ceph/phase-3/)
 - Cluster 為 dc1 baseline 拓撲（3 MON + 3 OSD nodes）
 
 ## Ansible 執行方式

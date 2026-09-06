@@ -17,7 +17,7 @@ permalink: /storage/3node-ceph/phase-3/
 
 ## 前置條件
 
-- 已完成 [Phase 2](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-2/)
+- 已完成 [Phase 2](/storage/3node-ceph/phase-2/)
 
 ## Ansible 執行方式
 

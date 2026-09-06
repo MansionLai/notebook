@@ -14,7 +14,7 @@ permalink: /storage/3node-ceph/phase-2/
 
 ## 前置條件
 
-- 已完成 [Phase 1](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-1/)
+- 已完成 [Phase 1](/storage/3node-ceph/phase-1/)
 - `ceph_mon` / `ceph_osd` 分組已可連線
 
 ## Ansible 執行方式

@@ -14,7 +14,7 @@ permalink: /storage/3node-ceph/phase-1/
 
 ## 前置條件
 
-- 已完成 [Phase 0](https://mansionlai.github.io/notebook/storage/3node-ceph/phase-0/)
+- 已完成 [Phase 0](/storage/3node-ceph/phase-0/)
 - inventory 已區分 `ceph_mon` 與 `ceph_osd`
 - `ceph_osd_devices` 僅定義在 OSD 節點
 

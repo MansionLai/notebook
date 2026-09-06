@@ -65,12 +65,12 @@ permalink: /kubernetes/3node-kubevirt/iac/
 
 ## 目前目錄內容
 
-- [`main.bicep`](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/iac/main.bicep) : 主模板，負責串接 network、nsg、nic、vm 等模組。
-- [`main.bicepparam`](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/iac/main.bicepparam) : 參數檔，集中放置區域、命名、網段、VM 規格等預設值。
-- [`modules/network.bicep`](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/iac/modules/network.bicep) : 建立 VNet 與子網路。
-- [`modules/nsg.bicep`](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/iac/modules/nsg.bicep) : 定義 Phase 0 所需的 NSG 規則。
-- [`modules/nic.bicep`](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/iac/modules/nic.bicep) : 建立 NIC、Public IP 與 worker 的第二張網卡設定。
-- [`modules/vm.bicep`](https://mansionlai.github.io/notebook/kubernetes/3node-kubevirt/iac/modules/vm.bicep) : 建立 Ubuntu VM 並掛載對應網卡。
+- [`main.bicep`](/kubernetes/3node-kubevirt/iac/main.bicep) : 主模板，負責串接 network、nsg、nic、vm 等模組。
+- [`main.bicepparam`](/kubernetes/3node-kubevirt/iac/main.bicepparam) : 參數檔，集中放置區域、命名、網段、VM 規格等預設值。
+- [`modules/network.bicep`](/kubernetes/3node-kubevirt/iac/modules/network.bicep) : 建立 VNet 與子網路。
+- [`modules/nsg.bicep`](/kubernetes/3node-kubevirt/iac/modules/nsg.bicep) : 定義 Phase 0 所需的 NSG 規則。
+- [`modules/nic.bicep`](/kubernetes/3node-kubevirt/iac/modules/nic.bicep) : 建立 NIC、Public IP 與 worker 的第二張網卡設定。
+- [`modules/vm.bicep`](/kubernetes/3node-kubevirt/iac/modules/vm.bicep) : 建立 Ubuntu VM 並掛載對應網卡。
 
 ## SSH 連線提醒
 
